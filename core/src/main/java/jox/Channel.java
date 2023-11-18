@@ -9,83 +9,110 @@ import java.util.concurrent.locks.LockSupport;
 import static jox.CellState.*;
 
 public class Channel<T> {
+    /*
+    Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" paper (https://arxiv.org/abs/2211.04986), and
+    the Kotlin implementation (https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
+
+    Notable differences from the Kotlin implementation:
+    * in Kotlin's channels, the buffer stores both the elements (in even indexes), and the state for each cell (in odd
+      indexes). This would be also possible here, but in two-thread rendezvous tests, this is slightly slower than the
+      approach below: we transmit the elements inside objects representing state. This does incur an additional
+      allocation in case of the `Buffered` state (when there's a waiting receiver - we can't simply use a constant).
+      However, we add a field to `Continuation` (which is a channel-specific class, unlike in Kotlin), to avoid the
+      allocation when the sender suspends.
+     */
+
+    /**
+     * The total number of `send` operations ever invoked. Each invocation gets a unique cell to process.
+     */
     private final AtomicLong senders = new AtomicLong(0L);
     private final AtomicLong receivers = new AtomicLong(0L);
-    private final AtomicReferenceArray<Object> buffer = new AtomicReferenceArray<>(40_000_000); // TODO
-
-    private void setElement(T value, long index) {
-        buffer.setPlain((int) index * 2, value);
-    }
+    /**
+     * The buffer holding the state of each cell. State can be {@link CellState}, {@link Buffered}, or {@link Continuation}.
+     */
+    private final AtomicReferenceArray<Object> buffer = new AtomicReferenceArray<>(20_000_000); // TODO
 
     private void setState(Object state, long index) {
-        buffer.set((int) index * 2 + 1, state);
-    }
-
-    private T getElement(long index) {
-        //noinspection unchecked
-        return (T) buffer.getPlain((int) index * 2);
+        buffer.set((int) index, state);
     }
 
     private Object getState(long index) {
-        return buffer.get((int) index * 2 + 1);
+        return buffer.get((int) index);
     }
 
     private boolean casState(long index, Object expected, Object newValue) {
-        return buffer.compareAndSet((int) index * 2 + 1, expected, newValue);
+        return buffer.compareAndSet((int) index, expected, newValue);
     }
 
     //
 
+    /**
+     * Send a value to the channel.
+     * TODO: throw exceptions when the channel is closed
+     *
+     * @param value The value to send. Not {@code null}.
+     */
     public void send(T value) throws InterruptedException {
         sendSafe(value); // TODO exceptions
     }
 
     /**
-     * @return T | ???
+     * Send a value to the channel. Doesn't throw exceptions when the channel is closed.
+     *
+     * @param value The value to send. Not {@code null}.
+     * @return Either {@code null}, or TODO: an exception when the channel is closed (the exception is not thrown.)
      */
     public Object sendSafe(T value) throws InterruptedException {
+        if (value == null) {
+            throw new NullPointerException();
+        }
         while (true) {
-            var s = senders.incrementAndGet();
-            setElement(value, s);
-            if (updateCellSend(s)) return null;
+            var s = senders.incrementAndGet(); // reserving the next cell
+            if (updateCellSend(s, value)) return null;
         }
     }
 
-    private boolean updateCellSend(long s) throws InterruptedException {
+    /**
+     * @param s     Index of the reserved cell.
+     * @param value The value to send.
+     * @return {@code true}, if sending was successful; {@code false}, if it should be restarted.
+     */
+    private boolean updateCellSend(long s, T value) throws InterruptedException {
         while (true) {
-            var state = getState(s);
-            var r = receivers.get();
+            var state = getState(s); // reading the current state of the cell; we'll try to update it atomically
+            var r = receivers.get(); // reading the receiver's counter
 
             switch (state) {
                 case null -> {
                     if (s >= r) {
-                        var c = new Continuation();
+                        // cell is empty, and no receiver -> suspend
+                        // storing the value to send as the continuation's payload, so that the receiver can use it
+                        var c = new Continuation(value);
                         if (casState(s, null, c)) {
-                            c.await(() -> {
-                                setElement(null, s);
-                                setState(INTERRUPTED, s);
-                            });
+                            c.await(() -> setState(INTERRUPTED, s));
                             return true;
                         }
-                        // else: next iteration
+                        // else: CAS unsuccessful, repeat
                     } else {
-                        if (casState(s, null, BUFFERED)) {
+                        // cell is empty, but a receiver is in progress -> elimination
+                        if (casState(s, null, new Buffered(value))) {
                             return true;
                         }
-                        // else: next iteration
+                        // else: CAS unsuccessful, repeat
                     }
                 }
                 case Continuation c -> {
-                    if (c.tryResume()) {
+                    // a receiver is waiting -> trying to resume
+                    if (c.tryResume(value)) {
                         setState(DONE, s);
                         return true;
                     } else {
-                        setElement(null, s);
+                        // cell interrupted -> trying with a new one
                         return false;
                     }
                 }
                 case INTERRUPTED, BROKEN -> {
-                    setElement(null, s);
+                    // cell interrupted or poisoned -> trying with a new one
                     return false;
                 }
                 default -> throw new IllegalStateException("Unexpected state: " + state);
@@ -95,55 +122,73 @@ public class Channel<T> {
 
     //
 
+    /**
+     * Receive a value from the channel.
+     * TODO: throw exceptions when the channel is closed
+     */
     public T receive() throws InterruptedException {
-        return (T) receiveSafe(); // TODO exceptions
+        //noinspection unchecked
+        return (T) receiveSafe();
     }
 
+    /**
+     * Receive a value from the channel. Doesn't throw exceptions when the channel is closed.
+     *
+     * @return Either a value of type {@code T}, or TODO: an exception when the channel is closed (the exception is not thrown.)
+     */
     public Object receiveSafe() throws InterruptedException {
         while (true) {
-            var r = receivers.incrementAndGet();
-            if (updateCellReceive(r)) {
-                var e = getElement(r);
-                setElement(null, r);
-                return e;
+            var r = receivers.incrementAndGet(); // reserving the next cell
+            var result = updateCellReceive(r);
+            if (result != UpdateCellReceiveResult.RESTART) {
+                return result;
             }
         }
     }
 
-    private boolean updateCellReceive(long r) throws InterruptedException {
+    /**
+     * @param r Index of the reserved cell.
+     * @return Either a restart ({@link UpdateCellReceiveResult#RESTART}), or the received value.
+     */
+    private Object updateCellReceive(long r) throws InterruptedException {
         while (true) {
-            var state = getState(r);
-            var s = senders.get();
+            var state = getState(r); // reading the current state of the cell; we'll try to update it atomically
+            var s = senders.get(); // reading the sender's counter
 
             switch (state) {
                 case null -> {
                     if (r >= s) {
-                        var c = new Continuation();
-                        if (casState(s, null, c)) {
-                            c.await(() -> setState(INTERRUPTED, r));
-                            return true;
+                        // cell is empty, and no sender -> suspend
+                        // not using any payload
+                        var c = new Continuation(null);
+                        if (casState(r, null, c)) {
+                            return c.await(() -> setState(INTERRUPTED, r));
                         }
-                        // else: next iteration
+                        // else: CAS unsuccessful, repeat
                     } else {
-                        if (casState(s, null, BROKEN)) {
-                            return false;
+                        if (casState(r, null, BROKEN)) {
+                            return UpdateCellReceiveResult.RESTART;
                         }
-                        // else: next iteration
+                        // else: CAS unsuccessful, repeat
                     }
                 }
                 case Continuation c -> {
-                    if (c.tryResume()) {
+                    // a sender is waiting -> trying to resume
+                    if (c.tryResume(0)) {
                         setState(DONE, r);
-                        return true;
+                        return c.getPayload();
                     } else {
-                        return false;
+                        // cell interrupted -> trying with a new one
+                        return UpdateCellReceiveResult.RESTART;
                     }
                 }
-                case BUFFERED -> {
-                    return true;
+                case Buffered b -> {
+                    // an elimination has happened -> finish
+                    return b.value();
                 }
                 case INTERRUPTED -> {
-                    return false;
+                    // cell interrupted -> trying with a new one
+                    return UpdateCellReceiveResult.RESTART;
                 }
                 default -> throw new IllegalStateException("Unexpected state: " + state);
             }
@@ -151,60 +196,96 @@ public class Channel<T> {
     }
 }
 
+// possible return values of updateCellReceive: one of the enum constants below, or the received value
+
+enum UpdateCellReceiveResult {
+    RESTART
+}
+
+// possible states of a cell: one of the enum constants below, Buffered, or Continuation
+
 enum CellState {
     DONE,
     INTERRUPTED,
-    BUFFERED,
     BROKEN;
 }
 
-class Continuation {
-    private final Thread creatingThread = Thread.currentThread();
-    private volatile int state = 0; // 0 - initial; 1 - done; 2 - interrupted
+// a java record called Buffered with a single value field; the type should be T
+record Buffered(Object value) {}
 
-    public boolean tryResume() {
-        var result = Continuation.STATE.compareAndSet(this, 0, 1);
+final class Continuation {
+    /**
+     * The number of busy-looping iterations before yielding, during {@link Continuation#await(Runnable)}. {@code 0}, if there's a single CPU.
+     */
+    private static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : 10000;
+
+    private final Thread creatingThread;
+    private volatile Object data; // set using DATA var handle
+
+    private final Object payload;
+
+    Continuation(Object payload) {
+        this.payload = payload;
+        this.creatingThread = Thread.currentThread();
+    }
+
+    /**
+     * Resume the continuation with the given value.
+     *
+     * @param value Should not be {@code null}.
+     * @return {@code true} tf the continuation was resumed successfully. {@code false} if it was interrupted.
+     */
+    boolean tryResume(Object value) {
+        var result = Continuation.DATA.compareAndSet(this, null, value);
         LockSupport.unpark(creatingThread);
         return result;
     }
 
-    public void await(Runnable onInterrupt) throws InterruptedException {
-        var spinIterations = 1000;
-        var yieldIterations = 2;
-        while (state == 0) {
+    /**
+     * Await for the continuation to be resumed.
+     *
+     * @param onInterrupt
+     * @return The value with which the continuation was resumed.
+     */
+    Object await(Runnable onInterrupt) throws InterruptedException {
+        var spinIterations = SPINS;
+        while (data == null) {
             if (spinIterations > 0) {
                 Thread.onSpinWait();
                 spinIterations -= 1;
-            } else if (yieldIterations > 0) {
-                Thread.yield();
-                yieldIterations -= 1;
             } else {
                 LockSupport.park();
-            }
 
-            if (Thread.interrupted()) {
-                Continuation.STATE.compareAndSet(this, 0, 2); // TODO if
-                var e = new InterruptedException();
+                if (Thread.interrupted()) {
+//                    Continuation.STATE.compareAndSet(this, 0, 2); // TODO if
+                    var e = new InterruptedException();
 
-                try {
-                    onInterrupt.run();
-                } catch (Throwable ee) {
-                    e.addSuppressed(ee);
+                    try {
+                        onInterrupt.run();
+                    } catch (Throwable ee) {
+                        e.addSuppressed(ee);
+                    }
+
+                    throw e;
                 }
-
-                throw e;
             }
         }
+
+        return data;
+    }
+
+    Object getPayload() {
+        return payload;
     }
 
     //
 
-    private static final VarHandle STATE;
+    private static final VarHandle DATA;
 
     static {
         var l = MethodHandles.lookup();
         try {
-            STATE = l.findVarHandle(Continuation.class, "state", int.class);
+            DATA = l.findVarHandle(Continuation.class, "data", Object.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
