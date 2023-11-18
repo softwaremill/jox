@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.concurrent.*;
-import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -16,14 +15,11 @@ public class ChannelTest {
 
         // when
         scoped(scope -> {
-            forkVoid(scope, () -> {
-                forkVoid(scope, () -> channel.send("x"));
-                var t2 = fork(scope, channel::receive);
+            forkVoid(scope, () -> channel.send("x"));
+            var t2 = fork(scope, channel::receive);
 
-                // then
-                assertEquals("x", t2.get());
-            });
-            return null;
+            // then
+            assertEquals("x", t2.get());
         });
     }
 
@@ -43,18 +39,12 @@ public class ChannelTest {
             for (int i = 1; i <= 1000; i++) {
                 fs.add(forkVoid(scope, () -> s.add(channel.receive())));
             }
-            fs.forEach(f -> {
-                try {
-                    f.get();
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                    throw new RuntimeException(ex);
-                }
-            });
+            for (Future<Void> f : fs) {
+                f.get();
+            }
 
             // then
             assertEquals(1000, s.size());
-            return null;
         });
     }
 
@@ -71,79 +61,62 @@ public class ChannelTest {
                     channel.send(i);
                 }
             });
-            var r = forkVoid(scope, () -> {
+            forkVoid(scope, () -> {
                 for (int i = 1; i <= 1000; i++) {
                     s.add(channel.receive());
                 }
-            });
-            try {
-                r.get();
-            } catch (Exception e) {
-                e.printStackTrace();
-                throw new RuntimeException(e);
-            }
+            }).get();
 
             // then
             assertEquals(1000, s.size());
-            return null;
         });
     }
 
     @Test
-    public void performanceTest() {
+    public void performanceTest() throws Exception {
         for (int j = 1; j <= 3; j++) {
             var max = 10_000_000L;
             var c = new Channel<Integer>();
             timed("rendezvous", () -> {
-                try {
-                    scoped(scope -> {
-                        forkVoid(scope, () -> {
-                            forkVoid(scope, () -> {
-                                for (int i = 0; i <= max; i++) {
-                                    c.sendSafe(i);
-                                }
-                            });
-                            var r = fork(scope, () -> {
-                                var acc = 0L;
-                                for (int i = 0; i <= max; i++) {
-                                    acc += (Integer) c.receiveSafe();
-                                }
-                                return acc;
-                            });
-
-                            try {
-                                assertEquals(max * (max + 1L) / 2, r.get());
-                            } catch (Exception ex) {
-                                ex.printStackTrace();
-                                throw new RuntimeException(ex);
-                            }
-                        });
-                        return null;
+                scoped(scope -> {
+                    forkVoid(scope, () -> {
+                        for (int i = 0; i <= max; i++) {
+                            c.send(i);
+                        }
                     });
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    throw new RuntimeException(e);
-                }
+                    var result = fork(scope, () -> {
+                        var acc = 0L;
+                        for (int i = 0; i <= max; i++) {
+                            acc += c.receive();
+                        }
+                        return acc;
+                    });
+
+                    assertEquals(max * (max + 1L) / 2, result.get());
+                });
             });
         }
     }
 
     //
 
-    private void scoped(Function<StructuredTaskScope, Void> f) throws InterruptedException, ExecutionException {
+    private void scoped(ConsumerWithException<StructuredTaskScope<Object>> f) throws InterruptedException, ExecutionException {
         try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            f.apply(scope);
+            // making sure everything runs in a VT
+            scope.fork(() -> {
+                f.accept(scope);
+                return null;
+            });
             scope.join().throwIfFailed();
         }
     }
 
-    private <T> Future<T> fork(StructuredTaskScope scope, Callable<T> c) {
+    private <T> Future<T> fork(StructuredTaskScope<Object> scope, Callable<T> c) {
         var f = new CompletableFuture<T>();
         scope.fork(() -> {
             try {
                 f.complete(c.call());
             } catch (Exception ex) {
-                ex.printStackTrace();
                 f.completeExceptionally(ex);
             }
             return null;
@@ -151,7 +124,7 @@ public class ChannelTest {
         return f;
     }
 
-    private Future<Void> forkVoid(StructuredTaskScope scope, RunnableWithException r) {
+    private Future<Void> forkVoid(StructuredTaskScope<Object> scope, RunnableWithException r) {
         return fork(scope, () -> {
             r.run();
             return null;
@@ -159,11 +132,16 @@ public class ChannelTest {
     }
 
     @FunctionalInterface
+    private interface ConsumerWithException<T> {
+        void accept(T o) throws Exception;
+    }
+
+    @FunctionalInterface
     private interface RunnableWithException {
         void run() throws Exception;
     }
 
-    private void timed(String label, Runnable block) {
+    private void timed(String label, RunnableWithException block) throws Exception {
         var start = System.nanoTime();
         block.run();
         var end = System.nanoTime();
