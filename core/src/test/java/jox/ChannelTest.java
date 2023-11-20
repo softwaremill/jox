@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashSet;
 import java.util.concurrent.*;
 
+import static jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ChannelTest {
@@ -96,55 +97,5 @@ public class ChannelTest {
                 });
             });
         }
-    }
-
-    //
-
-    private void scoped(ConsumerWithException<StructuredTaskScope<Object>> f) throws InterruptedException, ExecutionException {
-        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            // making sure everything runs in a VT
-            scope.fork(() -> {
-                f.accept(scope);
-                return null;
-            });
-            scope.join().throwIfFailed();
-        }
-    }
-
-    private <T> Future<T> fork(StructuredTaskScope<Object> scope, Callable<T> c) {
-        var f = new CompletableFuture<T>();
-        scope.fork(() -> {
-            try {
-                f.complete(c.call());
-            } catch (Exception ex) {
-                f.completeExceptionally(ex);
-            }
-            return null;
-        });
-        return f;
-    }
-
-    private Future<Void> forkVoid(StructuredTaskScope<Object> scope, RunnableWithException r) {
-        return fork(scope, () -> {
-            r.run();
-            return null;
-        });
-    }
-
-    @FunctionalInterface
-    private interface ConsumerWithException<T> {
-        void accept(T o) throws Exception;
-    }
-
-    @FunctionalInterface
-    private interface RunnableWithException {
-        void run() throws Exception;
-    }
-
-    private void timed(String label, RunnableWithException block) throws Exception {
-        var start = System.nanoTime();
-        block.run();
-        var end = System.nanoTime();
-        System.out.println(label + " took: " + (end - start) / 1_000_000 + " ms");
     }
 }
