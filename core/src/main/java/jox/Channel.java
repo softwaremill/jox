@@ -21,6 +21,8 @@ public class Channel<T> {
       allocation in case of the `Buffered` state (when there's a waiting receiver - we can't simply use a constant).
       However, we add a field to `Continuation` (which is a channel-specific class, unlike in Kotlin), to avoid the
       allocation when the sender suspends.
+    * as we don't directly store elements in the buffer, we don't need to clear them on interrupt etc. This is done
+      automatically when the cell's state is set to something else than a Continuation/Buffered.
      */
 
     /**
@@ -170,6 +172,7 @@ public class Channel<T> {
                         }
                         // else: CAS unsuccessful, repeat
                     } else {
+                        // sender in progress, receiver changed state first -> restart
                         if (casState(r, null, BROKEN)) {
                             return UpdateCellReceiveResult.RESTART;
                         }
