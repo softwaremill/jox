@@ -75,7 +75,7 @@ public class ChannelTest {
 
     @Test
     public void performanceTest() throws Exception {
-        for (int j = 1; j <= 3; j++) {
+        for (int j = 1; j <= 10; j++) {
             var max = 10_000_000L;
             var c = new Channel<Integer>();
             timed("rendezvous", () -> {

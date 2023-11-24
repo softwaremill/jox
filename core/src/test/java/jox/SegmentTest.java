@@ -4,13 +4,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
 
+import static jox.Segment.SEGMENT_SIZE;
 import static jox.TestUtil.forkVoid;
 import static jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentTest {
-    int segmentSize = 32; // from Segment.SEGMENT_SIZE
-
     Segment createSegmentChain(int count, long id) {
         var thisSegment = new Segment(id, null, 0);
         if (count <= 1) {
@@ -45,7 +44,7 @@ public class SegmentTest {
         var s3 = s2.getNext();
 
         // when
-        for (int i = 0; i < segmentSize - 1; i++) {
+        for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
             s2.cellInterrupted();
             // nothing should happen
             assertFalse(s2.isRemoved());
@@ -83,7 +82,7 @@ public class SegmentTest {
         assertTrue(s3.tryIncPointers());
         assertTrue(s4.tryIncPointers());
         // interrupting all cells
-        for (int i = 0; i < segmentSize; i++) {
+        for (int i = 0; i < SEGMENT_SIZE; i++) {
             s2.cellInterrupted();
             assertFalse(s2.isRemoved());
             s3.cellInterrupted();
@@ -114,7 +113,7 @@ public class SegmentTest {
         var s = createSegmentChain(1, 0);
 
         // when
-        for (int i = 0; i < segmentSize; i++) {
+        for (int i = 0; i < SEGMENT_SIZE; i++) {
             s.cellInterrupted();
         }
 
@@ -142,7 +141,7 @@ public class SegmentTest {
         // when
         assertTrue(s.tryIncPointers());
 
-        for (int i = 0; i < segmentSize; i++) {
+        for (int i = 0; i < SEGMENT_SIZE; i++) {
             s.cellInterrupted();
             assertFalse(s.isRemoved());
         }
@@ -168,7 +167,7 @@ public class SegmentTest {
             scoped(scope -> {
                 // first interrupting all cells but one in segments 2-(segmentCount-1))
                 for (int i = 1; i < ss.length - 1; i++) {
-                    for (int j = 0; j < segmentSize - 1; j++) {
+                    for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
                         ss[i].cellInterrupted();
                     }
                 }
@@ -192,5 +191,25 @@ public class SegmentTest {
             assertEquals(ss[segmentCount - 1].getPrev(), ss[0]);
             assertEquals(ss[segmentCount - 1].getNext(), null);
         }
+    }
+
+    @Test
+    void shouldNotResurrectAnUnlikedSegment() {
+        // given
+        var ss = createSegmentChainAsArray(3, 0);
+
+        // when
+        // unlinking segment 2 from segment 3
+        ss[2].cleanPrev();
+
+        // removing segment 2
+        for (int i = 0; i < SEGMENT_SIZE; i++) {
+            ss[1].cellInterrupted();
+        }
+
+        // then
+        assertTrue(ss[1].isRemoved());
+        assertEquals(ss[0].getNext(), ss[2]);
+        assertEquals(ss[2].getPrev(), null);
     }
 }
