@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ChannelInterruptionTest {
     @Test
-    public void testSendReceiveAfterSendInterrupt() throws Exception {
+    void testSendReceiveAfterSendInterrupt() throws Exception {
         // given
         Channel<String> channel = new Channel<>();
 
@@ -25,7 +25,7 @@ public class ChannelInterruptionTest {
     }
 
     @Test
-    public void testSendReceiveAfterReceiveInterrupt() throws Exception {
+    void testSendReceiveAfterReceiveInterrupt() throws Exception {
         // given
         Channel<String> channel = new Channel<>();
 
@@ -43,7 +43,7 @@ public class ChannelInterruptionTest {
     }
 
     @Test
-    public void testRaceInterruptAndSend() throws Exception {
+    void testRaceInterruptAndSend() throws Exception {
         // when
         scoped(scope -> {
             for (int i = 0; i < 100; i++) {

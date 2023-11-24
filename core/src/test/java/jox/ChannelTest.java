@@ -25,7 +25,7 @@ public class ChannelTest {
     }
 
     @Test
-    public void testSendReceiveInManyForks() throws ExecutionException, InterruptedException {
+    void testSendReceiveInManyForks() throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = new Channel<>();
         var fs = new HashSet<Future<Void>>();
@@ -50,7 +50,7 @@ public class ChannelTest {
     }
 
     @Test
-    public void testSendReceiveManyElementsInTwoForks() throws ExecutionException, InterruptedException {
+    void testSendReceiveManyElementsInTwoForks() throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = new Channel<>();
         var s = new ConcurrentSkipListSet<Integer>();
@@ -74,7 +74,7 @@ public class ChannelTest {
     }
 
     @Test
-    public void performanceTest() throws Exception {
+    void performanceTest() throws Exception {
         for (int j = 1; j <= 10; j++) {
             var max = 10_000_000L;
             var c = new Channel<Integer>();
