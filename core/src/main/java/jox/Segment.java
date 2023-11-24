@@ -180,7 +180,7 @@ final class Segment {
                 if (current.casNext(null, newSegment)) {
                     if (current.isRemoved()) {
                         // the current segment was a tail segment, so if it was logically removed, we need to remove it physically
-                        newSegment.remove();
+                        current.remove();
                     }
                 }
             }
@@ -223,5 +223,23 @@ final class Segment {
                 // and repeat
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        var n = next.get();
+        var p = prev.get();
+        var c = pointersPlusNotInterrupted.get();
+
+        var notInterrupted = c & ((1 << POINTERS_SHIFT) - 1);
+        var pointers = c >> POINTERS_SHIFT;
+
+        return "Segment{" +
+                "id=" + id +
+                ", next=" + (n == null ? "null" : n.id) +
+                ", prev=" + (p == null ? "null" : p.id) +
+                ", pointers=" + pointers +
+                ", notInterrupted=" + notInterrupted +
+                '}';
     }
 }
