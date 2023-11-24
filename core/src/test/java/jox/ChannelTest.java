@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ChannelTest {
     @Test
-    public void testSimpleSendReceive() throws InterruptedException, ExecutionException {
+    void testSimpleSendReceive() throws InterruptedException, ExecutionException {
         // given
         Channel<String> channel = new Channel<>();
 

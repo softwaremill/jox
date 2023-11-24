@@ -12,19 +12,6 @@ import static jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentTest {
-    Segment[] createSegmentChain(int count, long id) {
-        var segments = new Segment[count];
-        var thisSegment = new Segment(id, null, 0);
-        segments[0] = thisSegment;
-        for (int i = 1; i < count; i++) {
-            var nextSegment = new Segment(id + i, thisSegment, 0);
-            thisSegment.setNext(nextSegment);
-            segments[i] = nextSegment;
-            thisSegment = nextSegment;
-        }
-        return segments;
-    }
-
     @Test
     void segmentShouldBecomeRemovedOnceAllCellsInterrupted() {
         // given
@@ -301,6 +288,19 @@ public class SegmentTest {
                 }
             });
         }
+    }
+
+    private Segment[] createSegmentChain(int count, long id) {
+        var segments = new Segment[count];
+        var thisSegment = new Segment(id, null, 0);
+        segments[0] = thisSegment;
+        for (int i = 1; i < count; i++) {
+            var nextSegment = new Segment(id + i, thisSegment, 0);
+            thisSegment.setNext(nextSegment);
+            segments[i] = nextSegment;
+            thisSegment = nextSegment;
+        }
+        return segments;
     }
 
     private void interruptAllCells(Segment s) {
