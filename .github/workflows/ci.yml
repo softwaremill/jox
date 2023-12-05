@@ -63,7 +63,7 @@ jobs:
           skip-fetch-gh-pages: true
       - name: Check benchmark result
         uses: benchmark-action/github-action-benchmark@v1
-        # PRs, other branches
+        # PRs, other branches - the only difference in config is auto-push: false
         if: steps.extract_branch.outputs.branch != 'main'
         with:
           tool: 'jmh'
