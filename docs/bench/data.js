@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1701793539230,
+  "lastUpdate": 1701805564200,
   "repoUrl": "https://github.com/softwaremill/jox",
   "entries": {
     "Benchmark": [
@@ -42,6 +42,54 @@ window.BENCHMARK_DATA = {
             "value": 204.30113761142127,
             "unit": "ns/op",
             "extra": "iterations: 10\nforks: 3\nthreads: 2"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "committer": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "distinct": true,
+          "id": "3f0056c264281d49371c7cec5903b963be60e2d3",
+          "message": "WIP",
+          "timestamp": "2023-12-05T20:41:43+01:00",
+          "tree_id": "231d8fd46ff5246b78f3221c611078cd544af279",
+          "url": "https://github.com/softwaremill/jox/commit/3f0056c264281d49371c7cec5903b963be60e2d3"
+        },
+        "date": 1701805564187,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "org.sample.RendezvousBenchmark.channel",
+            "value": 171.35994752526412,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.channel_iterative",
+            "value": 160.08050200439558,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.exchanger",
+            "value": 98.58836241954818,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.synchronous_queue",
+            "value": 200.73369014348086,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
           }
         ]
       }
