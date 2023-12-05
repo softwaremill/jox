@@ -1,5 +1,6 @@
 package jox;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -74,6 +75,7 @@ public class ChannelTest {
     }
 
     @Test
+    @Disabled("moved to RendezvousBenchmark, left here for development purposes")
     void performanceTest() throws Exception {
         for (int j = 1; j <= 10; j++) {
             var max = 10_000_000L;
