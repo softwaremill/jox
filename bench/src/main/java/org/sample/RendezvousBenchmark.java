@@ -47,8 +47,7 @@ import java.util.concurrent.TimeUnit;
 // this needs to be slightly larger than the test time to avoid warnings
 @Timeout(time = 5100, timeUnit = TimeUnit.MILLISECONDS)
 @Fork(value = 3)
-@BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@BenchmarkMode(Mode.AverageTime)
 @State(Scope.Group)
 public class RendezvousBenchmark {
     private SynchronousQueue<Integer> queue = new SynchronousQueue<>();
@@ -96,7 +95,6 @@ public class RendezvousBenchmark {
         channel.send(63);
     }
 
-    
     @Benchmark
     @Group("channel")
     @GroupThreads(1)
