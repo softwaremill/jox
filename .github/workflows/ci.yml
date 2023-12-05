@@ -38,6 +38,10 @@ jobs:
         run: |
           mvn package -DskipTests=true
           java -Djmh.executor=VIRTUAL -jar bench/target/benchmarks.jar -i 1 -wi 0 -f 1 -to 1100ms -r 1000ms -rf json
+      - name: Extract branch name
+        shell: bash
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        id: extract_branch
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
@@ -53,6 +57,6 @@ jobs:
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
           # Store benchmark results in the docs folder of the main branch
-          gh-pages-branch: 'main'
+          gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
           benchmark-data-dir-path: 'docs/bench'
           skip-fetch-gh-pages: true
