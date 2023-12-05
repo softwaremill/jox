@@ -68,6 +68,7 @@ jobs:
         with:
           tool: 'jmh'
           output-file-path: jmh-result.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
           alert-threshold: '120%'
           comment-on-alert: true
