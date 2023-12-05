@@ -37,7 +37,7 @@ jobs:
       - name: Run benchmark
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/target/benchmarks.jar -i 1 -wi 0 -f 1 -to 1100ms -r 1000ms -rf json
+          java -Djmh.executor=VIRTUAL -jar bench/target/benchmarks.jar -i 10 -wi 3 -f 3 -to 5100ms -r 5000ms -w 5000ms -rf json
       - name: Extract branch name
         shell: bash
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
