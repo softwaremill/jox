@@ -50,8 +50,6 @@ jobs:
           alert-threshold: '120%'
           # Enable alert commit comment
           comment-on-alert: true
-          # Enable Job Summary for PRs
-          summary-always: true
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
           # Store benchmark results in the docs folder of the main branch
