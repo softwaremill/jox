@@ -96,6 +96,7 @@ public class RendezvousBenchmark {
         channel.send(63);
     }
 
+    
     @Benchmark
     @Group("channel")
     @GroupThreads(1)
