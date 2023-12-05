@@ -6,7 +6,9 @@ on:
   pull_request:
     branches:
       - main
-
+permissions:
+  contents: write
+  deployments: write
 jobs:
   benchmark:
     runs-on: ubuntu-22.04
