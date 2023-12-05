@@ -41,6 +41,7 @@ jobs:
           summary-always: true
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
-          # Store benchmark results in the docs folder of the master branch
+          # Store benchmark results in the docs folder of the main branch
           gh-pages-branch: 'main'
           benchmark-data-dir-path: 'docs/bench'
+          skip-fetch-gh-pages: true
