@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1701805564200,
+  "lastUpdate": 1701808607730,
   "repoUrl": "https://github.com/softwaremill/jox",
   "entries": {
     "Benchmark": [
@@ -90,6 +90,60 @@ window.BENCHMARK_DATA = {
             "value": 200.73369014348086,
             "unit": "ns/op",
             "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "committer": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "distinct": true,
+          "id": "423a794d3a34c42069eeef5e69e2470673c67680",
+          "message": "WIP",
+          "timestamp": "2023-12-05T21:31:37+01:00",
+          "tree_id": "e1aa902a89dcfbb0b39afd88506f4d214ee83ee5",
+          "url": "https://github.com/softwaremill/jox/commit/423a794d3a34c42069eeef5e69e2470673c67680"
+        },
+        "date": 1701808607716,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "jox.RendezvousBenchmark.channel",
+            "value": 172.5037829529761,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "jox.RendezvousBenchmark.channel_iterative",
+            "value": 165.4203963858364,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "jox.RendezvousBenchmark.exchanger",
+            "value": 97.94125701802312,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "jox.RendezvousBenchmark.synchronous_queue",
+            "value": 203.36669530075338,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "jox.RendezvousKotlinBenchmark.sendReceiveUsingDefaultDispatcher",
+            "value": 149.48507504688644,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
           }
         ]
       }
