@@ -34,10 +34,18 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
           cache: 'maven'
-      - name: Run benchmark
+      - name: Run java benchmarks
         run: |
           mvn package -DskipTests=true
           java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 3 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json
+      - name: Run kotlin benchmarks
+        run: |
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 3 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
+      - name: Merge java and kotlin benchmark results
+        uses: actions/github-script@v5
+        with:
+          script: |
+            jq -s '.[0] + .[1]' jmh-result.json jmh-result-kotlin.json > jmh-result-both.json
       - name: Extract branch name
         shell: bash
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
@@ -48,7 +56,7 @@ jobs:
         if: steps.extract_branch.outputs.branch == 'main'
         with:
           tool: 'jmh'
-          output-file-path: jmh-result.json
+          output-file-path: jmh-result-both.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
@@ -67,7 +75,7 @@ jobs:
         if: steps.extract_branch.outputs.branch != 'main'
         with:
           tool: 'jmh'
-          output-file-path: jmh-result.json
+          output-file-path: jmh-result-both.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
           alert-threshold: '120%'

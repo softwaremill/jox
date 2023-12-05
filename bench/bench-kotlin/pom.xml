@@ -47,6 +47,18 @@
                     <experimentalCoroutines>enable</experimentalCoroutines>
                 </configuration>
                 <executions>
+                    <!-- Enable JMH annotation processing -->
+                    <execution>
+                        <id>kapt</id>
+                        <goals>
+                            <goal>kapt</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirs>
+                                <sourceDir>src</sourceDir>
+                            </sourceDirs>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>compile</id>
                         <phase>process-sources</phase>

@@ -29,7 +29,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.sample;
+package jox;
 
 import jox.Channel;
 import org.openjdk.jmh.annotations.*;
