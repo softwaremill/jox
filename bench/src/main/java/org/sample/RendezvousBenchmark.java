@@ -83,7 +83,6 @@ public class RendezvousBenchmark {
     @GroupThreads(1)
     public void exchange2() throws InterruptedException {
         exchanger.exchange(64);
-        Thread.sleep(10);
     }
 
     //
