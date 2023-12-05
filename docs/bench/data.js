@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1701792302817,
+  "lastUpdate": 1701792421858,
   "repoUrl": "https://github.com/softwaremill/jox",
   "entries": {
     "Benchmark": [
@@ -124,6 +124,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "org.sample.RendezvousBenchmark.synchronous_queue",
             "value": 239.74681033262146,
+            "unit": "ns/op",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "committer": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "distinct": true,
+          "id": "e3867adf6582fda70513549f9dc82ad8e5a1e0de",
+          "message": "WIP",
+          "timestamp": "2023-12-05T17:06:13+01:00",
+          "tree_id": "bb7ce050ae0e47c7f13e700e626442d5dcff8414",
+          "url": "https://github.com/softwaremill/jox/commit/e3867adf6582fda70513549f9dc82ad8e5a1e0de"
+        },
+        "date": 1701792421844,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "org.sample.RendezvousBenchmark.channel",
+            "value": 184.55003363465295,
+            "unit": "ns/op",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.exchanger",
+            "value": 73.53995398045129,
+            "unit": "ns/op",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.synchronous_queue",
+            "value": 231.69473289994073,
             "unit": "ns/op",
             "extra": "iterations: 1\nforks: 1\nthreads: 2"
           }
