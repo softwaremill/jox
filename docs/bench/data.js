@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1701787500327,
+  "lastUpdate": 1701789187942,
   "repoUrl": "https://github.com/softwaremill/jox",
   "entries": {
     "Benchmark": [
@@ -292,6 +292,48 @@ window.BENCHMARK_DATA = {
           {
             "name": "org.sample.RendezvousBenchmark.synchronous_queue",
             "value": 8643.599014646023,
+            "unit": "ops/ms",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adam@warski.org",
+            "name": "Adam Warski",
+            "username": "adamw"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dec0f80bb327ac1b09d364da20a76f773d1eebd3",
+          "message": "Merge pull request #2 from softwaremill/test2\n\nWIP",
+          "timestamp": "2023-12-05T16:12:13+01:00",
+          "tree_id": "f401614d88b2ea67cf4663676d1b41d8653924fc",
+          "url": "https://github.com/softwaremill/jox/commit/dec0f80bb327ac1b09d364da20a76f773d1eebd3"
+        },
+        "date": 1701789187928,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "org.sample.RendezvousBenchmark.channel",
+            "value": 9986.080586519973,
+            "unit": "ops/ms",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.exchanger",
+            "value": 0.19721206532585667,
+            "unit": "ops/ms",
+            "extra": "iterations: 1\nforks: 1\nthreads: 2"
+          },
+          {
+            "name": "org.sample.RendezvousBenchmark.synchronous_queue",
+            "value": 8782.603060502664,
             "unit": "ops/ms",
             "extra": "iterations: 1\nforks: 1\nthreads: 2"
           }
