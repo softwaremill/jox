@@ -2,10 +2,10 @@ name: Benchmarks
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
     branches:
-      - master
+      - main
 
 jobs:
   benchmark:
@@ -40,5 +40,5 @@ jobs:
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
           # Store benchmark results in the docs folder of the master branch
-          gh-pages-branch: 'master'
+          gh-pages-branch: 'main'
           benchmark-data-dir-path: 'docs/bench'
