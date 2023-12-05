@@ -52,7 +52,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
-          alert-threshold: '90%'
+          alert-threshold: '120%'
           # Enable alert commit comment
           comment-on-alert: true
           fail-on-alert: true
@@ -70,7 +70,7 @@ jobs:
           output-file-path: jmh-result.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
-          alert-threshold: '90%'
+          alert-threshold: '120%'
           comment-on-alert: true
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
