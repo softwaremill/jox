@@ -76,3 +76,4 @@ jobs:
           alert-comment-cc-users: '@adamw'
           gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
           benchmark-data-dir-path: 'docs/bench'
+          skip-fetch-gh-pages: true
