@@ -102,4 +102,39 @@ public class RendezvousBenchmark {
     public void receiveFromChannel() throws InterruptedException {
         channel.receive();
     }
+
+    //
+
+    // including an iterative benchmark, for direct comparison w/ Kotlin, as we can't write a group-based benchmark
+    // there, due to suspended functions
+
+    private final static int OPERATIONS_PER_INVOCATION = 1_000_000;
+
+    @Benchmark
+    @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
+    @Group("channel_iterative")
+    public void sendReceive() throws InterruptedException {
+        var t1 = Thread.startVirtualThread(() -> {
+            for (int i = 0; i < OPERATIONS_PER_INVOCATION; i++) {
+                try {
+                    channel.send(63);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        var t2 = Thread.startVirtualThread(() -> {
+            for (int i = 0; i < OPERATIONS_PER_INVOCATION; i++) {
+                try {
+                    channel.receive();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        });
+
+        t1.join();
+        t2.join();
+    }
 }
