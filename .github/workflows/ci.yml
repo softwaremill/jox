@@ -21,3 +21,40 @@ jobs:
           cache: 'maven'
       - name: Test
         run: mvn --batch-mode --update-snapshots verify
+
+  benchmark:
+    needs: [ ci ]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+          cache: 'maven'
+      - name: Run benchmark
+        run: |
+          mvn package -DskipTests=true
+          java -Djmh.executor=VIRTUAL -jar bench/target/benchmarks.jar -i 1 -wi 0 -f 1 -to 1100ms -r 1000ms -rf json
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'jmh'
+          output-file-path: jmh-result.json
+          # Use personal access token instead of GITHUB_TOKEN due to https://github.community/t/github-action-not-triggering-gh-pages-upon-push/16096
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '120%'
+          # Enable alert commit comment
+          comment-on-alert: true
+          # Enable Job Summary for PRs
+          summary-always: true
+          fail-on-alert: true
+          alert-comment-cc-users: '@adamw'
+          # Store benchmark results in the docs folder of the main branch
+          gh-pages-branch: 'main'
+          benchmark-data-dir-path: 'docs/bench'
+          skip-fetch-gh-pages: true
