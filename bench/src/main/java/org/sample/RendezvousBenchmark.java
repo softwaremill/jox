@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 @Timeout(time = 5100, timeUnit = TimeUnit.MILLISECONDS)
 @Fork(value = 3)
 @BenchmarkMode(Mode.AverageTime)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Group)
 public class RendezvousBenchmark {
     private SynchronousQueue<Integer> queue = new SynchronousQueue<>();
