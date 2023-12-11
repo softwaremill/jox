@@ -21,7 +21,7 @@ public class SegmentTest {
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellInterrupted();
+            ss[1].cellInterruptedSender();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -32,7 +32,7 @@ public class SegmentTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellInterrupted(); // last cell
+        ss[1].cellInterruptedSender(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -48,9 +48,9 @@ public class SegmentTest {
         var ss = createSegmentChain(3, 0, true);
 
         // when
-        // interrupting all cells
+        // receiver-interrupting all cells
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[1].cellInterrupted();
+            ss[1].cellInterruptedReceiver();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -63,7 +63,7 @@ public class SegmentTest {
 
         // processing all cells but one
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellProcessed();
+            ss[1].cellProcessed_notInterruptedSender();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -74,7 +74,35 @@ public class SegmentTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellProcessed(); // last cell
+        ss[1].cellProcessed_notInterruptedSender(); // last cell
+        assertTrue(ss[1].isRemoved());
+
+        // then
+        assertEquals(ss[0].getPrev(), null);
+        assertEquals(ss[0].getNext(), ss[2]);
+        assertEquals(ss[2].getPrev(), ss[0]);
+        assertEquals(ss[2].getNext(), null);
+    }
+
+    @Test
+    void segmentShouldBecomeRemovedOnceAllCellsSendInterrupted() {
+        // given
+        var ss = createSegmentChain(3, 0, true);
+
+        // when
+        for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
+            ss[1].cellInterruptedSender();
+            // nothing should happen
+            assertFalse(ss[1].isRemoved());
+            assertEquals(ss[1].getPrev(), ss[0]);
+            assertEquals(ss[1].getNext(), ss[2]);
+            assertEquals(ss[0].getPrev(), null);
+            assertEquals(ss[0].getNext(), ss[1]);
+            assertEquals(ss[2].getPrev(), ss[1]);
+            assertEquals(ss[2].getNext(), null);
+        }
+
+        ss[1].cellInterruptedSender(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -96,11 +124,11 @@ public class SegmentTest {
         assertTrue(ss[3].tryIncPointers());
         // interrupting all cells
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[1].cellInterrupted();
+            ss[1].cellInterruptedSender();
             assertFalse(ss[1].isRemoved());
-            ss[2].cellInterrupted();
+            ss[2].cellInterruptedSender();
             assertFalse(ss[2].isRemoved());
-            ss[3].cellInterrupted();
+            ss[3].cellInterruptedSender();
             assertFalse(ss[3].isRemoved());
         }
         // decreasing number of pointers, segments become logically removed
@@ -151,7 +179,7 @@ public class SegmentTest {
         assertTrue(ss[0].tryIncPointers());
 
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[0].cellInterrupted();
+            ss[0].cellInterruptedSender();
             assertFalse(ss[0].isRemoved());
         }
 
@@ -177,7 +205,7 @@ public class SegmentTest {
                 // first interrupting all cells but one in segments 2-(segmentCount-1))
                 for (int i = 1; i < ss.length - 1; i++) {
                     for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
-                        ss[i].cellInterrupted();
+                        ss[i].cellInterruptedSender();
                     }
                 }
 
@@ -185,7 +213,7 @@ public class SegmentTest {
                 for (int i = 1; i < ss.length - 1; i++) {
                     int ii = i;
                     forkVoid(scope, () -> {
-                        ss[ii].cellInterrupted();
+                        ss[ii].cellInterruptedSender();
                     });
                 }
             });
@@ -349,7 +377,7 @@ public class SegmentTest {
 
     private void interruptAllCells(Segment s) {
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            s.cellInterrupted();
+            s.cellInterruptedSender();
         }
     }
 }

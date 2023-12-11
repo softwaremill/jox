@@ -67,7 +67,7 @@ public class Channel<T> {
 
         bufferEnd = new AtomicLong(capacity);
         for (int i = 0; i < capacity; i++) {
-            firstSegment.cellProcessed(); // the cells that are initially in the buffer are already processed (expandBuffer won't touch them)
+            firstSegment.cellProcessed_notInterruptedSender(); // the cells that are initially in the buffer are already processed (expandBuffer won't touch them)
         }
 
         sendSegment = new AtomicReference<>(firstSegment);
@@ -343,19 +343,25 @@ public class Channel<T> {
 
             // check if `bufferEndSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(bufferEndSegment, segment, id, !isRendezvous);
+                segment = findAndMoveForward(bufferEndSegment, segment, id, true);
 
-                // if we still have another segment, the segment must have been removed, which should not happen
+                // if we still have another segment, the segment must have been removed; this can happen if the current
+                // cell has been an interrupted sender (such cells are immediately marked as processed, which can cause
+                // segment removal); other cells might have been both interrupted senders/receivers
                 if (segment.getId() != id) {
-                    throw new IllegalStateException("A segment " + id + " has been removed before expandBuffer() completed, found: " + segment);
+                    // skipping all interrupted cells, and trying with a new one
+                    bufferEnd.compareAndSet(b, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
                 }
             }
 
             var result = updateCellExpandBuffer(segment, i);
-            segment.cellProcessed(); // letting the segment know that the cell is processed, and the segment can be potentially removed
             if (result) {
+                // letting the segment know that the cell is processed, and the segment can be potentially removed
+                segment.cellProcessed_notInterruptedSender();
                 return;
             }
+            // else, the cell must have been an interrupted sender; `Continuation` the properly notifies the segment
         }
     }
 
@@ -501,9 +507,16 @@ final class Continuation {
                 if (Thread.interrupted()) {
                     // potential race with `tryResume`
                     if (Continuation.DATA.compareAndSet(this, null, ContinuationMarker.INTERRUPTED)) {
-                        segment.setCell(cellIndex, isSender() ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
+                        var isSender = isSender();
+                        segment.setCell(cellIndex, isSender ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
+
                         // notifying the segment - if all cells become interrupted, the segment can be removed
-                        segment.cellInterrupted();
+                        if (isSender) {
+                            segment.cellInterruptedSender();
+                        } else {
+                            segment.cellInterruptedReceiver();
+                        }
+
                         throw new InterruptedException();
                     } else {
                         // another thread already set the data; setting the interrupt status (so that the next blocking
