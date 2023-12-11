@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 /**
  * Channel tests which are run for various capacities.
  */
-public class ChannelManyCapcitiesTest {
+public class ChannelTest {
     @ChannelMultiTest
     void testSendReceiveInManyForks(int capacity) throws ExecutionException, InterruptedException {
         // given
