@@ -385,7 +385,7 @@ public class Channel<T> {
                     // must be a receiver continuation - another buffer expansion already happened
                     return true;
                 }
-                case Buffered _ -> {
+                case Buffered b -> {
                     // an element is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
                     return true;
                 }
