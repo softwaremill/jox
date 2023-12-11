@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 
 final class Segment {
     // in the first 6 bits, we store the number of cells that haven't been interrupted yet
-    // in the second 6 bits, we store the number of cells which have been processed by expandBuffer (in buffered channels)
+    // in the second 6 bits, we store the number of cells which haven't been processed by expandBuffer yet (in buffered channels)
     // in bits 13 & 14, we store the number of incoming pointers to this segment
     static final int SEGMENT_SIZE = 32; // 2^5
     private static final int PROCESSED_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
@@ -23,6 +23,7 @@ final class Segment {
      * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
      * - the number of cells, which haven't been processed by {@code Channel.expandBuffer} yet (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
      * - the number of cells, which haven't been interrupted yet (in the first 6 bits)
+     * When this reaches 0, the segment is logically removed.
      */
     private final AtomicInteger pointers_notProcessed_notInterrupted;
 
@@ -80,8 +81,8 @@ final class Segment {
     }
 
     /**
-     * @return {@code true} if this segment is logically removed, that is there are no incoming pointers, and all cells
-     * have been interrupted.
+     * @return {@code true} if this segment is logically removed, that is there are no incoming pointers, all cells
+     * have been processed by expandBuffer, and all cells have been interrupted.
      */
     boolean isRemoved() {
         return pointers_notProcessed_notInterrupted.get() == 0;
