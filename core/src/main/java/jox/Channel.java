@@ -77,9 +77,6 @@ public class Channel<T> {
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
     }
 
-    // passed to continuation to set the interrupt state
-    private final TriConsumer<Segment, Integer, Object> setStateMethod = Segment::setCell; // TODO: remove?
-
     //
 
     /**
@@ -171,7 +168,7 @@ public class Channel<T> {
                         // storing the value to send as the continuation's payload, so that the receiver can use it
                         var c = new Continuation(value);
                         if (segment.casCell(i, null, c)) {
-                            c.await(setStateMethod, segment, i);
+                            c.await(segment, i);
                             return SendResult.AWAITED;
                         }
                         // else: CAS unsuccessful, repeat
@@ -288,7 +285,7 @@ public class Channel<T> {
                         var c = new Continuation(null);
                         if (segment.casCell(i, state, c)) {
                             expandBuffer();
-                            return c.await(setStateMethod, segment, i);
+                            return c.await(segment, i);
                         }
                         // else: CAS unsuccessful, repeat
                     } else {
@@ -451,7 +448,7 @@ record Buffered(Object value) {}
 
 final class Continuation {
     /**
-     * The number of busy-looping iterations before yielding, during {@link Continuation#await(TriConsumer, Segment, int)}.
+     * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
      * {@code 0}, if there's a single CPU.
      */
     private static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : 10000;
@@ -488,12 +485,11 @@ final class Continuation {
     /**
      * Await for the continuation to be resumed.
      *
-     * @param setStateMethod The method to call which will change the cell's state to interrupted, if interruption happens.
-     * @param segment        The segment in which the cell is located.
-     * @param cellIndex      The index of the cell for which to change the state to interrupted, if interruption happens.
+     * @param segment   The segment in which the cell is located.
+     * @param cellIndex The index of the cell for which to change the state to interrupted, if interruption happens.
      * @return The value with which the continuation was resumed.
      */
-    Object await(TriConsumer<Segment, Integer, Object> setStateMethod, Segment segment, int cellIndex) throws InterruptedException {
+    Object await(Segment segment, int cellIndex) throws InterruptedException {
         var spinIterations = SPINS;
         while (data == null) {
             if (spinIterations > 0) {
@@ -505,7 +501,7 @@ final class Continuation {
                 if (Thread.interrupted()) {
                     // potential race with `tryResume`
                     if (Continuation.DATA.compareAndSet(this, null, ContinuationMarker.INTERRUPTED)) {
-                        setStateMethod.accept(segment, cellIndex, isSender() ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
+                        segment.setCell(cellIndex, isSender() ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
                         // notifying the segment - if all cells become interrupted, the segment can be removed
                         segment.cellInterrupted();
                         throw new InterruptedException();
