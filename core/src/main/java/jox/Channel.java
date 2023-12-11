@@ -348,11 +348,9 @@ public class Channel<T> {
             if (segment.getId() != id) {
                 segment = findAndMoveForward(bufferEndSegment, segment, id, !isRendezvous);
 
-                // if we still have another segment, the segment must have been removed
+                // if we still have another segment, the segment must have been removed, which should not happen
                 if (segment.getId() != id) {
-                    // skipping all interrupted cells, and trying with a new one
-                    bufferEnd.compareAndSet(b, segment.getId() * Segment.SEGMENT_SIZE);
-                    continue;
+                    throw new IllegalStateException("A segment " + id + " has been removed before expandBuffer() completed, found: " + segment);
                 }
             }
 
