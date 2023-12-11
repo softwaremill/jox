@@ -35,10 +35,9 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <compilerArgs>
-                        <!-- needed only for tests, but IntelliJ import only works when this is set globally -->
-                        <arg>--enable-preview</arg>
-                    </compilerArgs>
+                    <!-- IntelliJ doesn't recognize this, the flag needs to be manually added in -->
+                    <fork>true</fork>
+                    <testCompilerArgument>--enable-preview</testCompilerArgument>
                 </configuration>
             </plugin>
             <plugin>
