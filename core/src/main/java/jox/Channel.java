@@ -15,6 +15,7 @@ public class Channel<T> {
     the Kotlin implementation (https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
 
     Notable differences from the Kotlin implementation:
+    * we block (virtual) threads, instead of suspend functions
     * in Kotlin's channels, the buffer stores both the elements (in even indexes), and the state for each cell (in odd
       indexes). This would be also possible here, but in two-thread rendezvous tests, this is slightly slower than the
       approach below: we transmit the elements inside objects representing state. This does incur an additional
@@ -23,13 +24,17 @@ public class Channel<T> {
       allocation when the sender suspends.
     * as we don't directly store elements in the buffer, we don't need to clear them on interrupt etc. This is done
       automatically when the cell's state is set to something else than a Continuation/Buffered.
+    * instead of the `completedExpandBuffersAndPauseFlag` counter, we maintain a counter of cells which haven't been
+      processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all cells have
+      been interrupted, processed & there are no counters. The segment is notified that a cell is processed after
+      `expandBuffer` completes.
 
     Other notes:
     * we need the previous pointers in segments to physically remove segments full of cells in the interrupted state.
       Segments before such an interrupted segments might still hold awaiting continuations. When physically removing a
       segment, we need to update the `next` pointer of the `previous` ("alive") segment. That way the memory usage is
       bounded by the number of awaiting threads.
-    * after a `send`, if we know that r >= s, or after a `receive`, when we know that s >= r, we can set the `previous`
+    * after a `send`, if we know that R > s, or after a `receive`, when we know that S > r, we can set the `previous`
       pointer in the segment to `null`, so that the previous segments can be GCd. Even if there are still ongoing
       operations on these (previous) segments, and we'll end up wanting to remove such a segment, subsequent channel
       operations won't use them, so the relinking won't be useful.
@@ -40,6 +45,7 @@ public class Channel<T> {
      */
     private final AtomicLong senders = new AtomicLong(0L);
     private final AtomicLong receivers = new AtomicLong(0L);
+    private final AtomicLong bufferEnd;
 
     /**
      * Segments holding cell states. State can be {@link CellState}, {@link Buffered}, or {@link Continuation}.
@@ -48,16 +54,31 @@ public class Channel<T> {
     private final AtomicReference<Segment> receiveSegment;
     private final AtomicReference<Segment> bufferEndSegment;
 
+    private final boolean isRendezvous;
+
     public Channel() {
-        var isRendezvous = true; // TODO: add capacity
-        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3);
+        this(0);
+    }
+
+    public Channel(long capacity) {
+        isRendezvous = capacity == 0L;
+
+        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, !isRendezvous);
+
+        bufferEnd = new AtomicLong(capacity);
+        for (int i = 0; i < capacity; i++) {
+            firstSegment.cellProcessed(); // the cells that are initially in the buffer are already processed (expandBuffer won't touch them)
+        }
+
         sendSegment = new AtomicReference<>(firstSegment);
         receiveSegment = new AtomicReference<>(firstSegment);
+        // If the capacity is 0, buffer expansion never happens, so the buffer end segment points to a null segment,
+        // not the first one. This is also reflected in the pointer counter of firstSegment.
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
     }
 
     // passed to continuation to set the interrupt state
-    private final TriConsumer<Segment, Integer, Object> setStateMethod = Segment::setCell;
+    private final TriConsumer<Segment, Integer, Object> setStateMethod = Segment::setCell; // TODO: remove?
 
     //
 
@@ -85,7 +106,7 @@ public class Channel<T> {
             // reading the segment before the counter increment - this is needed to find the required segment later
             var segment = sendSegment.get();
             // reserving the next cell
-            var s = senders.incrementAndGet();
+            var s = senders.getAndIncrement();
 
             // calculating the segment id and the index within the segment
             var id = s / Segment.SEGMENT_SIZE;
@@ -93,9 +114,9 @@ public class Channel<T> {
 
             // check if `sendSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(sendSegment, segment, id);
+                segment = findAndMoveForward(sendSegment, segment, id, !isRendezvous);
 
-                // if we still have another segment, the cell (as well as all other ones) must have been interrupted
+                // if we still have another segment, the segment must have been removed
                 if (segment.getId() != id) {
                     // skipping all interrupted cells, and trying with a new one
                     senders.compareAndSet(s, segment.getId() * Segment.SEGMENT_SIZE);
@@ -104,19 +125,29 @@ public class Channel<T> {
             }
 
             var sendResult = updateCellSend(segment, i, s, value);
-            /*
-            After `updateCellSend` completes, we can be sure that r >= s:
-            - if we stored and awaited a continuation, and it was resumed, then a receiver must have appeared
-            - if we buffered a value, then a receiver is in progress in that cell
-            - if a continuation was present, then the receiver must have been there
-            - if the cell was interrupted, that could have been only because of a receiver
-            - same, if the cell is broken
-
-            The only case when r < s is when awaiting on the continuation is interrupted, in which case the exception
-            propagates outside of this method.
-             */
-            segment.cleanPrev();
-            if (sendResult) return null;
+            switch (sendResult) {
+                case AWAITED -> {
+                    // the thread was suspended and then resumed by a receiver or by buffer expansion
+                    // not clearing the previous pointer, because of the buffering possibility
+                    return null;
+                }
+                case BUFFERED -> {
+                    // a receiver is coming, or we are in buffer
+                    // similarly as above, not clearing the previous pointer
+                    return null;
+                }
+                case RESUMED -> {
+                    // we resumed a receiver - we can be sure that R > s
+                    segment.cleanPrev();
+                    return null;
+                }
+                case FAILED -> {
+                    // the cell was broken (hence already processed by a receiver) or interrupted (also a receiver
+                    // must have been there); in both cases R > s
+                    segment.cleanPrev();
+                    // trying again with a new cell
+                }
+            }
         }
     }
 
@@ -127,43 +158,51 @@ public class Channel<T> {
      * @param value   The value to send.
      * @return {@code true}, if sending was successful; {@code false}, if it should be restarted.
      */
-    private boolean updateCellSend(Segment segment, int i, long s, T value) throws InterruptedException {
+    private SendResult updateCellSend(Segment segment, int i, long s, T value) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
             var r = receivers.get(); // reading the receiver's counter
+            var b = isRendezvous ? 0 : bufferEnd.get(); // reading the buffer end
 
             switch (state) {
                 case null -> {
-                    if (s >= r) {
-                        // cell is empty, and no receiver -> suspend
+                    if (s >= r && s >= b) {
+                        // cell is empty, and no receiver, not in buffer -> suspend
                         // storing the value to send as the continuation's payload, so that the receiver can use it
                         var c = new Continuation(value);
                         if (segment.casCell(i, null, c)) {
                             c.await(setStateMethod, segment, i);
-                            return true;
+                            return SendResult.AWAITED;
                         }
                         // else: CAS unsuccessful, repeat
                     } else {
-                        // cell is empty, but a receiver is in progress -> elimination
+                        // cell is empty, but a receiver is in progress, or in buffer -> elimination
                         if (segment.casCell(i, null, new Buffered(value))) {
-                            return true;
+                            return SendResult.BUFFERED;
                         }
                         // else: CAS unsuccessful, repeat
                     }
+                }
+                case IN_BUFFER -> {
+                    // cell just became part of the buffer
+                    if (segment.casCell(i, IN_BUFFER, new Buffered(value))) {
+                        return SendResult.BUFFERED;
+                    }
+                    // else: CAS unsuccessful, repeat
                 }
                 case Continuation c -> {
                     // a receiver is waiting -> trying to resume
                     if (c.tryResume(value)) {
                         segment.setCell(i, DONE);
-                        return true;
+                        return SendResult.RESUMED;
                     } else {
                         // cell interrupted -> trying with a new one
-                        return false;
+                        return SendResult.FAILED;
                     }
                 }
-                case INTERRUPTED, BROKEN -> {
+                case INTERRUPTED_RECEIVE, BROKEN -> {
                     // cell interrupted or poisoned -> trying with a new one
-                    return false;
+                    return SendResult.FAILED;
                 }
                 default -> throw new IllegalStateException("Unexpected state: " + state);
             }
@@ -191,107 +230,223 @@ public class Channel<T> {
             // reading the segment before the counter increment - this is needed to find the required segment later
             var segment = receiveSegment.get();
             // reserving the next cell
-            var r = receivers.incrementAndGet();
+            var r = receivers.getAndIncrement();
 
             // calculating the segment id and the index within the segment
             var id = r / Segment.SEGMENT_SIZE;
             var i = (int) (r % Segment.SEGMENT_SIZE);
 
-            // check if `sendSegment` stores a previous segment, if so move the reference forward
+            // check if `receiveSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(receiveSegment, segment, id);
+                segment = findAndMoveForward(receiveSegment, segment, id, !isRendezvous);
 
-                // if we still have another segment, the cell (as well as all other ones) must have been interrupted
+                // if we still have another segment, the segment must have been removed
                 if (segment.getId() != id) {
                     // skipping all interrupted cells, and trying with a new one
-                    senders.compareAndSet(r, segment.getId() * Segment.SEGMENT_SIZE);
+                    receivers.compareAndSet(r, segment.getId() * Segment.SEGMENT_SIZE);
                     continue;
                 }
             }
 
             var result = updateCellReceive(segment, i, r);
             /*
-            After `updateCellReceive` completes, we can be sure that s >= r:
+            After `updateCellReceive` completes, we can be sure that S > r:
             - if we stored and awaited a continuation, and it was resumed, then a sender must have appeared
             - if we marked the cell as broken, then a sender is in progress in that cell
             - if a continuation was present, then the sender must have been there
             - if the cell was interrupted, that could have been only because of a sender
-            - if a value was buffered, that's because there's a matching sender
+            - if a value was buffered, that's because there was/is a matching sender
 
-            The only case when s < r is when awaiting on the continuation is interrupted, in which case the exception
+            The only case when S < r is when awaiting on the continuation is interrupted, in which case the exception
             propagates outside of this method.
              */
             segment.cleanPrev();
-            if (result != UpdateCellReceiveResult.RESTART) {
+            if (result != ReceiveResult.FAILED) {
                 return result;
             }
         }
     }
 
     /**
+     * Invariant maintained by receive + expandBuffer: between R and B the number of cells that are empty / IN_BUFFER should be equal
+     * to the buffer size. These are the cells that can accept a sender.
+     *
      * @param r Index of the reserved cell.
-     * @return Either a restart ({@link UpdateCellReceiveResult#RESTART}), or the received value.
+     * @return Either a state-result ({@link ReceiveResult}), or the received value.
      */
     private Object updateCellReceive(Segment segment, int i, long r) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
+            var switchState = state == null ? IN_BUFFER : state; // we can't combine null+IN_BUFFER in the switch statement, hence cheating a bit here
             var s = senders.get(); // reading the sender's counter
 
-            switch (state) {
-                case null -> {
+            switch (switchState) {
+                case IN_BUFFER -> { // means that state == null || state == IN_BUFFER
                     if (r >= s) {
                         // cell is empty, and no sender -> suspend
                         // not using any payload
                         var c = new Continuation(null);
-                        if (segment.casCell(i, null, c)) {
+                        if (segment.casCell(i, state, c)) {
+                            expandBuffer();
                             return c.await(setStateMethod, segment, i);
                         }
                         // else: CAS unsuccessful, repeat
                     } else {
                         // sender in progress, receiver changed state first -> restart
-                        if (segment.casCell(i, null, BROKEN)) {
-                            return UpdateCellReceiveResult.RESTART;
+                        if (segment.casCell(i, state, BROKEN)) {
+                            expandBuffer();
+                            return ReceiveResult.FAILED;
                         }
                         // else: CAS unsuccessful, repeat
                     }
                 }
                 case Continuation c -> {
-                    // a sender is waiting -> trying to resume
-                    if (c.tryResume(0)) {
-                        segment.setCell(i, DONE);
-                        return c.getPayload();
-                    } else {
-                        // cell interrupted -> trying with a new one
-                        return UpdateCellReceiveResult.RESTART;
+                    if (segment.casCell(i, state, RESUMING)) {
+                        // a sender is waiting -> trying to resume
+                        if (c.tryResume(0)) {
+                            segment.setCell(i, DONE);
+                            return c.getPayload();
+                        } else {
+                            // cell interrupted -> trying with a new one
+                            // the state will be set to INTERRUPTED_SEND by the continuation, meanwhile everybody else will observe RESUMING
+                            return ReceiveResult.FAILED;
+                        }
                     }
+                    // else: CAS unsuccessful, repeat
                 }
                 case Buffered b -> {
+                    expandBuffer();
                     // an elimination has happened -> finish
                     return b.value();
                 }
-                case INTERRUPTED -> {
+                case INTERRUPTED_SEND -> {
                     // cell interrupted -> trying with a new one
-                    return UpdateCellReceiveResult.RESTART;
+                    return ReceiveResult.FAILED;
+                }
+                case RESUMING -> {
+                    // expandBuffer() is resuming the sender -> repeat
+                    Thread.onSpinWait();
                 }
                 default -> throw new IllegalStateException("Unexpected state: " + state);
             }
         }
     }
 
-    /**
-     * Possible return values of {@link Channel#updateCellReceive(Segment, int, long)}: one of the enum constants below, or the received value.
-     */
-    enum UpdateCellReceiveResult {
-        RESTART
+    private void expandBuffer() {
+        if (isRendezvous) return;
+        while (true) {
+            // reading the segment before the counter increment - this is needed to find the required segment later
+            var segment = bufferEndSegment.get();
+            // reserving the next cell
+            var b = bufferEnd.getAndIncrement();
+
+            // calculating the segment id and the index within the segment
+            var id = b / Segment.SEGMENT_SIZE;
+            var i = (int) (b % Segment.SEGMENT_SIZE);
+
+            // check if `bufferEndSegment` stores a previous segment, if so move the reference forward
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(bufferEndSegment, segment, id, !isRendezvous);
+
+                // if we still have another segment, the segment must have been removed
+                if (segment.getId() != id) {
+                    // skipping all interrupted cells, and trying with a new one
+                    bufferEnd.compareAndSet(b, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            var result = updateCellExpandBuffer(segment, i);
+            segment.cellProcessed(); // letting the segment know that the cell is processed, and the segment can be potentially removed
+            if (result) {
+                return;
+            }
+        }
     }
+
+    private boolean updateCellExpandBuffer(Segment segment, int i) {
+        while (true) {
+            var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
+
+            switch (state) {
+                case Continuation c when c.isSender() -> {
+                    if (segment.casCell(i, state, RESUMING)) {
+                        // a sender is waiting -> trying to resume
+                        if (c.tryResume(0)) {
+                            segment.setCell(i, new Buffered(c.getPayload()));
+                            return true;
+                        } else {
+                            // cell interrupted -> trying with a new one
+                            // the state will be set to INTERRUPTED_SEND by the continuation, meanwhile everybody else will observe RESUMING
+                            return false;
+                        }
+                    }
+                    // else: CAS unsuccessful, repeat
+                }
+                case Continuation c -> {
+                    // must be a receiver continuation - another buffer expansion already happened
+                    return true;
+                }
+                case Buffered _ -> {
+                    // an element is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
+                    return true;
+                }
+                case INTERRUPTED_SEND -> {
+                    // a sender was interrupted - restart
+                    return false;
+                }
+                case INTERRUPTED_RECEIVE -> {
+                    // a receiver continuation must have been here before - another buffer expansion already happened
+                    return true;
+                }
+                case null -> {
+                    // the cell is empty, a sender is or will be coming - set the cell as "in buffer" to let the sender know in case it's in progress
+                    if (segment.casCell(i, null, IN_BUFFER)) {
+                        return true;
+                    }
+                    // else: CAS unsuccessful, repeat
+                }
+                case BROKEN -> {
+                    // the cell is broken, receive() started another buffer expansion
+                    return true;
+                }
+                case DONE -> {
+                    // sender & receiver have already paired up, another buffer expansion already happened
+                    return true;
+                }
+                case RESUMING -> Thread.onSpinWait(); // receive() is resuming the sender -> repeat
+                default -> throw new IllegalStateException("Unexpected state: " + state);
+            }
+        }
+    }
+}
+
+/**
+ * Possible return values of {@code Channel#updateCellSend}: one of the enum constants below.
+ */
+enum SendResult {
+    AWAITED,
+    BUFFERED,
+    RESUMED,
+    FAILED
+}
+
+/**
+ * Possible return values of {@code Channel#updateCellReceive}: one of the enum constants below, or the received value.
+ */
+enum ReceiveResult {
+    FAILED
 }
 
 // possible states of a cell: one of the enum constants below, Buffered, or Continuation
 
 enum CellState {
     DONE,
-    INTERRUPTED,
-    BROKEN;
+    INTERRUPTED_SEND, // the send/receive differentiation is important for expandBuffer
+    INTERRUPTED_RECEIVE,
+    BROKEN,
+    IN_BUFFER, // used to inform a potentially concurrent sender that the cell is now in the buffer
+    RESUMING // expandBuffer is resuming a sender
 }
 
 record Buffered(Object value) {}
@@ -311,6 +466,13 @@ final class Continuation {
     Continuation(Object payload) {
         this.payload = payload;
         this.creatingThread = Thread.currentThread();
+    }
+
+    /**
+     * @return {@code true}, if the continuation is a sender; {@code false}, if it's a receiver.
+     */
+    boolean isSender() {
+        return payload != null; // senders set the value to send as the payload; moreover, a send value can't be null
     }
 
     /**
@@ -345,7 +507,7 @@ final class Continuation {
                 if (Thread.interrupted()) {
                     // potential race with `tryResume`
                     if (Continuation.DATA.compareAndSet(this, null, ContinuationMarker.INTERRUPTED)) {
-                        setStateMethod.accept(segment, cellIndex, INTERRUPTED);
+                        setStateMethod.accept(segment, cellIndex, isSender() ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
                         // notifying the segment - if all cells become interrupted, the segment can be removed
                         segment.cellInterrupted();
                         throw new InterruptedException();

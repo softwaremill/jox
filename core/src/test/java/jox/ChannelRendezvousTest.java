@@ -9,7 +9,7 @@ import java.util.concurrent.*;
 import static jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class ChannelTest {
+public class ChannelRendezvousTest {
     @Test
     void testSimpleSendReceive() throws InterruptedException, ExecutionException {
         // given
