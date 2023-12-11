@@ -36,6 +36,7 @@
                 <version>3.11.0</version>
                 <configuration>
                     <compilerArgs>
+                        <!-- needed only for tests, but IntelliJ import only works when this is set globally -->
                         <arg>--enable-preview</arg>
                     </compilerArgs>
                 </configuration>
