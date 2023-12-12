@@ -2,9 +2,11 @@ package jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import java.util.stream.Stream;
 
 import static jox.CellState.*;
 import static jox.Segment.findAndMoveForward;
@@ -40,6 +42,8 @@ public class Channel<T> {
       operations won't use them, so the relinking won't be useful.
      */
 
+    private final int capacity;
+
     /**
      * The total number of `send` operations ever invoked. Each invocation gets a unique cell to process.
      */
@@ -56,11 +60,13 @@ public class Channel<T> {
 
     private final boolean isRendezvous;
 
+
     public Channel() {
         this(0);
     }
 
-    public Channel(long capacity) {
+    public Channel(int capacity) {
+        this.capacity = capacity;
         isRendezvous = capacity == 0L;
 
         var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, !isRendezvous);
@@ -418,6 +424,40 @@ public class Channel<T> {
             }
         }
     }
+
+    @Override
+    public String toString() {
+        var smallestSegment = Stream.of(sendSegment.get(), receiveSegment.get(), bufferEndSegment.get())
+                .filter(s -> s != Segment.NULL_SEGMENT)
+                .min(Comparator.comparingLong(Segment::getId)).get();
+
+        var sb = new StringBuilder();
+        sb.append("Channel(capacity=").append(capacity).append("): \n");
+        var s = smallestSegment;
+        while (s != null) {
+            sb.append("  ").append(s).append(": ");
+            for (int i = 0; i < Segment.SEGMENT_SIZE; i++) {
+                var state = s.getCell(i);
+                switch (state) {
+                    case null -> sb.append("E");
+                    case IN_BUFFER -> sb.append("IB");
+                    case DONE -> sb.append("D");
+                    case INTERRUPTED_SEND -> sb.append("IS");
+                    case INTERRUPTED_RECEIVE -> sb.append("IR");
+                    case BROKEN -> sb.append("B");
+                    case RESUMING -> sb.append("R");
+                    case Buffered b -> sb.append("V(").append(b.value()).append(")");
+                    case Continuation c when c.isSender() -> sb.append("WS(").append(c.getPayload()).append(")");
+                    case Continuation c -> sb.append("WR");
+                    default -> throw new IllegalStateException("Unexpected value: " + state);
+                }
+                if (i != Segment.SEGMENT_SIZE - 1) sb.append(",");
+            }
+            s = s.getNext();
+            if (s != null) sb.append("\n");
+        }
+        return sb.toString();
+    }
 }
 
 /**
@@ -506,7 +546,7 @@ final class Continuation {
                     // potential race with `tryResume`
                     if (Continuation.DATA.compareAndSet(this, null, ContinuationMarker.INTERRUPTED)) {
                         var isSender = isSender();
-                        segment.setCell(cellIndex, isSender ? CellState.INTERRUPTED_SEND : CellState.INTERRUPTED_RECEIVE);
+                        segment.setCell(cellIndex, isSender ? INTERRUPTED_SEND : INTERRUPTED_RECEIVE);
 
                         // notifying the segment - if all cells become interrupted, the segment can be removed
                         if (isSender) {
