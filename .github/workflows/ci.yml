@@ -36,15 +36,13 @@ jobs:
         id: benchmark_java
         run: |
           mvn package -DskipTests=true
-          OUTPUT=$(java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json)
-          RC=$?
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json > out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
-          echo $OUTPUT >> $GITHUB_OUTPUT
+          cat out.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
           
-          echo $OUTPUT
-          exit $RC
+          cat out.txt
       - name: Run kotlin benchmarks
         id: benchmark_kotlin
         run: |
