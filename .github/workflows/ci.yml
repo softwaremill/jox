@@ -82,9 +82,9 @@ jobs:
         with:
           script: |
             function extractContent(str) {
-              const regex = /^Benchmark[\s\S]*?^Benchmark result/m;
+              const regex = /^Benchmark([\s\S]*?)(?=^Benchmark result)/m;
               const match = str.match(regex);
-              return match ? match[0] : null;
+              return match ? match[1].trim() : null;
             }
             
             // Only if there's a PR within which we run
@@ -92,10 +92,13 @@ jobs:
               let javaResults = extractContent(`${process.env.JAVA_OUTPUT}`);
               let kotlinResults = extractContent(`${process.env.KOTLIN_OUTPUT}`);
             
-              let comment = `<details><summary>Show results</summary>
+              let comment = `<details><summary>Benchmark results</summary>
 
               \`\`\`
+              Java:
               ${javaResults}
+            
+              Kotlin:
               ${kotlinResults}
               \`\`\`
 
