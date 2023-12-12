@@ -37,10 +37,10 @@ jobs:
       - name: Run java benchmarks
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 3 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json
       - name: Run kotlin benchmarks
         run: |
-          java -jar bench/bench-kotlin/target/benchmarks.jar -i 10 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
       - name: Merge java and kotlin benchmark results
         run: jq -s '.[0] + .[1]' jmh-result.json jmh-result-kotlin.json > jmh-result-both.json
       - name: Extract branch name
@@ -48,6 +48,7 @@ jobs:
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
         id: extract_branch
       - name: Check & store benchmark result
+        id: benchmark_java
         uses: benchmark-action/github-action-benchmark@v1
         # Only store updated benchmark results on main branch
         if: steps.extract_branch.outputs.branch == 'main'
@@ -67,6 +68,7 @@ jobs:
           benchmark-data-dir-path: 'docs/bench'
           skip-fetch-gh-pages: true
       - name: Check benchmark result
+        id: benchmark_kotlin
         uses: benchmark-action/github-action-benchmark@v1
         # PRs, other branches - the only difference in config is auto-push: false
         if: steps.extract_branch.outputs.branch != 'main'
@@ -82,3 +84,27 @@ jobs:
           gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
           benchmark-data-dir-path: 'docs/bench'
           skip-fetch-gh-pages: true
+      - name: Comment on PR with results
+        uses: actions/github-script@v7
+        env:
+          JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.stdout }}
+        with:
+          script: |
+            # Only if there's a PR within which we run
+            if (context.issue.number) {
+              let comment = `Script finished with \`${{ steps.benchmark_java.outcome }}\`\n`;
+              comment += `<details><summary>Show Output</summary>
+
+              \`\`\`
+              ${process.env.STEP_OUTPUT}
+              \`\`\`
+
+              </details>`;
+            
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
