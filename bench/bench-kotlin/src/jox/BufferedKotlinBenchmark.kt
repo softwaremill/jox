@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
-open class RendezvousKotlinBenchmark {
+open class BufferedKotlinBenchmark {
     @Param("1", "10", "100")
     var capacity: Int = 0
 

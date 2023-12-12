@@ -85,16 +85,16 @@ public class TestUtil {
     }
 
     @FunctionalInterface
-    public static interface ConsumerWithException<T> {
+    public interface ConsumerWithException<T> {
         void accept(T o) throws Exception;
     }
 
     @FunctionalInterface
-    public static interface RunnableWithException {
+    public interface RunnableWithException {
         void run() throws Exception;
     }
 
-    public static interface Fork<T> {
+    public interface Fork<T> {
         T get() throws ExecutionException, InterruptedException;
 
         /**

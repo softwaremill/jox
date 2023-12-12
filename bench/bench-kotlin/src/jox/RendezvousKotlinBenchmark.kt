@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 @Fork(value = 3)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-open class BufferedKotlinBenchmark {
+open class RendezvousKotlinBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     fun sendReceiveUsingDefaultDispatcher() {
