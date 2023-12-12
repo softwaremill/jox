@@ -34,11 +34,13 @@ jobs:
           cache: 'maven'
       - name: Run java benchmarks
         id: benchmark_java
+        uses: mathiasvr/command-output@v2.0.0 # grab the output into steps.X.outputs.stdout
         run: |
           mvn package -DskipTests=true
           java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json
       - name: Run kotlin benchmarks
         id: benchmark_kotlin
+        uses: mathiasvr/command-output@v2.0.0
         run: |
           java -jar bench/bench-kotlin/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
       - name: Merge java and kotlin benchmark results
