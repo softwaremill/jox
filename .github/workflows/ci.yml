@@ -81,24 +81,16 @@ jobs:
           KOTLIN_OUTPUT: ${{ steps.benchmark_kotlin.outputs.output }}
         with:
           script: |
-            function extractBenchmarkContent(str) {
-              const startIndex = str.indexOf("Benchmark");
-              const endIndex = str.indexOf("Benchmark result");
-
-              // Check if both strings are found
-              if (startIndex === -1 || endIndex === -1) {
-                return ''; // or handle the error as you prefer
-              }
-
-              // Extract and return the content
-              // Add the length of "Benchmark" to start after it
-              return str.substring(startIndex + "Benchmark".length, endIndex).trim();
+            function extractContent(str) {
+              const regex = /^Benchmark[\s\S]*?^Benchmark result/m;
+              const match = str.match(regex);
+              return match ? match[0] : null;
             }
             
             // Only if there's a PR within which we run
             if (context.issue.number) {
-              let javaResults = extractBenchmarkContent(`${process.env.JAVA_OUTPUT}`);
-              let kotlinResults = extractBenchmarkContent(`${process.env.KOTLIN_OUTPUT}`);
+              let javaResults = extractContent(`${process.env.JAVA_OUTPUT}`);
+              let kotlinResults = extractContent(`${process.env.KOTLIN_OUTPUT}`);
             
               let comment = `<details><summary>Show results</summary>
 
