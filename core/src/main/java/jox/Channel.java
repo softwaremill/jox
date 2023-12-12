@@ -158,12 +158,11 @@ public class Channel<T> {
     private SendResult updateCellSend(Segment segment, int i, long s, T value) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
-            var r = receivers.get(); // reading the receiver's counter
-            var b = isRendezvous ? 0 : bufferEnd.get(); // reading the buffer end
 
             switch (state) {
                 case null -> {
-                    if (s >= r && s >= b) {
+                    // reading the buffer end & receiver's counter if needed
+                    if (s >= (isRendezvous ? 0 : bufferEnd.get()) && s >= receivers.get()) {
                         // cell is empty, and no receiver, not in buffer -> suspend
                         // storing the value to send as the continuation's payload, so that the receiver can use it
                         var c = new Continuation(value);
@@ -275,11 +274,10 @@ public class Channel<T> {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
             var switchState = state == null ? IN_BUFFER : state; // we can't combine null+IN_BUFFER in the switch statement, hence cheating a bit here
-            var s = senders.get(); // reading the sender's counter
 
             switch (switchState) {
                 case IN_BUFFER -> { // means that state == null || state == IN_BUFFER
-                    if (r >= s) {
+                    if (r >= senders.get()) { // reading the sender's counter
                         // cell is empty, and no sender -> suspend
                         // not using any payload
                         var c = new Continuation(null);
