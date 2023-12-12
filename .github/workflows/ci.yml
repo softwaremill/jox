@@ -34,17 +34,21 @@ jobs:
           cache: 'maven'
       - name: Run java benchmarks
         id: benchmark_java
-        uses: mathiasvr/command-output@v2.0.0 # grab the output into steps.X.outputs.stdout
-        with:
-          run:
-            mvn package -DskipTests=true
-            java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json
+        run: |
+          mvn package -DskipTests=true
+          OUTPUT=$(java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json)
+          RC=$?
+          
+          echo 'output<<EOF' >> $GITHUB_OUTPUT
+          echo $OUTPUT >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+          
+          echo $OUTPUT
+          exit $RC
       - name: Run kotlin benchmarks
         id: benchmark_kotlin
-        uses: mathiasvr/command-output@v2.0.0
-        with:
-          run:
-            java -jar bench/bench-kotlin/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
+        run: |
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
       - name: Merge java and kotlin benchmark results
         run: jq -s '.[0] + .[1]' jmh-result.json jmh-result-kotlin.json > jmh-result-both.json
       - name: Extract branch name
@@ -73,7 +77,7 @@ jobs:
       - name: Comment on PR with results
         uses: actions/github-script@v7
         env:
-          JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.stdout }}
+          JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.output }}
         with:
           script: |
             // Only if there's a PR within which we run
