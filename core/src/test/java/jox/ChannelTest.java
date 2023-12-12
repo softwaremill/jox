@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Channel tests which are run for various capacities.
  */
 public class ChannelTest {
-    @ChannelMultiTest
+    @TestWithCapacities
     void testSendReceiveInManyForks(int capacity) throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = new Channel<>(capacity);
@@ -44,7 +44,7 @@ public class ChannelTest {
         });
     }
 
-    @ChannelMultiTest
+    @TestWithCapacities
     void testSendReceiveManyElementsInTwoForks(int capacity) throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = new Channel<>(capacity);
@@ -73,4 +73,4 @@ public class ChannelTest {
 @Retention(RetentionPolicy.RUNTIME)
 @ParameterizedTest
 @ValueSource(strings = {"0", "1", "2", "10"})
-@interface ChannelMultiTest {}
+@interface TestWithCapacities {}

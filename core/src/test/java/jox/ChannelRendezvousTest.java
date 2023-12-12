@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
 
 import static jox.TestUtil.*;
@@ -71,6 +73,39 @@ public class ChannelRendezvousTest {
 
             // then
             assertEquals(1000, s.size());
+        });
+    }
+
+    @Test
+    void testSendWaitsForRendezvous() throws ExecutionException, InterruptedException {
+        // given
+        Channel<Integer> channel = new Channel<>();
+        var trail = new ConcurrentLinkedQueue<String>();
+
+        // when
+        scoped(scope -> {
+            forkVoid(scope, () -> {
+                channel.send(1);
+                trail.add("S");
+            });
+            forkVoid(scope, () -> {
+                channel.send(2);
+                trail.add("S");
+            });
+            forkVoid(scope, () -> {
+                Thread.sleep(100L);
+                trail.add("R1");
+                var r1 = channel.receive();
+                Thread.sleep(100L);
+                trail.add("R2");
+                var r2 = channel.receive();
+                assertEquals(Set.of(1, 2), Set.of(r1, r2));
+            }).get();
+
+            Thread.sleep(100L); // allow trail to be finished
+
+            // then
+            assertEquals(List.of("R1", "S", "R2", "S"), trail.stream().toList());
         });
     }
 
