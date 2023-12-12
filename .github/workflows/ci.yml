@@ -1,14 +1,12 @@
 name: CI
 on:
   pull_request:
-    branches: [ '**' ]
+    branches: [ main ]
   push:
-    branches: [ '**' ]
+    branches: [ main ]
     tags: [ v* ]
 jobs:
   ci:
-    # run on external PRs, but not on internal PRs since those will be run by push to branch
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -35,12 +33,22 @@ jobs:
           java-version: '21'
           cache: 'maven'
       - name: Run java benchmarks
+        id: benchmark_java
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 3 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 10 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json | tee out.txt
+          
+          echo 'output<<EOF' >> $GITHUB_OUTPUT
+          cat out.txt >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
       - name: Run kotlin benchmarks
+        id: benchmark_kotlin
         run: |
-          java -jar bench/bench-kotlin/target/benchmarks.jar -i 10 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 10 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json | tee out.txt
+          
+          echo 'output<<EOF' >> $GITHUB_OUTPUT
+          cat out.txt >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
       - name: Merge java and kotlin benchmark results
         run: jq -s '.[0] + .[1]' jmh-result.json jmh-result-kotlin.json > jmh-result-both.json
       - name: Extract branch name
@@ -66,19 +74,40 @@ jobs:
           gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
           benchmark-data-dir-path: 'docs/bench'
           skip-fetch-gh-pages: true
-      - name: Check benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
-        # PRs, other branches - the only difference in config is auto-push: false
-        if: steps.extract_branch.outputs.branch != 'main'
+      - name: Comment on PR with results
+        uses: actions/github-script@v7
+        env:
+          JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.output }}
+          KOTLIN_OUTPUT: ${{ steps.benchmark_kotlin.outputs.output }}
         with:
-          tool: 'jmh'
-          output-file-path: jmh-result-both.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          alert-threshold: '120%'
-          comment-on-alert: true
-          fail-on-alert: true
-          alert-comment-cc-users: '@adamw'
-          gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
-          benchmark-data-dir-path: 'docs/bench'
-          skip-fetch-gh-pages: true
+          script: |
+            function extractContent(str) {
+              const regex = /^Benchmark([\s\S]*?)(?=^Benchmark result)/m;
+              const match = str.match(regex);
+              return match ? match[1].trim() : null;
+            }
+            
+            // Only if there's a PR within which we run
+            if (context.issue.number) {
+              let javaResults = extractContent(`${process.env.JAVA_OUTPUT}`);
+              let kotlinResults = extractContent(`${process.env.KOTLIN_OUTPUT}`);
+            
+              let comment = `<details><summary>Benchmark results</summary>
+
+              \`\`\`
+              Java:
+              ${javaResults}
+            
+              Kotlin:
+              ${kotlinResults}
+              \`\`\`
+
+              </details>`;
+            
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }

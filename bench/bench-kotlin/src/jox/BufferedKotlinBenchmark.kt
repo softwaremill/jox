@@ -14,12 +14,16 @@ import java.util.concurrent.TimeUnit
 @Fork(value = 3)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-open class BufferedKotlinBenchmark {
+@State(Scope.Benchmark)
+open class RendezvousKotlinBenchmark {
+    @Param("1", "10", "100")
+    var capacity: Int = 0
+
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     fun sendReceiveUsingDefaultDispatcher() {
         runBlocking {
-            val channel = Channel<Long>(0)
+            val channel = Channel<Long>(capacity)
             launch(Dispatchers.Default) {
                 for (x in 1..OPERATIONS_PER_INVOCATION) channel.send(63)
                 channel.close()

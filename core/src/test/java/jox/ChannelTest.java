@@ -1,34 +1,28 @@
 package jox;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.HashSet;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import static jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/**
+ * Channel tests which are run for various capacities.
+ */
 public class ChannelTest {
-    @Test
-    void testSimpleSendReceive() throws InterruptedException, ExecutionException {
+    @TestWithCapacities
+    void testSendReceiveInManyForks(int capacity) throws ExecutionException, InterruptedException {
         // given
-        Channel<String> channel = new Channel<>();
-
-        // when
-        scoped(scope -> {
-            forkVoid(scope, () -> channel.send("x"));
-            var t2 = fork(scope, channel::receive);
-
-            // then
-            assertEquals("x", t2.get());
-        });
-    }
-
-    @Test
-    void testSendReceiveInManyForks() throws ExecutionException, InterruptedException {
-        // given
-        Channel<Integer> channel = new Channel<>();
+        Channel<Integer> channel = new Channel<>(capacity);
         var fs = new HashSet<Future<Void>>();
         var s = new ConcurrentSkipListSet<Integer>();
 
@@ -50,10 +44,10 @@ public class ChannelTest {
         });
     }
 
-    @Test
-    void testSendReceiveManyElementsInTwoForks() throws ExecutionException, InterruptedException {
+    @TestWithCapacities
+    void testSendReceiveManyElementsInTwoForks(int capacity) throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>();
+        Channel<Integer> channel = new Channel<>(capacity);
         var s = new ConcurrentSkipListSet<Integer>();
 
         // when
@@ -73,31 +67,10 @@ public class ChannelTest {
             assertEquals(1000, s.size());
         });
     }
-
-    @Test
-    @Disabled("moved to RendezvousBenchmark, left here for development purposes")
-    void performanceTest() throws Exception {
-        for (int j = 1; j <= 10; j++) {
-            var max = 10_000_000L;
-            var c = new Channel<Integer>();
-            timed("rendezvous", () -> {
-                scoped(scope -> {
-                    forkVoid(scope, () -> {
-                        for (int i = 0; i <= max; i++) {
-                            c.send(i);
-                        }
-                    });
-                    var result = fork(scope, () -> {
-                        var acc = 0L;
-                        for (int i = 0; i <= max; i++) {
-                            acc += c.receive();
-                        }
-                        return acc;
-                    });
-
-                    assertEquals(max * (max + 1L) / 2, result.get());
-                });
-            });
-        }
-    }
 }
+
+@Target(ElementType.METHOD)
+@Retention(RetentionPolicy.RUNTIME)
+@ParameterizedTest
+@ValueSource(strings = {"0", "1", "2", "10"})
+@interface TestWithCapacities {}
