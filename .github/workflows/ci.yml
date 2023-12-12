@@ -90,13 +90,13 @@ jobs:
           JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.stdout }}
         with:
           script: |
-            # Only if there's a PR within which we run
+            // Only if there's a PR within which we run
             if (context.issue.number) {
               let comment = `Script finished with \`${{ steps.benchmark_java.outcome }}\`\n`;
               comment += `<details><summary>Show Output</summary>
 
               \`\`\`
-              ${process.env.STEP_OUTPUT}
+              ${process.env.JAVA_OUTPUT}
               \`\`\`
 
               </details>`;
