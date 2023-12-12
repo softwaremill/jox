@@ -33,10 +33,12 @@ jobs:
           java-version: '21'
           cache: 'maven'
       - name: Run java benchmarks
+        id: benchmark_java
         run: |
           mvn package -DskipTests=true
           java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json
       - name: Run kotlin benchmarks
+        id: benchmark_kotlin
         run: |
           java -jar bench/bench-kotlin/target/benchmarks.jar -i 1 -wi 1 -f 1 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json
       - name: Merge java and kotlin benchmark results
@@ -46,7 +48,6 @@ jobs:
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
         id: extract_branch
       - name: Check & store benchmark result
-        id: benchmark_java
         uses: benchmark-action/github-action-benchmark@v1
         # Only store updated benchmark results on main branch
         if: steps.extract_branch.outputs.branch == 'main'
@@ -62,23 +63,6 @@ jobs:
           fail-on-alert: true
           alert-comment-cc-users: '@adamw'
           # Store benchmark results in the docs folder of the main branch
-          gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
-          benchmark-data-dir-path: 'docs/bench'
-          skip-fetch-gh-pages: true
-      - name: Check benchmark result
-        id: benchmark_kotlin
-        uses: benchmark-action/github-action-benchmark@v1
-        # PRs, other branches - the only difference in config is auto-push: false
-        if: steps.extract_branch.outputs.branch != 'main'
-        with:
-          tool: 'jmh'
-          output-file-path: jmh-result-both.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: false
-          alert-threshold: '120%'
-          comment-on-alert: true
-          fail-on-alert: true
-          alert-comment-cc-users: '@adamw'
           gh-pages-branch: ${{ steps.extract_branch.outputs.branch }}
           benchmark-data-dir-path: 'docs/bench'
           skip-fetch-gh-pages: true
