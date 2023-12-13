@@ -155,7 +155,7 @@ public class Channel<T> {
     }
 
     /**
-     * @param segment The segment in which to store the cell's state.
+     * @param segment The segment which stores the cell's state.
      * @param i       The index within the {@code segment}.
      * @param s       Index of the reserved cell.
      * @param value   The value to send.
@@ -271,9 +271,11 @@ public class Channel<T> {
 
     /**
      * Invariant maintained by receive + expandBuffer: between R and B the number of cells that are empty / IN_BUFFER should be equal
-     * to the buffer size. These are the cells that can accept a sender.
+     * to the buffer size. These are the cells that can accept a sender without suspension.
      *
-     * @param r Index of the reserved cell.
+     * @param segment The segment which stores the cell's state.
+     * @param i       The index within the {@code segment}.
+     * @param r       Index of the reserved cell.
      * @return Either a state-result ({@link ReceiveResult}), or the received value.
      */
     private Object updateCellReceive(Segment segment, int i, long r) throws InterruptedException {
@@ -306,6 +308,7 @@ public class Channel<T> {
                         // a sender is waiting -> trying to resume
                         if (c.tryResume(0)) {
                             segment.setCell(i, DONE);
+                            expandBuffer();
                             return c.getPayload();
                         } else {
                             // cell interrupted -> trying with a new one
@@ -316,6 +319,7 @@ public class Channel<T> {
                     // else: CAS unsuccessful, repeat
                 }
                 case Buffered b -> {
+                    segment.setCell(i, DONE);
                     expandBuffer();
                     // an elimination has happened -> finish
                     return b.value();
@@ -432,7 +436,11 @@ public class Channel<T> {
                 .min(Comparator.comparingLong(Segment::getId)).get();
 
         var sb = new StringBuilder();
-        sb.append("Channel(capacity=").append(capacity).append("): \n");
+        sb.append("Channel(capacity=").append(capacity)
+                .append(", sendSegment=").append(sendSegment.get().getId()).append(", sendCounter=").append(senders.get())
+                .append(", receiveSegment=").append(receiveSegment.get().getId()).append(", receiveCounter=").append(receivers.get())
+                .append(", bufferEndSegment=").append(bufferEndSegment.get().getId()).append(", bufferEndCounter=").append(bufferEnd.get())
+                .append("): \n");
         var s = smallestSegment;
         while (s != null) {
             sb.append("  ").append(s).append(": ");

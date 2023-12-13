@@ -65,6 +65,11 @@ public class TestUtil {
             }
 
             @Override
+            public T get(long timeout, TimeUnit unit) throws ExecutionException, InterruptedException, TimeoutException {
+                return f.get(timeout, unit);
+            }
+
+            @Override
             public Object cancel() throws InterruptedException, ExecutionException {
                 t.interrupt();
                 t.join();
@@ -96,6 +101,8 @@ public class TestUtil {
 
     public interface Fork<T> {
         T get() throws ExecutionException, InterruptedException;
+
+        T get(long timeout, TimeUnit unit) throws ExecutionException, InterruptedException, TimeoutException;
 
         /**
          * Either an exception, or T. Waits for the fork to complete.
