@@ -83,23 +83,28 @@ public class Channel<T> {
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
     }
 
-    //
+    // *******
+    // Sending
+    // *******
 
     /**
      * Send a value to the channel.
-     * TODO: throw exceptions when the channel is closed
      *
      * @param value The value to send. Not {@code null}.
+     * @throws ChannelClosedException When the channel is closed.
      */
     public void send(T value) throws InterruptedException {
-        sendSafe(value); // TODO exceptions
+        var r = sendSafe(value);
+        if (r instanceof ChannelClosed c) {
+            throw c.toException();
+        }
     }
 
     /**
-     * Send a value to the channel. Doesn't throw exceptions when the channel is closed.
+     * Send a value to the channel. Doesn't throw exceptions when the channel is closed, but returns a value.
      *
      * @param value The value to send. Not {@code null}.
-     * @return Either {@code null}, or TODO: an exception when the channel is closed (the exception is not thrown.)
+     * @return Either {@code null}, or {@link ChannelClosed}, when the channel is closed.
      */
     public Object sendSafe(T value) throws InterruptedException {
         if (value == null) {
@@ -211,21 +216,29 @@ public class Channel<T> {
         }
     }
 
-    //
+    // *********
+    // Receiving
+    // *********
 
     /**
      * Receive a value from the channel.
-     * TODO: throw exceptions when the channel is closed
+     *
+     * @throws ChannelClosedException When the channel is closed.
      */
     public T receive() throws InterruptedException {
-        //noinspection unchecked
-        return (T) receiveSafe();
+        var r = receiveSafe();
+        if (r instanceof ChannelClosed c) {
+            throw c.toException();
+        } else {
+            //noinspection unchecked
+            return (T) r;
+        }
     }
 
     /**
-     * Receive a value from the channel. Doesn't throw exceptions when the channel is closed.
+     * Receive a value from the channel. Doesn't throw exceptions when the channel is closed, but returns a value.
      *
-     * @return Either a value of type {@code T}, or TODO: an exception when the channel is closed (the exception is not thrown.)
+     * @return Either a value of type {@code T}, or {@link ChannelClosed}, when the channel is closed.
      */
     public Object receiveSafe() throws InterruptedException {
         while (true) {
@@ -337,6 +350,10 @@ public class Channel<T> {
         }
     }
 
+    // ****************
+    // Buffer expansion
+    // ****************
+
     private void expandBuffer() {
         if (isRendezvous) return;
         while (true) {
@@ -428,6 +445,14 @@ public class Channel<T> {
             }
         }
     }
+
+    // *******
+    // Closing
+    // *******
+
+    // ****
+    // Misc
+    // ****
 
     @Override
     public String toString() {
