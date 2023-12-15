@@ -13,10 +13,19 @@ final class Segment {
     private static final int POINTERS_SHIFT = 12;
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
+    /**
+     * Used in {@code next} to indicate that the segment is closed.
+     */
+    private enum State {
+        CLOSED
+    }
 
     private final long id;
     private final AtomicReferenceArray<Object> data = new AtomicReferenceArray<>(SEGMENT_SIZE);
-    private final AtomicReference<Segment> next = new AtomicReference<>(null);
+    /**
+     * Possible values: {@code Segment} or {@code State.CLOSED} (union type).
+     */
+    private final AtomicReference<Object> next = new AtomicReference<>(null);
     private final AtomicReference<Segment> prev;
     /**
      * A single counter that can be inspected & modified atomically, which includes:
@@ -42,28 +51,17 @@ final class Segment {
         return id;
     }
 
-    Segment getPrev() {
-        return prev.get();
-    }
-
-    void setPrev(Segment newPrev) {
-        prev.set(newPrev);
-    }
-
     void cleanPrev() {
         prev.set(null);
     }
 
     Segment getNext() {
-        return next.get();
+        var s = next.get();
+        return s == State.CLOSED ? null : (Segment) s;
     }
 
-    boolean casNext(Segment expected, Segment setTo) {
-        return next.compareAndSet(expected, setTo);
-    }
-
-    void setNext(Segment newNext) {
-        next.set(newNext);
+    private boolean setNextIfNull(Segment setTo) {
+        return next.compareAndSet(null, setTo);
     }
 
     Object getCell(int index) {
@@ -79,7 +77,7 @@ final class Segment {
     }
 
     private boolean isTail() {
-        return next.get() == null;
+        return getNext() == null;
     }
 
     /**
@@ -160,7 +158,7 @@ final class Segment {
 
             // link next and prev
             _next.prev.updateAndGet(p -> p == null ? null : _prev);
-            if (_prev != null) _prev.setNext(_next);
+            if (_prev != null) _prev.next.set(_next);
 
             // double-checking if _prev & _next are still not removed
             if (_next.isRemoved() && !_next.isTail()) continue;
@@ -168,6 +166,26 @@ final class Segment {
 
             // the segment is now removed
             return;
+        }
+    }
+
+    /**
+     * Closes the segment chain - sets the {@code next} pointer of the last segment to {@code State.CLOSED}, and returns the last segment.
+     */
+    Segment close() {
+        var s = this;
+        while (true) {
+            var n = s.next.get();
+            if (n == null) { // this is the tail segment
+                if (s.next.compareAndSet(null, State.CLOSED)) {
+                    return s;
+                }
+                // else: try again
+            } else if (n == State.CLOSED) {
+                return s;
+            } else {
+                s = (Segment) n;
+            }
         }
     }
 
@@ -179,12 +197,15 @@ final class Segment {
         return s;
     }
 
+    /**
+     * Should only be called, if this is not the tail segment.
+     */
     private Segment aliveSegmentRight() {
-        var s = next.get();
-        while (s.isRemoved() && !s.isTail()) {
-            s = s.next.get();
+        var n = (Segment) next.get(); // this is not the tail, so there's a next segment
+        while (n.isRemoved() && !n.isTail()) {
+            n = (Segment) n.next.get(); // again, not tail
         }
-        return s;
+        return n;
     }
 
     //
@@ -192,10 +213,15 @@ final class Segment {
     /**
      * Finds or creates a non-removed segment with an id at least {@code id}, starting from {@code start}, and updates
      * the {@code ref} reference to it.
+     *
+     * @return The found segment, or {@code null} if the segment chain is closed.
      */
     static Segment findAndMoveForward(AtomicReference<Segment> ref, Segment start, long id, boolean countProcessed) {
         while (true) {
             var segment = findSegment(start, id, countProcessed);
+            if (segment == null) {
+                return null;
+            }
             if (moveForward(ref, segment)) {
                 return segment;
             }
@@ -205,14 +231,20 @@ final class Segment {
     /**
      * Finds a non-removed segment with an id at least {@code id}, starting from {@code start}. New segments are created
      * if needed; this might prompt physical removal of the previously-tail segment.
+     *
+     * @return The found segment, or {@code null} if the segment chain is closed.
      */
     private static Segment findSegment(Segment start, long id, boolean countProcessed) {
         var current = start;
         while (current.getId() < id || current.isRemoved()) {
-            // create a new segment if needed
-            if (current.getNext() == null) {
+            var n = current.next.get();
+            if (n == State.CLOSED) {
+                // segment chain is closed, so we can't create a new segment
+                return null;
+            } else if (n == null) {
+                // create a new segment if needed
                 var newSegment = new Segment(current.getId() + 1, current, 0, countProcessed);
-                if (current.casNext(null, newSegment)) {
+                if (current.setNextIfNull(newSegment)) {
                     if (current.isRemoved()) {
                         // the current segment was a tail segment, so if it was logically removed, we need to remove it physically
                         current.remove();
@@ -272,11 +304,21 @@ final class Segment {
 
         return "Segment{" +
                 "id=" + id +
-                ", next=" + (n == null ? "null" : n.id) +
+                ", next=" + (n == null ? "null" : (n == State.CLOSED ? "closed" : ((Segment) n).id)) +
                 ", prev=" + (p == null ? "null" : p.id) +
                 ", pointers=" + pointers +
                 ", notProcessed=" + notProcessed +
                 ", notInterrupted=" + notInterrupted +
                 '}';
+    }
+
+    // for tests
+
+    Segment getPrev() {
+        return prev.get();
+    }
+
+    void setNext(Segment newNext) {
+        next.set(newNext);
     }
 }

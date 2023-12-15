@@ -199,6 +199,36 @@ public class SegmentRendezvousTest {
     }
 
     @Test
+    void shouldMoveReferenceForwardIfClosedAndFoundSegmentExists() {
+        // given
+        var s = createSegmentChain(4, 0, false);
+        var r = new AtomicReference<>(s[0]);
+
+        // when
+        s[0].close();
+        var result = Segment.findAndMoveForward(r, s[0], 3, true);
+
+        // then
+        assertEquals(s[3], result);
+        assertEquals(s[3], r.get());
+    }
+
+    @Test
+    void shouldNotMoveReferenceForwardIfClosedAndFoundSegmentDoesNotExist() {
+        // given
+        var s = createSegmentChain(4, 0, false);
+        var r = new AtomicReference<>(s[0]);
+
+        // when
+        s[0].close();
+        var result = Segment.findAndMoveForward(r, s[0], 5, true);
+
+        // then
+        assertNull(result);
+        assertEquals(s[0], r.get());
+    }
+
+    @Test
     void shouldRemoveOldTailSegment() {
         // given
         var ss = createSegmentChain(2, 0, false);

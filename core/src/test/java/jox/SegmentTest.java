@@ -82,6 +82,18 @@ public class SegmentTest {
         assertEquals(ss[2].getNext(), null);
     }
 
+    @Test
+    void shouldReturnTheLastSegmentWhenClosing() {
+        // given
+        var ss = createSegmentChain(3, 0, true);
+
+        // when
+        var s = ss[0].close();
+
+        // then
+        assertEquals(ss[2].getId(), s.getId());
+    }
+
     static Segment[] createSegmentChain(int count, long id, boolean countProcessed) {
         var segments = new Segment[count];
         var thisSegment = new Segment(id, null, 0, countProcessed);
