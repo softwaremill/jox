@@ -23,7 +23,7 @@ public class SegmentRendezvousTest {
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellInterruptedSender();
+            ss[1].cellInterruptedSender_orClosed();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -34,7 +34,7 @@ public class SegmentRendezvousTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellInterruptedSender(); // last cell
+        ss[1].cellInterruptedSender_orClosed(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -56,11 +56,11 @@ public class SegmentRendezvousTest {
         assertTrue(ss[3].tryIncPointers());
         // interrupting all cells
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[1].cellInterruptedSender();
+            ss[1].cellInterruptedSender_orClosed();
             assertFalse(ss[1].isRemoved());
-            ss[2].cellInterruptedSender();
+            ss[2].cellInterruptedSender_orClosed();
             assertFalse(ss[2].isRemoved());
-            ss[3].cellInterruptedSender();
+            ss[3].cellInterruptedSender_orClosed();
             assertFalse(ss[3].isRemoved());
         }
         // decreasing number of pointers, segments become logically removed
@@ -111,7 +111,7 @@ public class SegmentRendezvousTest {
         assertTrue(ss[0].tryIncPointers());
 
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[0].cellInterruptedSender();
+            ss[0].cellInterruptedSender_orClosed();
             assertFalse(ss[0].isRemoved());
         }
 
@@ -137,7 +137,7 @@ public class SegmentRendezvousTest {
                 // first interrupting all cells but one in segments 2-(segmentCount-1))
                 for (int i = 1; i < ss.length - 1; i++) {
                     for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
-                        ss[i].cellInterruptedSender();
+                        ss[i].cellInterruptedSender_orClosed();
                     }
                 }
 
@@ -145,7 +145,7 @@ public class SegmentRendezvousTest {
                 for (int i = 1; i < ss.length - 1; i++) {
                     int ii = i;
                     forkVoid(scope, () -> {
-                        ss[ii].cellInterruptedSender();
+                        ss[ii].cellInterruptedSender_orClosed();
                     });
                 }
             });
@@ -196,6 +196,36 @@ public class SegmentRendezvousTest {
         result = Segment.findAndMoveForward(r, s[0], 5, false);
         assertEquals(5, result.getId());
         assertEquals(result, s[3].getNext().getNext());
+    }
+
+    @Test
+    void shouldMoveReferenceForwardIfClosedAndFoundSegmentExists() {
+        // given
+        var s = createSegmentChain(4, 0, false);
+        var r = new AtomicReference<>(s[0]);
+
+        // when
+        s[0].close();
+        var result = Segment.findAndMoveForward(r, s[0], 3, true);
+
+        // then
+        assertEquals(s[3], result);
+        assertEquals(s[3], r.get());
+    }
+
+    @Test
+    void shouldNotMoveReferenceForwardIfClosedAndFoundSegmentDoesNotExist() {
+        // given
+        var s = createSegmentChain(4, 0, false);
+        var r = new AtomicReference<>(s[0]);
+
+        // when
+        s[0].close();
+        var result = Segment.findAndMoveForward(r, s[0], 5, true);
+
+        // then
+        assertNull(result);
+        assertEquals(s[0], r.get());
     }
 
     @Test
