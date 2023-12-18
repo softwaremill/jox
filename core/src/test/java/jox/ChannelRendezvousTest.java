@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.concurrent.*;
 
 import static jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ChannelRendezvousTest {
     @Test
@@ -107,6 +107,31 @@ public class ChannelRendezvousTest {
             // then
             assertEquals(List.of("R1", "S", "R2", "S"), trail.stream().toList());
         });
+    }
+
+    @Test
+    void shouldProperlyReportChannelState() {
+        // given
+        Channel<Integer> c1 = new Channel<>();
+        Channel<Integer> c2 = new Channel<>();
+        Channel<Integer> c3 = new Channel<>();
+
+        // when
+        c1.done();
+        c2.error(new RuntimeException());
+
+        // then
+        assertTrue(c1.isDone());
+        assertFalse(c2.isDone());
+        assertFalse(c3.isDone());
+
+        assertNull(c1.isError());
+        assertNotNull(c2.isError());
+        assertNull(c3.isError());
+
+        assertTrue(c1.isClosed());
+        assertTrue(c2.isClosed());
+        assertFalse(c3.isClosed());
     }
 
     @Test

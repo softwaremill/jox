@@ -2,13 +2,7 @@ package jox;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
-
 import static jox.Segment.SEGMENT_SIZE;
-import static jox.TestUtil.forkVoid;
-import static jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentTest {
@@ -61,7 +55,7 @@ public class SegmentTest {
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellInterruptedSender();
+            ss[1].cellInterruptedSender_orClosed();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -72,7 +66,7 @@ public class SegmentTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellInterruptedSender(); // last cell
+        ss[1].cellInterruptedSender_orClosed(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -109,7 +103,7 @@ public class SegmentTest {
 
     static void interruptAllCells(Segment s) {
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            s.cellInterruptedSender();
+            s.cellInterruptedSender_orClosed();
         }
     }
 }

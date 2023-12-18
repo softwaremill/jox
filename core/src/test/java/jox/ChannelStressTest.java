@@ -1,7 +1,5 @@
 package jox;
 
-import org.junit.jupiter.api.Test;
-
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -12,7 +10,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ChannelStressTest {
     /**
      * Runs a large number of send/receive operations in multiple threads, occasionally interrupting them. At the end,
-     * verifies that messages are not duplicated and sent/received properly, as well as the channel's internal state is
+     * closes the channel as "done".
+     * <p>
+     * Verifies that messages are not duplicated and sent/received properly, as well as the channel's internal state is
      * correct.
      */
     @TestWithCapacities
@@ -35,7 +35,11 @@ public class ChannelStressTest {
                             // in each fork, run the given number of iterations
                             var data = new StressTestThreadData(scope, ch, new Random(), finalI, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
                             for (int j = 0; j < numberOfIterations; j++) {
-                                stressTestThread(data, j);
+                                stressTestIteration(data, j);
+                            }
+                            // if this is the first fork, after all the iterations complete, close the channel
+                            if (finalI == 0) {
+                                ch.done();
                             }
                             return data;
                         }));
@@ -92,15 +96,14 @@ public class ChannelStressTest {
                                         List<String> sent, List<String> received,
                                         List<String> sendInterrupted, Counter receiveInterrupted) {}
 
-    private void stressTestThread(StressTestThreadData data, int iteration) throws InterruptedException, ExecutionException {
-
+    private void stressTestIteration(StressTestThreadData data, int iteration) throws InterruptedException, ExecutionException {
         switch (data.random.nextInt(2)) {
             case 0 -> {
                 // send
                 var msg = "T" + data.threadId + "I" + iteration;
                 var shouldCancel = data.random.nextInt(4) == 0;
 
-                var f = forkCancelable(data.scope, () -> data.ch.send(msg));
+                var f = forkCancelable(data.scope, () -> data.ch.sendSafe(msg));
 
                 Object result;
                 if (shouldCancel) {
@@ -116,6 +119,9 @@ public class ChannelStressTest {
 
                 if (result instanceof Exception) {
                     data.sendInterrupted.add(msg);
+                } else if (result instanceof ChannelClosed) {
+                    // we count the cases where the channel was closed as interrupted
+                    data.sendInterrupted.add(msg);
                 } else {
                     data.sent.add(msg);
                 }
@@ -124,7 +130,7 @@ public class ChannelStressTest {
                 // receive
                 var shouldCancel = data.random.nextInt(4) == 0;
 
-                var f = forkCancelable(data.scope, data.ch::receive);
+                var f = forkCancelable(data.scope, data.ch::receiveSafe);
 
                 Object result;
                 if (shouldCancel) {
@@ -140,6 +146,9 @@ public class ChannelStressTest {
 
                 if (result instanceof Exception) {
                     data.receiveInterrupted.value++;
+                } else if (result instanceof ChannelClosed) {
+                    // we count the cases where the channel was closed as interrupted
+                    data.receiveInterrupted.value++;
                 } else {
                     data.received.add((String) result);
                 }
@@ -149,20 +158,18 @@ public class ChannelStressTest {
 
     // utilities
 
-    private class Counter {
+    private static class Counter {
         int value;
     }
 
     private List<String> drainChannel(StructuredTaskScope<Object> scope, Channel<String> ch) throws ExecutionException, InterruptedException {
         var result = new ArrayList<String>();
         while (true) {
-            var f = forkCancelable(scope, ch::receive);
-            try {
-                result.add(f.get(100, TimeUnit.MILLISECONDS));
-            } catch (TimeoutException e) {
-                // assuming nothing to receive
-                f.cancel();
+            var e = ch.receiveSafe();
+            if (e instanceof ChannelClosed.ChannelDone) {
                 return result;
+            } else {
+                result.add((String) e);
             }
         }
     }

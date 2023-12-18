@@ -20,6 +20,10 @@ public sealed interface ChannelClosed permits ChannelClosed.ChannelDone, Channel
             this.cause = cause;
         }
 
+        public Throwable getCause() {
+            return cause;
+        }
+
         @Override
         public ChannelClosedException toException() {
             return new ChannelClosedException.ChannelErrorException(cause);

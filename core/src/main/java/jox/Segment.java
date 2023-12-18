@@ -30,8 +30,9 @@ final class Segment {
     /**
      * A single counter that can be inspected & modified atomically, which includes:
      * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
-     * - the number of cells, which haven't been processed by {@code Channel.expandBuffer} yet (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
-     * - the number of cells, which haven't been interrupted yet (in the first 6 bits)
+     * - the number of cells, which haven't been processed by {@code Channel.expandBuffer} or closed yet
+     * (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
+     * - the number of cells, which haven't been interrupted or closed yet (in the first 6 bits)
      * When this reaches 0, the segment is logically removed.
      */
     private final AtomicInteger pointers_notProcessed_notInterrupted;
@@ -58,6 +59,10 @@ final class Segment {
     Segment getNext() {
         var s = next.get();
         return s == State.CLOSED ? null : (Segment) s;
+    }
+
+    Segment getPrev() {
+        return prev.get();
     }
 
     private boolean setNextIfNull(Segment setTo) {
@@ -122,10 +127,12 @@ final class Segment {
     }
 
     /**
-     * Notify the segment that a `send` has been interrupted in the cell. Also marks the cell as processed.
+     * Notify the segment that a `send` has been interrupted in the cell, or that the cell has been closed. Also marks
+     * the cell as processed.
+     * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellInterruptedSender() {
+    void cellInterruptedSender_orClosed() {
         if (countProcessed) {
             // decrementing both counters in a single operation
             if (pointers_notProcessed_notInterrupted.addAndGet(-(1 << PROCESSED_SHIFT) - 1) == 0) remove();
@@ -136,7 +143,8 @@ final class Segment {
 
     /**
      * Notify the segment that a cell has been processed by {@code Channel.expandBuffer}. Should not be called
-     * in the cell has an interrupted sender.
+     * if the cell has an interrupted sender.
+     * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
     void cellProcessed_notInterruptedSender() {
@@ -313,10 +321,6 @@ final class Segment {
     }
 
     // for tests
-
-    Segment getPrev() {
-        return prev.get();
-    }
 
     void setNext(Segment newNext) {
         next.set(newNext);

@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutionException;
 import static jox.TestUtil.forkVoid;
 import static jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Tests which always use buffered channels.
@@ -76,5 +77,43 @@ public class ChannelBufferedTest {
             channel.send(5); // should not block
             channel.send(6); // should not block
         });
+    }
+
+    @Test
+    @Timeout(1)
+    void shouldReceiveFromAChannelUntilDone() throws InterruptedException {
+        // given
+        Channel<Integer> c = new Channel<>(3);
+        c.send(1);
+        c.send(2);
+        c.done();
+
+        // when
+        var r1 = c.receiveSafe();
+        var r2 = c.receiveSafe();
+        var r3 = c.receiveSafe();
+
+        // then
+        assertEquals(1, r1);
+        assertEquals(2, r2);
+        assertInstanceOf(ChannelClosed.class, r3);
+    }
+
+    @Test
+    @Timeout(1)
+    void shouldNotReceiveFromAChannelInCaseOfAnError() throws InterruptedException {
+        // given
+        Channel<Integer> c = new Channel<>(3);
+        c.send(1);
+        c.send(2);
+        c.error(new RuntimeException());
+
+        // when
+        var r1 = c.receiveSafe();
+        var r2 = c.receiveSafe();
+
+        // then
+        assertInstanceOf(ChannelClosed.ChannelError.class, r1);
+        assertInstanceOf(ChannelClosed.ChannelError.class, r2);
     }
 }
