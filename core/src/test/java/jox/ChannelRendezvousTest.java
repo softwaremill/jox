@@ -135,6 +135,44 @@ public class ChannelRendezvousTest {
     }
 
     @Test
+    void pendingReceivesShouldGetNotifiedThatChannelIsDone() throws InterruptedException, ExecutionException {
+        // given
+        Channel<Integer> c = new Channel<>();
+        scoped(scope -> {
+            var f = fork(scope, c::receiveSafe);
+
+            // when
+            Thread.sleep(100L);
+            c.done();
+
+            // then
+            assertEquals(new ChannelClosed.ChannelDone(), f.get());
+
+            // should be rejected immediately
+            assertEquals(new ChannelClosed.ChannelDone(), c.receiveSafe());
+        });
+    }
+
+    @Test
+    void pendingSendsShouldGetNotifiedThatChannelIsErrored() throws InterruptedException, ExecutionException {
+        // given
+        Channel<Integer> c = new Channel<>();
+        scoped(scope -> {
+            var f = fork(scope, () -> c.sendSafe(1));
+
+            // when
+            Thread.sleep(100L);
+            c.error(new RuntimeException());
+
+            // then
+            assertInstanceOf(ChannelClosed.ChannelError.class, f.get());
+
+            // should be rejected immediately
+            assertInstanceOf(ChannelClosed.ChannelError.class, c.sendSafe(2));
+        });
+    }
+
+    @Test
     @Disabled("moved to RendezvousBenchmark, left here for development purposes")
     void performanceTest() throws Exception {
         for (int j = 1; j <= 10; j++) {

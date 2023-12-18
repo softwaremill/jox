@@ -30,6 +30,13 @@ public class Channel<T> {
       processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all cells have
       been interrupted, processed & there are no counters. The segment is notified that a cell is processed after
       `expandBuffer` completes.
+    * the close procedure is a bit different - the Kotlin version does this "cooperatively", that is multiple threads
+      that observe that the channel is closing participate in appropriate state mutations. This doesn't seem to be
+      necessary in this implementation. Instead, `close()` sets the closed flag and closes the segment chain - which
+      constraints the number of cells to close. `send()` observes the closed status right away, `receive()` observes
+      it via the closed segment chain, or via closed cells. Same as in Kotlin, the cells are closed in reverse order.
+      All eligible cells are attempted to be closed, so it's guaranteed that each operation will observe the closing
+      appropriately.
 
     Other notes:
     * we need the previous pointers in segments to physically remove segments full of cells in the interrupted state.
@@ -332,7 +339,7 @@ public class Channel<T> {
 
             switch (switchState) {
                 case IN_BUFFER -> { // means that state == null || state == IN_BUFFER
-                    if (r >= sendersAndClosedFlag.get()) { // reading the sender's counter
+                    if (r >= getSendersCounter(sendersAndClosedFlag.get())) { // reading the sender's counter
                         // cell is empty, and no sender -> suspend
                         // not using any payload
                         var c = new Continuation(null);
@@ -684,7 +691,7 @@ public class Channel<T> {
     public Throwable isError() {
         var reason = closedReason.get();
         if (reason instanceof ChannelClosed.ChannelError e) {
-            return e.getCause();
+            return e.cause();
         } else {
             return null;
         }

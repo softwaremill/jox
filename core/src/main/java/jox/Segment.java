@@ -258,8 +258,10 @@ final class Segment {
                         current.remove();
                     }
                 }
+                // else: try again with current
+            } else {
+                current = (Segment) n;
             }
-            current = current.getNext();
         }
         return current;
     }
