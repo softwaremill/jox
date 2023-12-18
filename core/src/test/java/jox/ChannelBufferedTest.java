@@ -3,9 +3,6 @@ package jox;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 
 import static jox.TestUtil.forkVoid;
@@ -53,7 +50,6 @@ public class ChannelBufferedTest {
     void testBufferCapacityStaysTheSameAfterSendsReceives() throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = new Channel<>(2);
-        var trail = new ConcurrentLinkedQueue<String>();
 
         // when
         scoped(scope -> {

@@ -19,9 +19,9 @@ public class ChannelStressTest {
     void testMultipleOperations(int capacity) throws Exception {
         System.out.println();
 
-        int numberOfRepetitions = 10;
+        int numberOfRepetitions = 20;
         int numberOfThreads = 8;
-        int numberOfIterations = 1000;
+        int numberOfIterations = 2000;
 
         for (int r = 0; r < numberOfRepetitions; r++) {
             var ch = new Channel<String>(capacity);
