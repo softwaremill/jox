@@ -1,4 +1,4 @@
-# Jox
+# jox
 
 Fast and scalable channels for Java.
 
@@ -9,7 +9,7 @@ the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/ma
 
 ## Dependencies
 
-Maven dependency:
+Maven:
 
 ```xml
 
@@ -41,7 +41,8 @@ import com.softwaremill.jox.Channel;
 
 class Demo1 {
     public static void main(String[] args) {
-        // creates a rendezvous channel (buffer of size 0 - a sender & receiver must meet to pass a value)
+        // creates a rendezvous channel 
+        // (buffer of size 0 - a sender & receiver must meet to pass a value)
         var ch = new Channel<Integer>(0);
 
         new Thread.ofVirtual().start(() -> {
@@ -127,7 +128,46 @@ synchronisation primitives (queues), as well as the Kotlin channel implementatio
 The test results for version 0.0.1, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
 
 ```
+Benchmark                                                          (capacity)  Mode  Cnt     Score     Error  Units
+BufferedBenchmark.array_blocking_queue                                      1  avgt   30  2266.799 ± 231.198  ns/op
+BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue              1  avgt   30  2266.798 ± 231.197  ns/op
+BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue           1  avgt   30  2266.799 ± 231.199  ns/op
+BufferedBenchmark.array_blocking_queue                                     10  avgt   30   450.796 ±  93.496  ns/op
+BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue             10  avgt   30   450.795 ±  93.495  ns/op
+BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue          10  avgt   30   450.797 ±  93.497  ns/op
+BufferedBenchmark.array_blocking_queue                                    100  avgt   30   147.962 ±   9.743  ns/op
+BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue            100  avgt   30   147.962 ±   9.743  ns/op
+BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue         100  avgt   30   147.962 ±   9.743  ns/op
+BufferedBenchmark.channel                                                   1  avgt   30   177.547 ±  14.626  ns/op
+BufferedBenchmark.channel:receiveFromChannel                                1  avgt   30   177.547 ±  14.626  ns/op
+BufferedBenchmark.channel:sendToChannel                                     1  avgt   30   177.547 ±  14.626  ns/op
+BufferedBenchmark.channel                                                  10  avgt   30   135.838 ±  14.578  ns/op
+BufferedBenchmark.channel:receiveFromChannel                               10  avgt   30   135.838 ±  14.578  ns/op
+BufferedBenchmark.channel:sendToChannel                                    10  avgt   30   135.838 ±  14.578  ns/op
+BufferedBenchmark.channel                                                 100  avgt   30    92.837 ±  13.936  ns/op
+BufferedBenchmark.channel:receiveFromChannel                              100  avgt   30    92.837 ±  13.936  ns/op
+BufferedBenchmark.channel:sendToChannel                                   100  avgt   30    92.836 ±  13.935  ns/op
+BufferedBenchmark.channel_iterative                                         1  avgt   30   185.138 ±  14.382  ns/op
+BufferedBenchmark.channel_iterative                                        10  avgt   30   126.594 ±  12.089  ns/op
+BufferedBenchmark.channel_iterative                                       100  avgt   30    83.534 ±   6.540  ns/op
+RendezvousBenchmark.channel                                               N/A  avgt   30   176.499 ±  14.964  ns/op
+RendezvousBenchmark.channel:receiveFromChannel                            N/A  avgt   30   176.499 ±  14.964  ns/op
+RendezvousBenchmark.channel:sendToChannel                                 N/A  avgt   30   176.499 ±  14.964  ns/op
+RendezvousBenchmark.channel_iterative                                     N/A  avgt   30   209.041 ±  30.397  ns/op
+RendezvousBenchmark.exchanger                                             N/A  avgt   30   177.630 ± 152.388  ns/op
+RendezvousBenchmark.exchanger:exchange1                                   N/A  avgt   30   177.630 ± 152.388  ns/op
+RendezvousBenchmark.exchanger:exchange2                                   N/A  avgt   30   177.630 ± 152.388  ns/op
+RendezvousBenchmark.synchronous_queue                                     N/A  avgt   30   978.826 ± 188.831  ns/op
+RendezvousBenchmark.synchronous_queue:putToSynchronousQueue               N/A  avgt   30   978.826 ± 188.830  ns/op
+RendezvousBenchmark.synchronous_queue:takeFromSynchronousQueue            N/A  avgt   30   978.825 ± 188.832  ns/op
 
+Benchmark result is saved to jmh-result.json
+
+Benchmark                                                    (capacity)  Mode  Cnt    Score   Error  Units
+BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher             1  avgt   30   86.614 ± 0.784  ns/op
+BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher            10  avgt   30   40.153 ± 0.221  ns/op
+BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher           100  avgt   30   26.764 ± 0.022  ns/op
+RendezvousKotlinBenchmark.sendReceiveUsingDefaultDispatcher         N/A  avgt   30  108.338 ± 0.538  ns/op
 ```
 
 ## Feedback
