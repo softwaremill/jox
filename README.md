@@ -41,7 +41,7 @@ libraryDependencies += "com.softwaremill.jox" % "core" % "0.0.2"
 ### Rendezvous channel
 
 ```java
-import jox.Channel;
+import com.softwaremill.jox.Channel;
 
 class Demo1 {
     public static void main(String[] args) throws InterruptedException {
@@ -73,7 +73,7 @@ class Demo1 {
 ### Buffered channel
 
 ```java
-import jox.Channel;
+import com.softwaremill.jox.Channel;
 
 class Demo2 {
     public static void main(String[] args) throws InterruptedException {
@@ -109,7 +109,7 @@ or `null` / the received value.
 Channels can also be inspected whether they are closed, using the `isClosed()`, `isDone()` and `isError()` methods.
 
 ```java
-import jox.Channel;
+import com.softwaremill.jox.Channel;
 
 class Demo3 {
     public static void main(String[] args) throws InterruptedException {

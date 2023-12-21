@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -8,10 +8,46 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Stream;
 
-import static jox.CellState.*;
-import static jox.Segment.findAndMoveForward;
+import static com.softwaremill.jox.CellState.*;
+import static com.softwaremill.jox.Segment.findAndMoveForward;
 
-public class Channel<T> {
+/**
+ * Channel is a thread-safe data structure which exposes three basic operations:
+ * <p>
+ * - {@link Channel#send(Object)}-ing a value to the channel
+ * - {@link Channel#receive()}-ing a value from the channel
+ * - closing the channel using {@link Channel#done()} or {@link Channel#error(Throwable)}
+ * <p>
+ * There are two channel flavors:
+ * <p>
+ * - rendezvous channels, where senders and receivers must meet to exchange values
+ * - buffered channels, where a given number of sent elements might be buffered, before subsequent sends block
+ * <p>
+ * The no-argument {@link Channel} constructor creates a rendezvous channel, while a buffered channel can be created
+ * by providing a positive integer to the constructor. A rendezvous channel behaves like a buffered channel with
+ * buffer size 0.
+ * <p>
+ * In a rendezvous channel, senders and receivers block, until a matching party arrives (unless one is already waiting).
+ * Similarly, buffered channels block if the buffer is full (in case of senders), or in case of receivers, if the
+ * buffer is empty and there are no waiting senders.
+ * <p>
+ * All blocking operations behave properly upon interruption.
+ * <p>
+ * Channels might be closed, either because no more elements will be produced by the source (using
+ * {@link Channel#done()}), or because there was an error while producing or processing the received elements (using
+ * {@link Channel#error(Throwable)}).
+ * <p>
+ * After closing, no more elements can be sent to the channel. If the channel is "done", any pending sends will be
+ * completed normally. If the channel is in an "error" state, pending sends will be interrupted and will return with
+ * the reason for the closure.
+ * <p>
+ * In case the channel is closed, one of the {@link ChannelClosedException}s is thrown. Alternatively, you can call
+ * the less type-safe, but more exception-safe {@link Channel#sendSafe(Object)} and {@link Channel#receiveSafe()}
+ * methods, which do not throw in case the channel is closed, but return one of the {@link ChannelClosed} values.
+ *
+ * @param <T> The type of the elements processed by the channel.
+ */
+public final class Channel<T> {
     /*
     Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" paper (https://arxiv.org/abs/2211.04986), and
     the Kotlin implementation (https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
@@ -73,11 +109,20 @@ public class Channel<T> {
     private final boolean isRendezvous;
 
 
+    /**
+     * Creates a rendezvous channel.
+     */
     public Channel() {
         this(0);
     }
 
+    /**
+     * Creates a buffered channel (when capacity is positive), or a rendezvous channel if the capacity is 0.
+     * Capacity cannot be negative.
+     */
     public Channel(int capacity) {
+        assert capacity >= 0 : "Capacity must be non-negative.";
+
         this.capacity = capacity;
         isRendezvous = capacity == 0L;
 
@@ -540,7 +585,7 @@ public class Channel<T> {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
     public Object doneSafe() {
-        return closeSafe(new ChannelClosed.ChannelDone());
+        return closeSafe(new ChannelDone());
     }
 
     /**
@@ -575,7 +620,7 @@ public class Channel<T> {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
     public Object errorSafe(Throwable reason) {
-        return closeSafe(new ChannelClosed.ChannelError(reason));
+        return closeSafe(new ChannelError(reason));
     }
 
     private Object closeSafe(ChannelClosed channelClosed) {
@@ -591,7 +636,7 @@ public class Channel<T> {
         // closing the segment chain guarantees that no new segment beyond `lastSegment` will be created
         var lastSegment = sendSegment.get().close();
 
-        if (channelClosed instanceof ChannelClosed.ChannelError) {
+        if (channelClosed instanceof ChannelError) {
             // closing all cells, as this is an error
             closeCellsUntil(0, lastSegment);
         } else {
@@ -682,15 +727,15 @@ public class Channel<T> {
     }
 
     public boolean isDone() {
-        return closedReason.get() instanceof ChannelClosed.ChannelDone;
+        return closedReason.get() instanceof ChannelDone;
     }
 
     /**
-     * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelClosed.ChannelDone}.
+     * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelDone}.
      */
     public Throwable isError() {
         var reason = closedReason.get();
-        if (reason instanceof ChannelClosed.ChannelError e) {
+        if (reason instanceof ChannelError e) {
             return e.cause();
         } else {
             return null;

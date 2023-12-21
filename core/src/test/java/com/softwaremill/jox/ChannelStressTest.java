@@ -1,9 +1,9 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.util.*;
 import java.util.concurrent.*;
 
-import static jox.TestUtil.*;
+import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -166,7 +166,7 @@ public class ChannelStressTest {
         var result = new ArrayList<String>();
         while (true) {
             var e = ch.receiveSafe();
-            if (e instanceof ChannelClosed.ChannelDone) {
+            if (e instanceof ChannelDone) {
                 return result;
             } else {
                 result.add((String) e);

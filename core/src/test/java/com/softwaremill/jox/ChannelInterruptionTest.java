@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Test;
 
@@ -6,10 +6,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
-import static jox.TestUtil.*;
+import static com.softwaremill.jox.TestUtil.*;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

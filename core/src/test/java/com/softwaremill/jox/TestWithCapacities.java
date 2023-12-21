@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

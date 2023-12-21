@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;

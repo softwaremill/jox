@@ -1,12 +1,14 @@
-package jox;
+package com.softwaremill.jox;
 
+import com.softwaremill.jox.Channel;
 import org.openjdk.jmh.annotations.*;
 
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Exchanger;
+import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Buffered tests for {@link ArrayBlockingQueue} and {@link Channel}.
+ * Rendezvous tests for {@link SynchronousQueue}, {@link Exchanger} and {@link Channel}.
  */
 @Warmup(iterations = 3, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 10, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
@@ -17,36 +19,44 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Group)
-public class BufferedBenchmark {
-    @Param({"1", "10", "100"})
-    public int capacity;
-
-    private ArrayBlockingQueue<Integer> queue;
-    private Channel<Integer> channel;
-
-    @Setup
-    public void create() {
-        queue = new ArrayBlockingQueue<>(capacity);
-        channel = new Channel<>(capacity);
-    }
-
-    //
+public class RendezvousBenchmark {
+    private SynchronousQueue<Integer> queue = new SynchronousQueue<>();
 
     @Benchmark
-    @Group("array_blocking_queue")
+    @Group("synchronous_queue")
     @GroupThreads(1)
-    public void putToArrayBlockingQueue() throws InterruptedException {
+    public void putToSynchronousQueue() throws InterruptedException {
         queue.put(63);
     }
 
     @Benchmark
-    @Group("array_blocking_queue")
+    @Group("synchronous_queue")
     @GroupThreads(1)
-    public void takeFromArrayBlockingQueue() throws InterruptedException {
+    public void takeFromSynchronousQueue() throws InterruptedException {
         queue.take();
     }
 
     //
+
+    private Exchanger<Integer> exchanger = new Exchanger<>();
+
+    @Benchmark
+    @Group("exchanger")
+    @GroupThreads(1)
+    public void exchange1() throws InterruptedException {
+        exchanger.exchange(63);
+    }
+
+    @Benchmark
+    @Group("exchanger")
+    @GroupThreads(1)
+    public void exchange2() throws InterruptedException {
+        exchanger.exchange(64);
+    }
+
+    //
+
+    private Channel<Integer> channel = new Channel<>();
 
     @Benchmark
     @Group("channel")

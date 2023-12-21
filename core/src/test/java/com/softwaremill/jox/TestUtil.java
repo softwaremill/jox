@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.util.concurrent.*;
 
