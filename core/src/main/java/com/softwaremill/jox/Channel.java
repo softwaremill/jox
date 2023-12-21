@@ -47,7 +47,7 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  *
  * @param <T> The type of the elements processed by the channel.
  */
-public class Channel<T> {
+public final class Channel<T> {
     /*
     Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" paper (https://arxiv.org/abs/2211.04986), and
     the Kotlin implementation (https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
