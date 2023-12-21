@@ -109,10 +109,17 @@ public class Channel<T> {
     private final boolean isRendezvous;
 
 
+    /**
+     * Creates a rendezvous channel.
+     */
     public Channel() {
         this(0);
     }
 
+    /**
+     * Creates a buffered channel (when capacity is positive), or a rendezvous channel if the capacity is 0.
+     * Capacity cannot be negative.
+     */
     public Channel(int capacity) {
         assert capacity >= 0 : "Capacity must be non-negative.";
 
