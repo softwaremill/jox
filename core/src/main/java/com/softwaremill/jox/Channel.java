@@ -540,7 +540,7 @@ public class Channel<T> {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
     public Object doneSafe() {
-        return closeSafe(new ChannelClosed.ChannelDone());
+        return closeSafe(new ChannelDone());
     }
 
     /**
@@ -575,7 +575,7 @@ public class Channel<T> {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
     public Object errorSafe(Throwable reason) {
-        return closeSafe(new ChannelClosed.ChannelError(reason));
+        return closeSafe(new ChannelError(reason));
     }
 
     private Object closeSafe(ChannelClosed channelClosed) {
@@ -591,7 +591,7 @@ public class Channel<T> {
         // closing the segment chain guarantees that no new segment beyond `lastSegment` will be created
         var lastSegment = sendSegment.get().close();
 
-        if (channelClosed instanceof ChannelClosed.ChannelError) {
+        if (channelClosed instanceof ChannelError) {
             // closing all cells, as this is an error
             closeCellsUntil(0, lastSegment);
         } else {
@@ -682,15 +682,15 @@ public class Channel<T> {
     }
 
     public boolean isDone() {
-        return closedReason.get() instanceof ChannelClosed.ChannelDone;
+        return closedReason.get() instanceof ChannelDone;
     }
 
     /**
-     * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelClosed.ChannelDone}.
+     * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelDone}.
      */
     public Throwable isError() {
         var reason = closedReason.get();
-        if (reason instanceof ChannelClosed.ChannelError e) {
+        if (reason instanceof ChannelError e) {
             return e.cause();
         } else {
             return null;

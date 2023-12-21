@@ -166,7 +166,7 @@ public class ChannelStressTest {
         var result = new ArrayList<String>();
         while (true) {
             var e = ch.receiveSafe();
-            if (e instanceof ChannelClosed.ChannelDone) {
+            if (e instanceof ChannelDone) {
                 return result;
             } else {
                 result.add((String) e);

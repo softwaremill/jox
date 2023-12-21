@@ -109,7 +109,7 @@ public class ChannelBufferedTest {
         var r2 = c.receiveSafe();
 
         // then
-        assertInstanceOf(ChannelClosed.ChannelError.class, r1);
-        assertInstanceOf(ChannelClosed.ChannelError.class, r2);
+        assertInstanceOf(ChannelError.class, r1);
+        assertInstanceOf(ChannelError.class, r2);
     }
 }

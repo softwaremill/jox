@@ -146,10 +146,10 @@ public class ChannelRendezvousTest {
             c.done();
 
             // then
-            assertEquals(new ChannelClosed.ChannelDone(), f.get());
+            assertEquals(new ChannelDone(), f.get());
 
             // should be rejected immediately
-            assertEquals(new ChannelClosed.ChannelDone(), c.receiveSafe());
+            assertEquals(new ChannelDone(), c.receiveSafe());
         });
     }
 
@@ -165,10 +165,10 @@ public class ChannelRendezvousTest {
             c.error(new RuntimeException());
 
             // then
-            assertInstanceOf(ChannelClosed.ChannelError.class, f.get());
+            assertInstanceOf(ChannelError.class, f.get());
 
             // should be rejected immediately
-            assertInstanceOf(ChannelClosed.ChannelError.class, c.sendSafe(2));
+            assertInstanceOf(ChannelError.class, c.sendSafe(2));
         });
     }
 
