@@ -6,14 +6,14 @@ public sealed interface ChannelClosed permits ChannelClosed.ChannelDone, Channel
     record ChannelDone() implements ChannelClosed {
         @Override
         public ChannelClosedException toException() {
-            return new ChannelClosedException.ChannelDoneException();
+            return new ChannelDoneException();
         }
     }
 
     record ChannelError(Throwable cause) implements ChannelClosed {
         @Override
         public ChannelClosedException toException() {
-            return new ChannelClosedException.ChannelErrorException(cause);
+            return new ChannelErrorException(cause);
         }
     }
 }
