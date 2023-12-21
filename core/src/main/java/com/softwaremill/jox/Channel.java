@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -8,8 +8,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Stream;
 
-import static jox.CellState.*;
-import static jox.Segment.findAndMoveForward;
+import static com.softwaremill.jox.CellState.*;
+import static com.softwaremill.jox.Segment.findAndMoveForward;
 
 public class Channel<T> {
     /*

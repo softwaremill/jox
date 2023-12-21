@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 public sealed interface ChannelClosed permits ChannelClosed.ChannelDone, ChannelClosed.ChannelError {
     ChannelClosedException toException();

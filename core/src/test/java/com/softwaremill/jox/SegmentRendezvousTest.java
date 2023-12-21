@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Test;
 
@@ -6,11 +6,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static jox.Segment.SEGMENT_SIZE;
-import static jox.SegmentTest.createSegmentChain;
-import static jox.SegmentTest.interruptAllCells;
-import static jox.TestUtil.forkVoid;
-import static jox.TestUtil.scoped;
+import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
+import static com.softwaremill.jox.SegmentTest.createSegmentChain;
+import static com.softwaremill.jox.SegmentTest.interruptAllCells;
+import static com.softwaremill.jox.TestUtil.forkVoid;
+import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentRendezvousTest {

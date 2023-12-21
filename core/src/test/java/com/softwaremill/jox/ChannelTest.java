@@ -1,12 +1,12 @@
-package jox;
+package com.softwaremill.jox;
 
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-import static jox.TestUtil.forkVoid;
-import static jox.TestUtil.scoped;
+import static com.softwaremill.jox.TestUtil.forkVoid;
+import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**

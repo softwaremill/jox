@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 
-import static jox.TestUtil.*;
+import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ChannelRendezvousTest {

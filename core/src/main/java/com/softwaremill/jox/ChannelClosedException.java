@@ -1,4 +1,4 @@
-package jox;
+package com.softwaremill.jox;
 
 public sealed class ChannelClosedException extends RuntimeException permits ChannelClosedException.ChannelDoneException, ChannelClosedException.ChannelErrorException {
     public ChannelClosedException() {
