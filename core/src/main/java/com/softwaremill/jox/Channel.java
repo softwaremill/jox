@@ -779,15 +779,9 @@ public final class Channel<T> {
                     }
                 }
                 case StoredSelect ss -> {
-                    if (ss.getSelect().channelClosed(closedReason.get())) {
-                        segment.setCell(i, CLOSED);
-                        segment.cellInterruptedSender_orClosed();
-                        return;
-                    } else {
-                        // the select hasn't been closed; instead, it will clean up all cells as part of handling the
-                        // non-closed state in its main loop
-                        return;
-                    }
+                    ss.getSelect().channelClosed(closedReason.get());
+                    // not setting the state & updating counters, as each non-selected stored select cell will be
+                    // cleaned up, setting an interrupted state (and informing the segment)
                 }
                 case DONE, BROKEN -> {
                     return; // nothing to do - a sender & receiver have already met
@@ -863,9 +857,9 @@ public final class Channel<T> {
 //
 //    public <U> SelectClause<U> sendClauseMap(T value, Supplier<U> callback) {}
 
-    void disposeStoredSelect(Segment segment, int i, boolean isSender) {
+    void cleanupStoredSelect(Segment segment, int i, boolean isSender) {
         // We treat the cell as if it was interrupted - the code is same as in `Continuation.await`;
-        // there's no need to resolve races with `SelectInstance.trySelect`, as disposal is called either when a clause
+        // there's no need to resolve races with `SelectInstance.trySelect`, as cleanup is called either when a clause
         // is selected, a channel is closed, or during re-registration. In all cases `trySelect` would fail.
         // In other words, the races are resolved by synchronizing on `SelectInstance.state`.
         segment.setCell(i, isSender ? INTERRUPTED_SEND : INTERRUPTED_RECEIVE);
@@ -956,7 +950,7 @@ enum SendResult {
 }
 
 /**
- * Possible return values of {@code Channel#updateCellReceive}: one of the enum constants below, the received value or {@link SelectStored} (used for disposal).
+ * Possible return values of {@code Channel#updateCellReceive}: one of the enum constants below, the received value or {@link SelectStored} (used for cleanup).
  */
 enum ReceiveResult {
     FAILED,

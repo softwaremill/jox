@@ -11,24 +11,31 @@ public class Select {
      Each select invocation proceeds through a couple of states. The state is stored in an internal representation
      of the select, a `SelectInstance`.
 
-     First, the select starts in the `REGISTERING` state. For each clause, we call it's `register` method, which in turn
-     reserves a send/receive cell in the channel, and stores a `StoredSelect` instance. This instance, apart from the
-     `SelectInstance`, also holds the segment & index of the cell, so that we can clean up later, when another clause is
-     selected.
+     First, the select starts in the `REGISTERING` state. For each clause, we call its `register` method, which in turn
+     reserves a send/receive cell in the channel, and stores a `StoredSelect` instance there. This instance, apart from
+     the `SelectInstance`, also holds the segment & index of the cell, so that we can clean up later, when another
+     clause is selected.
 
      During registration, if another thread tries to select a clause concurrently, it's prevented from doing so;
      instead, we collect the clauses for which this happened in a list, and re-register them. Such a thread treats
      such invocations as if the cell was interrupted, and retries with a new cell. Later, we clean up the stored
      selects, which are re-registered, so that there are no memory leaks.
 
-     It's possible that a clause is completed immediately after registration. If that's the case, we overwrite the state
-     (including a potentially concurrently set closed state).
+     Regardless of the outcome, clean up is always called at some point for each `StoredSelect`, apart from the one
+     corresponding to the selected clause. The cleanup sets the cell's state to an interrupted sender or receiver, and
+     updates the segment's counter appropriately.
 
-     Any of the states set during registration are acted up in `checkStateAndWait`. The method properly cleans up in
+     It's possible that a clause is completed immediately during registration. If that's the case, we overwrite the
+     state (including a potentially concurrently set closed state), and cease further registrations.
+
+     Any of the states set during registration are acted upon in `checkStateAndWait`. The method properly cleans up in
      case a clause was selected, or a channel becomes closed. If it sees a `REGISTERING` state, the state is changed
-     to the current `Thread`, and the computation is suspended. Then, another thread running `trySelect` or
-     `channelClosed`, after changing the state appropriately, has to wake up the thread to let the select know, that it
-     should inspect the state again.
+     to the current `Thread`, and the computation is suspended.
+
+     On the other hand, other threads which encounter a `StoredSelect` instance in a channel's cell, call the
+     `SelectInstance`'s methods: either `trySelect` or `channelClosed`. These change the state appropriately, optionally
+     waking up the suspended thread to let it know, that it should inspect the state again. If the state change is
+     successful, the cell's state is updated. Otherwise, it's the responsibility of the cleanup procedure to update it.
      */
 
     /**
@@ -84,6 +91,14 @@ public class Select {
 }
 
 class SelectInstance {
+    /**
+     * Possible states:
+     * - one of {@link SelectState}
+     * - {@link Thread} to wake up
+     * - {@link ChannelClosed}
+     * - a {@link List} of clauses to re-register
+     * - {@link SelectClause} (the selected clause)
+     */
     private final AtomicReference<Object> state = new AtomicReference<>(SelectState.REGISTERING);
 
     /**
@@ -108,7 +123,7 @@ class SelectInstance {
         var result = clause.register(this);
         switch (result) {
             case StoredSelect ss -> {
-                // keeping the stored select to later call dispose()
+                // keeping the stored select to later call cleanup()
                 storedSelects.add(ss);
                 return true;
             }
@@ -180,12 +195,12 @@ class SelectInstance {
                     if (state.compareAndSet(currentState, SelectState.REGISTERING)) {
                         //noinspection unchecked
                         for (var clause : (List<SelectClause<?>>) clausesToReRegister) {
-                            // disposing & removing the stored select for the clause which we'll re-register
+                            // cleaning up & removing the stored select for the clause which we'll re-register
                             var storedSelectsIterator = storedSelects.iterator();
                             while (storedSelectsIterator.hasNext()) {
                                 var stored = storedSelectsIterator.next();
                                 if (stored.getClause() == clause) {
-                                    stored.dispose();
+                                    stored.cleanup();
                                     storedSelectsIterator.remove();
                                     break;
                                 }
@@ -212,10 +227,10 @@ class SelectInstance {
     }
 
     private void cleanup(SelectClause<?> selected) {
-        // disposing of all the clauses that were registered, except for the selected one
+        // cleaning up of all the clauses that were registered, except for the selected one
         for (var stored : storedSelects) {
             if (stored.getClause() != selected) {
-                stored.dispose();
+                stored.cleanup();
             }
         }
         storedSelects.clear();
@@ -275,44 +290,40 @@ class SelectInstance {
         }
     }
 
-    /**
-     * @return {@code true}, if the state of the select has been changed to closed; otherwise, a clause might have been
-     * already selected, another closure reason provided, or the select might have been interrupted.
-     */
-    boolean channelClosed(ChannelClosed channelClosed) {
+    void channelClosed(ChannelClosed channelClosed) {
         while (true) {
             var currentState = state.get();
             switch (currentState) {
                 case SelectState.REGISTERING -> {
                     // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
                     if (state.compareAndSet(currentState, channelClosed)) {
-                        return true;
+                        return;
                     }
                     // else: CAS unsuccessful, retry
                 }
                 case List<?> clausesToReRegister -> {
                     // same as above
                     if (state.compareAndSet(currentState, channelClosed)) {
-                        return true;
+                        return;
                     }
                     // else: CAS unsuccessful, retry
                 }
                 case SelectState.INTERRUPTED -> {
                     // already interrupted
-                    return false;
+                    return;
                 }
                 case ChannelClosed cc -> {
                     // already closed
-                    return false;
+                    return;
                 }
                 case SelectClause<?> selectedClause -> {
                     // already selected
-                    return false;
+                    return;
                 }
                 case Thread t -> {
                     if (state.compareAndSet(currentState, channelClosed)) {
                         LockSupport.unpark(t);
-                        return true;
+                        return;
                     }
                     // else: CAS unsuccessful, retry
                 }
@@ -321,13 +332,6 @@ class SelectInstance {
         }
     }
 }
-
-// possible states of a select instance:
-// - one of the enumeration values below
-// - Thread to wake up
-// - ChannelClosed
-// - a List of clauses to re-register
-// - SelectClause (the selected clause)
 
 enum SelectState {
     REGISTERING,
@@ -366,7 +370,7 @@ class StoredSelect {
         return clause;
     }
 
-    void dispose() {
-        clause.getChannel().disposeStoredSelect(segment, i, isSender);
+    void cleanup() {
+        clause.getChannel().cleanupStoredSelect(segment, i, isSender);
     }
 }
