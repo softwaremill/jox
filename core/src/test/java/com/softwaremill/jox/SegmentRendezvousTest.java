@@ -23,7 +23,7 @@ public class SegmentRendezvousTest {
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellInterruptedSender_orClosed();
+            ss[1].cellInterruptedReceiver();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -34,7 +34,7 @@ public class SegmentRendezvousTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellInterruptedSender_orClosed(); // last cell
+        ss[1].cellInterruptedReceiver(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -56,11 +56,11 @@ public class SegmentRendezvousTest {
         assertTrue(ss[3].tryIncPointers());
         // interrupting all cells
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[1].cellInterruptedSender_orClosed();
+            ss[1].cellInterruptedReceiver();
             assertFalse(ss[1].isRemoved());
-            ss[2].cellInterruptedSender_orClosed();
+            ss[2].cellInterruptedReceiver();
             assertFalse(ss[2].isRemoved());
-            ss[3].cellInterruptedSender_orClosed();
+            ss[3].cellInterruptedReceiver();
             assertFalse(ss[3].isRemoved());
         }
         // decreasing number of pointers, segments become logically removed
@@ -111,7 +111,7 @@ public class SegmentRendezvousTest {
         assertTrue(ss[0].tryIncPointers());
 
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[0].cellInterruptedSender_orClosed();
+            ss[0].cellInterruptedReceiver();
             assertFalse(ss[0].isRemoved());
         }
 
@@ -137,7 +137,7 @@ public class SegmentRendezvousTest {
                 // first interrupting all cells but one in segments 2-(segmentCount-1))
                 for (int i = 1; i < ss.length - 1; i++) {
                     for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
-                        ss[i].cellInterruptedSender_orClosed();
+                        ss[i].cellInterruptedReceiver();
                     }
                 }
 
@@ -145,7 +145,7 @@ public class SegmentRendezvousTest {
                 for (int i = 1; i < ss.length - 1; i++) {
                     int ii = i;
                     forkVoid(scope, () -> {
-                        ss[ii].cellInterruptedSender_orClosed();
+                        ss[ii].cellInterruptedReceiver();
                     });
                 }
             });

@@ -65,7 +65,7 @@ public final class Channel<T> {
       automatically when the cell's state is set to something else than a Continuation/Buffered.
     * instead of the `completedExpandBuffersAndPauseFlag` counter, we maintain a counter of cells which haven't been
       processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all cells have
-      been interrupted, processed & there are no counters. The segment is notified that a cell is processed after
+      been interrupted, processed & there are no pointers. The segment is notified that a cell is processed after
       `expandBuffer` completes.
     * the close procedure is a bit different - the Kotlin version does this "cooperatively", that is multiple threads
       that observe that the channel is closing participate in appropriate state mutations. This doesn't seem to be
@@ -138,21 +138,8 @@ public final class Channel<T> {
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
 
         bufferEnd = new AtomicLong(capacity);
-        // the cells that are initially in the buffer are already processed (expandBuffer won't touch them): we need
-        // to mark them as processed, so that segment removal works properly for these initial segments; however, the
-        // buffer might span several segments, so we need to iterate over them
-        var currentBufferEndSegment = bufferEndSegment.get();
-        for (int i = 0; i < capacity; i++) {
-            if (i % Segment.SEGMENT_SIZE == 0) {
-                currentBufferEndSegment = findAndMoveForward(bufferEndSegment, currentBufferEndSegment, i / Segment.SEGMENT_SIZE, !isRendezvous);
-            }
-
-            currentBufferEndSegment.cellProcessed_notInterruptedSender();
-        }
 
         closedReason = new AtomicReference<>(null);
-
-        System.out.println("DONE: " + this);
     }
 
     // *******
@@ -523,25 +510,25 @@ public final class Channel<T> {
                 }
 
                 // if we still have another segment, the segment must have been removed; this can happen if the current
-                // cell has been an interrupted sender (such cells are immediately marked as processed, which can cause
-                // segment removal); other cells might have been both interrupted senders/receivers
+                // cell has been an interrupted receiver (such cells are immediately marked as processed, which can cause
+                // segment removal); other cells might have been both interrupted senders/receivers (but all interrupted
+                // senders must have already been processed by expandBuffer)
                 if (segment.getId() != id) {
-                    // skipping all interrupted cells, and trying with a new one
+                    // skipping all interrupted cells as an optimization
                     bufferEnd.compareAndSet(b, segment.getId() * Segment.SEGMENT_SIZE);
-                    continue;
+                    // another buffer expansion already happened for this cell (in the removed segment)
+                    return;
                 }
             }
 
             var result = updateCellExpandBuffer(segment, i);
-            if (result == ExpandBufferResult.DONE) {
-                // letting the segment know that the cell is processed, and the segment can be potentially removed
-                segment.cellProcessed_notInterruptedSender();
-                return;
-            } else if (result == ExpandBufferResult.CLOSED) {
-                // the cell is already counted as processed by the close procedure
+            if (result == ExpandBufferResult.FAILED) {
+                // the cell must have been an interrupted sender; notifying the segment and trying with a new cell
+                segment.cellProcessed();
+            } else {
+                // done or closed
                 return;
             }
-            // else, the cell must have been an interrupted sender; `Continuation` properly notifies the segment
         }
     }
 
@@ -755,20 +742,23 @@ public final class Channel<T> {
             switch (state) {
                 case null -> {
                     if (segment.casCell(i, null, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        // we treat closing a cell same as if it there was an interrupted receiver: there's no need
+                        // for the cell to be processed by `expandBuffer`, and segments full of closed cells can be
+                        // safely removed
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
                 case IN_BUFFER -> {
                     if (segment.casCell(i, state, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
                 case Buffered b -> {
                     // discarding the buffered value
                     if (segment.casCell(i, state, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
@@ -777,12 +767,12 @@ public final class Channel<T> {
                     // `Continuation.data`: only one thread will successfully change its value from `null`
                     if (c.tryResume(ChannelClosedMarker.CLOSED)) {
                         segment.setCell(i, CLOSED);
-                        segment.cellInterruptedSender_orClosed();
+                        segment.cellInterruptedReceiver();
                         return;
                     } else {
                         // when cell interrupted - the segment counters will be appropriately decremented from the
-                        // continuation, depending on if this is a sender or receiver; moreover, the cell is already
-                        // processed in case this is a receiver
+                        // continuation, depending on if this is a sender or receiver; moreover, for interrupted senders
+                        // this will be processed by expandBuffer as we are closing cells from the end
                         // otherwise, the cell might be completed with a value, and the result is processed normally
                         // on another thread
                         return;
@@ -876,7 +866,7 @@ public final class Channel<T> {
 
         // notifying the segment - if all cells become interrupted, the segment can be removed
         if (isSender) {
-            segment.cellInterruptedSender_orClosed();
+            segment.cellInterruptedSender();
         } else {
             segment.cellInterruptedReceiver();
         }
@@ -1052,7 +1042,7 @@ final class Continuation {
 
                         // notifying the segment - if all cells become interrupted, the segment can be removed
                         if (isSender) {
-                            segment.cellInterruptedSender_orClosed();
+                            segment.cellInterruptedSender();
                         } else {
                             segment.cellInterruptedReceiver();
                         }

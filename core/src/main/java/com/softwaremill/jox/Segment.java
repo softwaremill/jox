@@ -5,9 +5,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 final class Segment {
-    // in the first 6 bits, we store the number of cells that haven't been interrupted yet
-    // in the second 6 bits, we store the number of cells which haven't been processed by expandBuffer yet (in buffered channels)
-    // in bits 13 & 14, we store the number of incoming pointers to this segment
+    /*
+    - in the first 6 bits, we store the number of cells that haven't been interrupted yet.
+      This counter is maintained by `Continuation`.
+    - in the second 6 bits, we store the number of cells that are interrupted senders which haven't been processed by
+      `expandBuffer` yet (in buffered channels), or which haven't been interrupted at all. That is, the counter is only
+      decremented when a cell is an interrupted receiver by `Continuation`, or an interrupted sender that is processed
+      by `expandBuffer`.
+    - in bits 13 & 14, we store the number of incoming pointers to this segment
+     */
+
     static final int SEGMENT_SIZE = 32; // 2^5
     private static final int PROCESSED_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
     private static final int POINTERS_SHIFT = 12;
@@ -30,9 +37,9 @@ final class Segment {
     /**
      * A single counter that can be inspected & modified atomically, which includes:
      * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
-     * - the number of cells, which haven't been processed by {@code Channel.expandBuffer} or closed yet
-     * (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
-     * - the number of cells, which haven't been interrupted or closed yet (in the first 6 bits)
+     * - the number of cells, which haven't been interrupted, or haven't been processed by {@code Channel.expandBuffer}
+     * yet (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
+     * - the number of cells, which haven't been interrupted yet (in the first 6 bits)
      * When this reaches 0, the segment is logically removed.
      */
     private final AtomicInteger pointers_notProcessed_notInterrupted;
@@ -87,7 +94,7 @@ final class Segment {
 
     /**
      * @return {@code true} if this segment is logically removed, that is there are no incoming pointers, all cells
-     * have been processed by expandBuffer, and all cells have been interrupted.
+     * have been interrupted & interrupted senders processed by expandBuffer, and all cells have been interrupted.
      */
     boolean isRemoved() {
         return pointers_notProcessed_notInterrupted.get() == 0;
@@ -120,19 +127,10 @@ final class Segment {
 
     /**
      * Notify the segment that a `receive` has been interrupted in the cell.
-     * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
-     */
-    void cellInterruptedReceiver() {
-        if (pointers_notProcessed_notInterrupted.decrementAndGet() == 0) remove();
-    }
-
-    /**
-     * Notify the segment that a `send` has been interrupted in the cell, or that the cell has been closed. Also marks
-     * the cell as processed.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellInterruptedSender_orClosed() {
+    void cellInterruptedReceiver() {
         if (countProcessed) {
             // decrementing both counters in a single operation
             if (pointers_notProcessed_notInterrupted.addAndGet(-(1 << PROCESSED_SHIFT) - 1) == 0) remove();
@@ -142,12 +140,20 @@ final class Segment {
     }
 
     /**
-     * Notify the segment that a cell has been processed by {@code Channel.expandBuffer}. Should not be called
-     * if the cell has an interrupted sender.
+     * Notify the segment that a `send` has been interrupted in the cell.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellProcessed_notInterruptedSender() {
+    void cellInterruptedSender() {
+        if (pointers_notProcessed_notInterrupted.decrementAndGet() == 0) remove();
+    }
+
+    /**
+     * Notify the segment that an interrupted sender cell has been processed by {@code Channel.expandBuffer}.
+     * <p>
+     * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
+     */
+    void cellProcessed() {
         if (pointers_notProcessed_notInterrupted.addAndGet(-(1 << PROCESSED_SHIFT)) == 0) remove();
     }
 
