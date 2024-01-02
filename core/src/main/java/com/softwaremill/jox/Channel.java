@@ -131,18 +131,28 @@ public final class Channel<T> {
 
         var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, !isRendezvous);
 
-        bufferEnd = new AtomicLong(capacity);
-        for (int i = 0; i < capacity; i++) {
-            firstSegment.cellProcessed_notInterruptedSender(); // the cells that are initially in the buffer are already processed (expandBuffer won't touch them)
-        }
-
         sendSegment = new AtomicReference<>(firstSegment);
         receiveSegment = new AtomicReference<>(firstSegment);
         // If the capacity is 0, buffer expansion never happens, so the buffer end segment points to a null segment,
         // not the first one. This is also reflected in the pointer counter of firstSegment.
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
 
+        bufferEnd = new AtomicLong(capacity);
+        // the cells that are initially in the buffer are already processed (expandBuffer won't touch them): we need
+        // to mark them as processed, so that segment removal works properly for these initial segments; however, the
+        // buffer might span several segments, so we need to iterate over them
+        var currentBufferEndSegment = bufferEndSegment.get();
+        for (int i = 0; i < capacity; i++) {
+            if (i % Segment.SEGMENT_SIZE == 0) {
+                currentBufferEndSegment = findAndMoveForward(bufferEndSegment, currentBufferEndSegment, i / Segment.SEGMENT_SIZE, !isRendezvous);
+            }
+
+            currentBufferEndSegment.cellProcessed_notInterruptedSender();
+        }
+
         closedReason = new AtomicReference<>(null);
+
+        System.out.println("DONE: " + this);
     }
 
     // *******
