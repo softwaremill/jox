@@ -278,10 +278,13 @@ class SelectInstance {
                 case Thread t -> {
                     // setting the value first, before the memory barrier created by setting (and in the main loop
                     // thread, reading) the state.
-                    storedSelect.getClause().setRawValue(rawValue);
-                    if (state.compareAndSet(currentState, storedSelect.getClause())) {
+                    var clause = storedSelect.getClause();
+                    clause.setRawValue(rawValue);
+                    if (state.compareAndSet(currentState, clause)) {
                         LockSupport.unpark(t);
                         return true;
+                    } else {
+                        clause.setRawValue(null); // preventing memory leaks
                     }
                     // else: CAS unsuccessful, retry
                 }
