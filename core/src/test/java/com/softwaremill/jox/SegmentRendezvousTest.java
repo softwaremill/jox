@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
 import static com.softwaremill.jox.SegmentTest.createSegmentChain;
-import static com.softwaremill.jox.SegmentTest.interruptAllCells;
+import static com.softwaremill.jox.SegmentTest.sendInterruptAllCells;
 import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
@@ -19,7 +19,7 @@ public class SegmentRendezvousTest {
     @Test
     void segmentShouldBecomeRemovedOnceAllCellsInterrupted() {
         // given
-        var ss = createSegmentChain(3, 0, false);
+        var ss = createSegmentChain(3, 0, true);
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
@@ -47,7 +47,7 @@ public class SegmentRendezvousTest {
     @Test
     void shouldRemoveMultipleSegments() {
         // given
-        var ss = createSegmentChain(5, 0, false);
+        var ss = createSegmentChain(5, 0, true);
 
         // when
         // first, preventing automatic removal
@@ -83,10 +83,10 @@ public class SegmentRendezvousTest {
     @Test
     void shouldNotIncrementIncomingPointersIfSegmentRemoved() {
         // given
-        var ss = createSegmentChain(1, 0, false);
+        var ss = createSegmentChain(1, 0, true);
 
         // when
-        interruptAllCells(ss[0]);
+        sendInterruptAllCells(ss[0]);
 
         // then
         assertFalse(ss[0].tryIncPointers());
@@ -95,7 +95,7 @@ public class SegmentRendezvousTest {
     @Test
     void shouldIncrementAndDecrementPointersInSegment() {
         // given
-        var ss = createSegmentChain(1, 0, false);
+        var ss = createSegmentChain(1, 0, true);
 
         // when
         assertTrue(ss[0].tryIncPointers());
@@ -105,7 +105,7 @@ public class SegmentRendezvousTest {
     @Test
     void shouldNotRemoveSegmentIfThereAreIncomingPointers() {
         // given
-        var ss = createSegmentChain(2, 0, false);
+        var ss = createSegmentChain(2, 0, true);
 
         // when
         assertTrue(ss[0].tryIncPointers());
@@ -130,7 +130,7 @@ public class SegmentRendezvousTest {
         int segmentCount = 30;
 
         for (int k = 0; k < 1000; k++) {
-            var ss = createSegmentChain(segmentCount, 0, false);
+            var ss = createSegmentChain(segmentCount, 0, true);
 
             // when
             scoped(scope -> {
@@ -165,14 +165,14 @@ public class SegmentRendezvousTest {
     @Test
     void shouldNotResurrectAnUnlikedSegment() {
         // given
-        var ss = createSegmentChain(3, 0, false);
+        var ss = createSegmentChain(3, 0, true);
 
         // when
         // unlinking segment 2 from segment 3
         ss[2].cleanPrev();
 
         // removing segment 2
-        interruptAllCells(ss[1]);
+        sendInterruptAllCells(ss[1]);
 
         // then
         assertTrue(ss[1].isRemoved());
@@ -183,17 +183,17 @@ public class SegmentRendezvousTest {
     @Test
     void shouldFindAndMoveSegmentReferenceForward() {
         // given
-        var s = createSegmentChain(4, 0, false);
+        var s = createSegmentChain(4, 0, true);
         var r = new AtomicReference<>(s[0]);
 
         // when
-        var result = Segment.findAndMoveForward(r, s[0], 2, false);
+        var result = Segment.findAndMoveForward(r, s[0], 2);
 
         // then
         assertEquals(s[2], result);
 
         // when
-        result = Segment.findAndMoveForward(r, s[0], 5, false);
+        result = Segment.findAndMoveForward(r, s[0], 5);
         assertEquals(5, result.getId());
         assertEquals(result, s[3].getNext().getNext());
     }
@@ -201,12 +201,12 @@ public class SegmentRendezvousTest {
     @Test
     void shouldMoveReferenceForwardIfClosedAndFoundSegmentExists() {
         // given
-        var s = createSegmentChain(4, 0, false);
+        var s = createSegmentChain(4, 0, true);
         var r = new AtomicReference<>(s[0]);
 
         // when
         s[0].close();
-        var result = Segment.findAndMoveForward(r, s[0], 3, true);
+        var result = Segment.findAndMoveForward(r, s[0], 3);
 
         // then
         assertEquals(s[3], result);
@@ -216,12 +216,12 @@ public class SegmentRendezvousTest {
     @Test
     void shouldNotMoveReferenceForwardIfClosedAndFoundSegmentDoesNotExist() {
         // given
-        var s = createSegmentChain(4, 0, false);
+        var s = createSegmentChain(4, 0, true);
         var r = new AtomicReference<>(s[0]);
 
         // when
         s[0].close();
-        var result = Segment.findAndMoveForward(r, s[0], 5, true);
+        var result = Segment.findAndMoveForward(r, s[0], 5);
 
         // then
         assertNull(result);
@@ -231,17 +231,17 @@ public class SegmentRendezvousTest {
     @Test
     void shouldRemoveOldTailSegment() {
         // given
-        var ss = createSegmentChain(2, 0, false);
+        var ss = createSegmentChain(2, 0, true);
 
         // when
-        interruptAllCells(ss[1]);
+        sendInterruptAllCells(ss[1]);
 
         // then
         assertTrue(ss[1].isRemoved());
         assertEquals(ss[0].getNext(), ss[1]); // logically, but not physically removed
 
         // when
-        var s2 = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 2, false);
+        var s2 = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 2);
 
         // then
         assertEquals(s2, ss[0].getNext());
@@ -251,11 +251,11 @@ public class SegmentRendezvousTest {
     @Test
     void shouldReturnNextSegmentIfRemoved() {
         // given
-        var ss = createSegmentChain(3, 0, false);
-        interruptAllCells(ss[1]);
+        var ss = createSegmentChain(3, 0, true);
+        sendInterruptAllCells(ss[1]);
 
         // when
-        var result = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 1, false);
+        var result = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 1);
 
         // then
         assertEquals(ss[2], result);
@@ -264,11 +264,11 @@ public class SegmentRendezvousTest {
     @Test
     void shouldNotUpdateSegmentReferenceIfAlreadyUpdated() {
         // given
-        var ss = createSegmentChain(3, 0, false);
+        var ss = createSegmentChain(3, 0, true);
         var ref = new AtomicReference<>(ss[2]);
 
         // when
-        var result = Segment.findAndMoveForward(ref, ss[0], 1, false);
+        var result = Segment.findAndMoveForward(ref, ss[0], 1);
 
         // then
         assertEquals(ss[1], result);
@@ -278,22 +278,22 @@ public class SegmentRendezvousTest {
     @Test
     void shouldUpdateSegmentPointersWhenReferenceChanges() {
         // given
-        var ss = createSegmentChain(3, 0, false);
+        var ss = createSegmentChain(3, 0, true);
         var ref = new AtomicReference<>(ss[0]);
 
         // when
-        Segment.findAndMoveForward(ref, ss[0], 1, false);
+        Segment.findAndMoveForward(ref, ss[0], 1);
 
         // then
-        interruptAllCells(ss[1]);
+        sendInterruptAllCells(ss[1]);
         assertFalse(ss[1].isRemoved()); // shouldn't be removed because there's an incoming pointer
 
         // when
-        Segment.findAndMoveForward(ref, ss[0], 2, false);
+        Segment.findAndMoveForward(ref, ss[0], 2);
 
         // then
         assertTrue(ss[1].isRemoved()); // no more pointers -> logically removed
-        interruptAllCells(ss[2]);
+        sendInterruptAllCells(ss[2]);
         assertFalse(ss[2].isRemoved()); // shouldn't be removed because there's an incoming pointer
     }
 
@@ -301,7 +301,7 @@ public class SegmentRendezvousTest {
     void shouldConcurrentlyMoveSegmentsForward() throws ExecutionException, InterruptedException {
         // given
         for (int k = 0; k < 1000; k++) {
-            var ss = createSegmentChain(1, 0, false);
+            var ss = createSegmentChain(1, 0, true);
             var ref = new AtomicReference<>(ss[0]);
             var observedSegments = new ConcurrentHashMap<Integer, Segment>();
 
@@ -312,7 +312,7 @@ public class SegmentRendezvousTest {
                     forkVoid(scope, () -> {
                         var s = ss[0];
                         for (int i = 0; i < 300; i++) {
-                            s = Segment.findAndMoveForward(ref, s, i, false);
+                            s = Segment.findAndMoveForward(ref, s, i);
                             var previous = observedSegments.put(i, s);
                             if (previous != s && previous != null) {
                                 fail("Already observed segment: " + previous + " for id: " + i + ", but found: " + s);

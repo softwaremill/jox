@@ -64,9 +64,9 @@ public final class Channel<T> {
     * as we don't directly store elements in the buffer, we don't need to clear them on interrupt etc. This is done
       automatically when the cell's state is set to something else than a Continuation/Buffered.
     * instead of the `completedExpandBuffersAndPauseFlag` counter, we maintain a counter of cells which haven't been
-      processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all cells have
-      been interrupted, processed & there are no pointers. The segment is notified that a cell is processed after
-      `expandBuffer` completes.
+      interrupted & processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all
+      cells have been interrupted, processed & there are no pointers. The segment is notified that a cell is interrupted
+      directly from `Continuation`, and that a cell is processed after `expandBuffer` completes.
     * the close procedure is a bit different - the Kotlin version does this "cooperatively", that is multiple threads
       that observe that the channel is closing participate in appropriate state mutations. This doesn't seem to be
       necessary in this implementation. Instead, `close()` sets the closed flag and closes the segment chain - which
@@ -109,7 +109,6 @@ public final class Channel<T> {
 
     private final boolean isRendezvous;
 
-
     /**
      * Creates a rendezvous channel.
      */
@@ -129,7 +128,7 @@ public final class Channel<T> {
         this.capacity = capacity;
         isRendezvous = capacity == 0L;
 
-        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, !isRendezvous);
+        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, isRendezvous);
 
         sendSegment = new AtomicReference<>(firstSegment);
         receiveSegment = new AtomicReference<>(firstSegment);
@@ -185,7 +184,7 @@ public final class Channel<T> {
 
             // check if `sendSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(sendSegment, segment, id, !isRendezvous);
+                segment = findAndMoveForward(sendSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, `s` points to a segment which doesn't exist
                     return closedReason.get();
@@ -349,7 +348,7 @@ public final class Channel<T> {
 
             // check if `receiveSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(receiveSegment, segment, id, !isRendezvous);
+                segment = findAndMoveForward(receiveSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, r points to a segment which doesn't exist
                     return closedReason.get();
@@ -503,7 +502,7 @@ public final class Channel<T> {
 
             // check if `bufferEndSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(bufferEndSegment, segment, id, true);
+                segment = findAndMoveForward(bufferEndSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, b points to a segment which doesn't exist, nowhere to expand
                     return;
@@ -523,7 +522,8 @@ public final class Channel<T> {
 
             var result = updateCellExpandBuffer(segment, i);
             if (result == ExpandBufferResult.FAILED) {
-                // the cell must have been an interrupted sender; notifying the segment and trying with a new cell
+                // the cell must have been an interrupted sender; notifying the segment that the cell is now processed
+                // and trying with a new cell
                 segment.cellProcessed();
             } else {
                 // done or closed
