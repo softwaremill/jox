@@ -139,4 +139,27 @@ public class SelectTest {
         // then
         assertEquals("vv", received);
     }
+
+    @Test
+    public void testBufferExpandedWhenSelecting() throws InterruptedException {
+        // given
+        Channel<String> ch = new Channel<>(2);
+
+        // when
+        ch.send("v1");
+        ch.send("v2");
+        String r1 = select(ch.receiveClause());
+        String r2 = select(ch.receiveClause());
+
+        ch.send("v3");
+        ch.send("v4"); // none of the sends should block
+        String r3 = select(ch.receiveClause());
+        String r4 = select(ch.receiveClause());
+
+        // then
+        assertEquals("v1", r1);
+        assertEquals("v2", r2);
+        assertEquals("v3", r3);
+        assertEquals("v4", r4);
+    }
 }
