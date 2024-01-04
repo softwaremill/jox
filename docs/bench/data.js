@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1703168204512,
+  "lastUpdate": 1704375923225,
   "repoUrl": "https://github.com/softwaremill/jox",
   "entries": {
     "Benchmark": [
@@ -1138,6 +1138,162 @@ window.BENCHMARK_DATA = {
           {
             "name": "com.softwaremill.jox.RendezvousKotlinBenchmark.sendReceiveUsingDefaultDispatcher",
             "value": 140.96090893492064,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "committer": {
+            "email": "adam@warski.org",
+            "name": "adamw",
+            "username": "adamw"
+          },
+          "distinct": true,
+          "id": "109707a17a2131f7fef3d5b7eea55a63468b595c",
+          "message": "Release drafter",
+          "timestamp": "2024-01-04T14:18:34+01:00",
+          "tree_id": "c62e31a5f6e41e902f36373809aa4b2f883ca0a7",
+          "url": "https://github.com/softwaremill/jox/commit/109707a17a2131f7fef3d5b7eea55a63468b595c"
+        },
+        "date": 1704375923211,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.array_blocking_queue ( {\"capacity\":\"1\"} )",
+            "value": 1151.2165182672584,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.array_blocking_queue ( {\"capacity\":\"10\"} )",
+            "value": 244.2836688428649,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.array_blocking_queue ( {\"capacity\":\"100\"} )",
+            "value": 145.83005076019495,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel ( {\"capacity\":\"1\"} )",
+            "value": 208.93743388247404,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel ( {\"capacity\":\"10\"} )",
+            "value": 181.95528862713888,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel ( {\"capacity\":\"100\"} )",
+            "value": 141.2086216480721,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel_iterative ( {\"capacity\":\"1\"} )",
+            "value": 204.4358666121212,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel_iterative ( {\"capacity\":\"10\"} )",
+            "value": 171.51796893104117,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedBenchmark.channel_iterative ( {\"capacity\":\"100\"} )",
+            "value": 140.6721158021461,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.RendezvousBenchmark.channel",
+            "value": 185.43803617440977,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.RendezvousBenchmark.channel_iterative",
+            "value": 177.59462606767678,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.RendezvousBenchmark.exchanger",
+            "value": 91.73481481558571,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.RendezvousBenchmark.synchronous_queue",
+            "value": 208.17899307943568,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.SelectBenchmark.channel",
+            "value": 222.0338600426866,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 2"
+          },
+          {
+            "name": "com.softwaremill.jox.SelectBenchmark.single_channel_iterative",
+            "value": 258.9913286058201,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.SelectBenchmark.two_channels_iterative",
+            "value": 229.93358417826596,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher ( {\"capacity\":\"1\"} )",
+            "value": 113.14968543684209,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher ( {\"capacity\":\"10\"} )",
+            "value": 51.31537736960172,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher ( {\"capacity\":\"100\"} )",
+            "value": 32.11638622544803,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.RendezvousKotlinBenchmark.sendReceiveUsingDefaultDispatcher",
+            "value": 143.13187821015873,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.SelectKotlinBenchmark.sendReceiveUsingSelect_singleChannel_defaultDispatcher",
+            "value": 247.49793288981482,
+            "unit": "ns/op",
+            "extra": "iterations: 5\nforks: 3\nthreads: 1"
+          },
+          {
+            "name": "com.softwaremill.jox.SelectKotlinBenchmark.sendReceiveUsingSelect_twoChannels_defaultDispatcher",
+            "value": 355.82850441111106,
             "unit": "ns/op",
             "extra": "iterations: 5\nforks: 3\nthreads: 1"
           }
