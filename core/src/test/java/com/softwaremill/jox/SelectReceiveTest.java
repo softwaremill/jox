@@ -12,7 +12,7 @@ import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class SelectTest {
+public class SelectReceiveTest {
     @Test
     public void testSelectFromFirstBuffered() throws InterruptedException {
         // given

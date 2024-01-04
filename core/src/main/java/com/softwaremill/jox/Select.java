@@ -136,7 +136,7 @@ class SelectInstance {
             }
             default -> {
                 // else: the clause was selected
-                clause.setRawValue(result);
+                clause.setPayload(result); // might be a no-op for send clauses
                 // when setting the state, we might override another state:
                 // - a list of clauses to re-register - there's no point in doing that anyway (since we already selected a clause)
                 // - a closed state - the closure must have happened concurrently with registration; we give priority to immediate selects then
@@ -276,15 +276,15 @@ class SelectInstance {
                     return false;
                 }
                 case Thread t -> {
-                    // setting the value first, before the memory barrier created by setting (and in the main loop
-                    // thread, reading) the state.
                     var clause = storedSelect.getClause();
-                    clause.setRawValue(rawValue);
+                    // for receives, setting the value first, before the memory barrier created by setting (and in the
+                    // main loop thread, reading) the state.
+                    clause.setPayload(rawValue);
                     if (state.compareAndSet(currentState, clause)) {
                         LockSupport.unpark(t);
                         return true;
                     } else {
-                        clause.setRawValue(null); // preventing memory leaks
+                        clause.setPayload(null); // preventing memory leaks
                     }
                     // else: CAS unsuccessful, retry
                 }
