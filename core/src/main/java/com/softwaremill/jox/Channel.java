@@ -858,11 +858,19 @@ public final class Channel<T> {
 
     private static final Function<Object, Object> IDENTITY = Function.identity();
 
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
+     * the current channel.
+     */
     public SelectClause<T> receiveClause() {
         //noinspection unchecked
         return receiveClause((Function<T, T>) IDENTITY);
     }
 
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
+     * the current channel, and transform it using the provided {@code callback}.
+     */
     public <U> SelectClause<U> receiveClause(Function<T, U> callback) {
         return new SelectClause<>(null) {
             @Override
@@ -888,10 +896,18 @@ public final class Channel<T> {
         };
     }
 
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
+     * to the current channel, and return {@code null} as the clause's result.
+     */
     public SelectClause<Void> sendClause(T value) {
         return sendClause(value, () -> null);
     }
 
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
+     * to the current channel, and return the value of the provided callback as the clause's result.
+     */
     public <U> SelectClause<U> sendClause(T value, Supplier<U> callback) {
         return new SelectClause<>(value) {
             @Override
