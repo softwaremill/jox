@@ -860,10 +860,10 @@ public final class Channel<T> {
 
     public SelectClause<T> receiveClause() {
         //noinspection unchecked
-        return receiveClauseMap((Function<T, T>) IDENTITY);
+        return receiveClause((Function<T, T>) IDENTITY);
     }
 
-    public <U> SelectClause<U> receiveClauseMap(Function<T, U> callback) {
+    public <U> SelectClause<U> receiveClause(Function<T, U> callback) {
         return new SelectClause<>(null) {
             @Override
             Channel<?> getChannel() {
@@ -889,10 +889,10 @@ public final class Channel<T> {
     }
 
     public SelectClause<Void> sendClause(T value) {
-        return sendClauseMap(value, () -> null);
+        return sendClause(value, () -> null);
     }
 
-    public <U> SelectClause<U> sendClauseMap(T value, Supplier<U> callback) {
+    public <U> SelectClause<U> sendClause(T value, Supplier<U> callback) {
         return new SelectClause<>(value) {
             @Override
             Channel<?> getChannel() {

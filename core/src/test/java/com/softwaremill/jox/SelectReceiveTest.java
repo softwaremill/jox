@@ -134,7 +134,7 @@ public class SelectReceiveTest {
         ch1.send("v");
 
         // when
-        String received = select(ch1.receiveClauseMap(x -> x + x), ch2.receiveClauseMap(x -> x + x));
+        String received = select(ch1.receiveClause(x -> x + x), ch2.receiveClause(x -> x + x));
 
         // then
         assertEquals("vv", received);

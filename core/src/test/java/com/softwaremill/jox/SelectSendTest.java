@@ -126,7 +126,7 @@ public class SelectSendTest {
         Channel<String> ch2 = new Channel<>(1);
 
         // when
-        String sent = select(ch1.sendClauseMap("v1", () -> "1"), ch2.sendClauseMap("v2", () -> "2"));
+        String sent = select(ch1.sendClause("v1", () -> "1"), ch2.sendClause("v2", () -> "2"));
 
         // then
         assertEquals("1", sent);

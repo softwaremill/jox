@@ -40,6 +40,9 @@ public class Select {
 
     /**
      * Select exactly one clause to complete. Each clause should be created for a different channel.
+     * <p>
+     * If a couple of the clauses can be completed immediately, the select is biased towards the clauses that appear
+     * first.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return The value returned by the selected clause.
@@ -59,6 +62,9 @@ public class Select {
     /**
      * Select exactly one clause to complete. Each clause should be created for a different channel.
      * Doesn't throw exceptions when the channel is closed, but returns a value.
+     * <p>
+     * If a couple of the clauses can be completed immediately, the select is biased towards the clauses that appear
+     * first.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any of the channels is closed.
