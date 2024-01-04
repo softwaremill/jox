@@ -9,12 +9,12 @@ public class SegmentTest {
     @Test
     void segmentShouldBecomeRemovedOnceAllCellsInterruptedAndProcessed() {
         // given
-        var ss = createSegmentChain(3, 0, true);
+        var ss = createSegmentChain(3, 0, false);
 
         // when
-        // receiver-interrupting all cells
+        // sender-interrupting all cells
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            ss[1].cellInterruptedReceiver();
+            ss[1].cellInterruptedSender();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -27,7 +27,7 @@ public class SegmentTest {
 
         // processing all cells but one
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellProcessed_notInterruptedSender();
+            ss[1].cellProcessed();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -38,7 +38,7 @@ public class SegmentTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellProcessed_notInterruptedSender(); // last cell
+        ss[1].cellProcessed(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -49,13 +49,13 @@ public class SegmentTest {
     }
 
     @Test
-    void segmentShouldBecomeRemovedOnceAllCellsSendInterrupted() {
+    void segmentShouldBecomeRemovedOnceAllCellsReceiveInterrupted() {
         // given
-        var ss = createSegmentChain(3, 0, true);
+        var ss = createSegmentChain(3, 0, false);
 
         // when
         for (int i = 0; i < SEGMENT_SIZE - 1; i++) {
-            ss[1].cellInterruptedSender_orClosed();
+            ss[1].cellInterruptedReceiver();
             // nothing should happen
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
@@ -66,7 +66,7 @@ public class SegmentTest {
             assertEquals(ss[2].getNext(), null);
         }
 
-        ss[1].cellInterruptedSender_orClosed(); // last cell
+        ss[1].cellInterruptedReceiver(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
@@ -79,7 +79,7 @@ public class SegmentTest {
     @Test
     void shouldReturnTheLastSegmentWhenClosing() {
         // given
-        var ss = createSegmentChain(3, 0, true);
+        var ss = createSegmentChain(3, 0, false);
 
         // when
         var s = ss[0].close();
@@ -88,12 +88,12 @@ public class SegmentTest {
         assertEquals(ss[2].getId(), s.getId());
     }
 
-    static Segment[] createSegmentChain(int count, long id, boolean countProcessed) {
+    static Segment[] createSegmentChain(int count, long id, boolean isRendezvous) {
         var segments = new Segment[count];
-        var thisSegment = new Segment(id, null, 0, countProcessed);
+        var thisSegment = new Segment(id, null, 0, isRendezvous);
         segments[0] = thisSegment;
         for (int i = 1; i < count; i++) {
-            var nextSegment = new Segment(id + i, thisSegment, 0, countProcessed);
+            var nextSegment = new Segment(id + i, thisSegment, 0, isRendezvous);
             thisSegment.setNext(nextSegment);
             segments[i] = nextSegment;
             thisSegment = nextSegment;
@@ -101,9 +101,9 @@ public class SegmentTest {
         return segments;
     }
 
-    static void interruptAllCells(Segment s) {
+    static void sendInterruptAllCells(Segment s) {
         for (int i = 0; i < SEGMENT_SIZE; i++) {
-            s.cellInterruptedSender_orClosed();
+            s.cellInterruptedSender();
         }
     }
 }

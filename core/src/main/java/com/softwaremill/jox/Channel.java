@@ -6,6 +6,8 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static com.softwaremill.jox.CellState.*;
@@ -63,9 +65,9 @@ public final class Channel<T> {
     * as we don't directly store elements in the buffer, we don't need to clear them on interrupt etc. This is done
       automatically when the cell's state is set to something else than a Continuation/Buffered.
     * instead of the `completedExpandBuffersAndPauseFlag` counter, we maintain a counter of cells which haven't been
-      processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all cells have
-      been interrupted, processed & there are no counters. The segment is notified that a cell is processed after
-      `expandBuffer` completes.
+      interrupted & processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all
+      cells have been interrupted, processed & there are no pointers. The segment is notified that a cell is interrupted
+      directly from `Continuation`, and that a cell is processed after `expandBuffer` completes.
     * the close procedure is a bit different - the Kotlin version does this "cooperatively", that is multiple threads
       that observe that the channel is closing participate in appropriate state mutations. This doesn't seem to be
       necessary in this implementation. Instead, `close()` sets the closed flag and closes the segment chain - which
@@ -108,7 +110,6 @@ public final class Channel<T> {
 
     private final boolean isRendezvous;
 
-
     /**
      * Creates a rendezvous channel.
      */
@@ -121,23 +122,22 @@ public final class Channel<T> {
      * Capacity cannot be negative.
      */
     public Channel(int capacity) {
-        assert capacity >= 0 : "Capacity must be non-negative.";
+        if (capacity < 0) {
+            throw new IllegalArgumentException("Capacity must be non-negative.");
+        }
 
         this.capacity = capacity;
         isRendezvous = capacity == 0L;
 
-        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, !isRendezvous);
-
-        bufferEnd = new AtomicLong(capacity);
-        for (int i = 0; i < capacity; i++) {
-            firstSegment.cellProcessed_notInterruptedSender(); // the cells that are initially in the buffer are already processed (expandBuffer won't touch them)
-        }
+        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, isRendezvous);
 
         sendSegment = new AtomicReference<>(firstSegment);
         receiveSegment = new AtomicReference<>(firstSegment);
         // If the capacity is 0, buffer expansion never happens, so the buffer end segment points to a null segment,
         // not the first one. This is also reflected in the pointer counter of firstSegment.
         bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
+
+        bufferEnd = new AtomicLong(capacity);
 
         closedReason = new AtomicReference<>(null);
     }
@@ -166,6 +166,14 @@ public final class Channel<T> {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is closed.
      */
     public Object sendSafe(T value) throws InterruptedException {
+        return doSend(value, null, null);
+    }
+
+    /**
+     * @return If {@code select} & {@code selectClause} is {@code null}: {@code null} when the value was sent, or
+     * {@link ChannelClosed}, when the channel is closed. Otherwise, might also return {@link StoredSelect}.
+     */
+    private Object doSend(T value, SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         if (value == null) {
             throw new NullPointerException();
         }
@@ -185,7 +193,7 @@ public final class Channel<T> {
 
             // check if `sendSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(sendSegment, segment, id, !isRendezvous);
+                segment = findAndMoveForward(sendSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, `s` points to a segment which doesn't exist
                     return closedReason.get();
@@ -199,33 +207,38 @@ public final class Channel<T> {
                 }
             }
 
-            var sendResult = updateCellSend(segment, i, s, value);
+            var sendResult = updateCellSend(segment, i, s, value, select, selectClause);
             switch (sendResult) {
-                case AWAITED -> {
+                case SendResult.AWAITED -> {
                     // the thread was suspended and then resumed by a receiver or by buffer expansion
                     // not clearing the previous pointer, because of the buffering possibility
                     return null;
                 }
-                case BUFFERED -> {
+                case SendResult.BUFFERED -> {
                     // a receiver is coming, or we are in buffer
                     // similarly as above, not clearing the previous pointer
                     return null;
                 }
-                case RESUMED -> {
+                case SendResult.RESUMED -> {
                     // we resumed a receiver - we can be sure that R > s
                     segment.cleanPrev();
                     return null;
                 }
-                case FAILED -> {
+                case SendResult.FAILED -> {
                     // the cell was broken (hence already processed by a receiver) or interrupted (also a receiver
                     // must have been there); in both cases R > s
                     segment.cleanPrev();
                     // trying again with a new cell
                 }
-                case CLOSED -> {
+                case SendResult.CLOSED -> {
                     // not cleaning the previous segments - the close procedure might still need it
                     return closedReason.get();
                 }
+                case StoredSelect ss -> {
+                    // we stored a select instance - there's no matching receive, not clearing the previous segment
+                    return ss;
+                }
+                default -> throw new IllegalStateException("Unexpected result: " + sendResult);
             }
         }
     }
@@ -235,9 +248,9 @@ public final class Channel<T> {
      * @param i       The index within the {@code segment}.
      * @param s       Index of the reserved cell.
      * @param value   The value to send.
-     * @return {@code true}, if sending was successful; {@code false}, if it should be restarted.
+     * @return One of {@link SendResult}, or {@link StoredSelect} if {@code select} is not {@code null}.
      */
-    private SendResult updateCellSend(Segment segment, int i, long s, T value) throws InterruptedException {
+    private Object updateCellSend(Segment segment, int i, long s, T value, SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
 
@@ -246,16 +259,26 @@ public final class Channel<T> {
                     // reading the buffer end & receiver's counter if needed
                     if (s >= (isRendezvous ? 0 : bufferEnd.get()) && s >= receivers.get()) {
                         // cell is empty, and no receiver, not in buffer -> suspend
-                        // storing the value to send as the continuation's payload, so that the receiver can use it
-                        var c = new Continuation(value);
-                        if (segment.casCell(i, null, c)) {
-                            if (c.await(segment, i) == ChannelClosedMarker.CLOSED) {
-                                return SendResult.CLOSED;
-                            } else {
-                                return SendResult.AWAITED;
+                        if (select != null) {
+                            // cell is empty, no receiver, and we are in a select -> store the select instance
+                            // and await externally; the value to send is stored in the selectClause
+                            var storedSelect = new StoredSelect(select, segment, i, true, selectClause);
+                            if (segment.casCell(i, state, storedSelect)) {
+                                return storedSelect;
                             }
+                            // else: CAS unsuccessful, repeat
+                        } else {
+                            // storing the value to send as the continuation's payload, so that the receiver can use it
+                            var c = new Continuation(value);
+                            if (segment.casCell(i, null, c)) {
+                                if (c.await(segment, i) == ChannelClosedMarker.CLOSED) {
+                                    return SendResult.CLOSED;
+                                } else {
+                                    return SendResult.AWAITED;
+                                }
+                            }
+                            // else: CAS unsuccessful, repeat
                         }
-                        // else: CAS unsuccessful, repeat
                     } else {
                         // cell is empty, but a receiver is in progress, or in buffer -> elimination
                         if (segment.casCell(i, null, new Buffered(value))) {
@@ -277,7 +300,18 @@ public final class Channel<T> {
                         segment.setCell(i, DONE);
                         return SendResult.RESUMED;
                     } else {
-                        // cell interrupted -> trying with a new one
+                        // when cell interrupted -> trying with a new one
+                        // when close in progress -> subsequent cells are already closed, this will be detected in the next iteration
+                        return SendResult.FAILED;
+                    }
+                }
+                case StoredSelect ss -> {
+                    // a select clause is waiting -> trying to resume
+                    if (ss.getSelect().trySelect(ss, value)) {
+                        segment.setCell(i, DONE);
+                        return SendResult.RESUMED;
+                    } else {
+                        // select unsuccessful -> trying with a new one
                         return SendResult.FAILED;
                     }
                 }
@@ -318,6 +352,14 @@ public final class Channel<T> {
      * @return Either a value of type {@code T}, or {@link ChannelClosed}, when the channel is closed.
      */
     public Object receiveSafe() throws InterruptedException {
+        return doReceive(null, null);
+    }
+
+    /**
+     * @return If {@code select} & {@code selectClause} is {@code null}: the received value, or {@link ChannelClosed},
+     * when the channel is closed. Otherwise, might also return {@link StoredSelect}.
+     */
+    private Object doReceive(SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         while (true) {
             // reading the segment before the counter increment - this is needed to find the required segment later
             var segment = receiveSegment.get();
@@ -330,7 +372,7 @@ public final class Channel<T> {
 
             // check if `receiveSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(receiveSegment, segment, id, !isRendezvous);
+                segment = findAndMoveForward(receiveSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, r points to a segment which doesn't exist
                     return closedReason.get();
@@ -344,23 +386,27 @@ public final class Channel<T> {
                 }
             }
 
-            var result = updateCellReceive(segment, i, r);
+            var result = updateCellReceive(segment, i, r, select, selectClause);
             if (result == ReceiveResult.CLOSED) {
                 // not cleaning the previous segments - the close procedure might still need it
                 return closedReason.get();
             } else {
               /*
-                After `updateCellReceive` completes and the channel isn't closed, we can be sure that S > r:
+                After `updateCellReceive` completes and the channel isn't closed, we can be sure that S > r, unless
+                we stored the given select instance:
                 - if we stored and awaited a continuation, and it was resumed, then a sender must have appeared
                 - if we marked the cell as broken, then a sender is in progress in that cell
                 - if a continuation was present, then the sender must have been there
                 - if the cell was interrupted, that could have been only because of a sender
                 - if a value was buffered, that's because there was/is a matching sender
 
-                The only case when S < r is when awaiting on the continuation is interrupted, in which case the
-                exception propagates outside of this method.
+                The only cases when S <= r are when:
+                - awaiting on the continuation is interrupted, in which case the exception propagates outside of this method
+                - we stored the given select instance (in an empty / in-buffer cell)
                 */
-                segment.cleanPrev();
+                if (!(result instanceof StoredSelect)) {
+                    segment.cleanPrev();
+                }
                 if (result != ReceiveResult.FAILED) {
                     return result;
                 }
@@ -371,13 +417,16 @@ public final class Channel<T> {
     /**
      * Invariant maintained by receive + expandBuffer: between R and B the number of cells that are empty / IN_BUFFER should be equal
      * to the buffer size. These are the cells that can accept a sender without suspension.
+     * <p>
+     * This method might suspend (and be interrupted) only if {@code select} is {@code null}.
      *
      * @param segment The segment which stores the cell's state.
      * @param i       The index within the {@code segment}.
      * @param r       Index of the reserved cell.
-     * @return Either a state-result ({@link ReceiveResult}), or the received value.
+     * @param select  The select instance of which this receive is part of, or {@code null} (along with {@code selectClause}) if this is a direct receive call.
+     * @return Either a state-result ({@link ReceiveResult}), {@link StoredSelect} in case {@code select} is not {@code null}, or the received value.
      */
-    private Object updateCellReceive(Segment segment, int i, long r) throws InterruptedException {
+    private Object updateCellReceive(Segment segment, int i, long r, SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
             var switchState = state == null ? IN_BUFFER : state; // we can't combine null+IN_BUFFER in the switch statement, hence cheating a bit here
@@ -385,19 +434,30 @@ public final class Channel<T> {
             switch (switchState) {
                 case IN_BUFFER -> { // means that state == null || state == IN_BUFFER
                     if (r >= getSendersCounter(sendersAndClosedFlag.get())) { // reading the sender's counter
-                        // cell is empty, and no sender -> suspend
-                        // not using any payload
-                        var c = new Continuation(null);
-                        if (segment.casCell(i, state, c)) {
-                            expandBuffer();
-                            var result = c.await(segment, i);
-                            if (result == ChannelClosedMarker.CLOSED) {
-                                return ReceiveResult.CLOSED;
-                            } else {
-                                return result;
+                        if (select != null) {
+                            // cell is empty, no sender, and we are in a select -> store the select instance
+                            // and await externally
+                            var storedSelect = new StoredSelect(select, segment, i, false, selectClause);
+                            if (segment.casCell(i, state, storedSelect)) {
+                                expandBuffer();
+                                return storedSelect;
                             }
+                            // else: CAS unsuccessful, repeat
+                        } else {
+                            // cell is empty, and no sender -> suspend
+                            // not using any payload
+                            var c = new Continuation(null);
+                            if (segment.casCell(i, state, c)) {
+                                expandBuffer();
+                                var result = c.await(segment, i);
+                                if (result == ChannelClosedMarker.CLOSED) {
+                                    return ReceiveResult.CLOSED;
+                                } else {
+                                    return result;
+                                }
+                            }
+                            // else: CAS unsuccessful, repeat
                         }
-                        // else: CAS unsuccessful, repeat
                     } else {
                         // sender in progress, receiver changed state first -> restart
                         if (segment.casCell(i, state, BROKEN)) {
@@ -408,6 +468,7 @@ public final class Channel<T> {
                     }
                 }
                 case Continuation c -> {
+                    // resolving a potential race with `expandBuffer`
                     if (segment.casCell(i, state, RESUMING)) {
                         // a sender is waiting -> trying to resume
                         if (c.tryResume(0)) {
@@ -415,8 +476,26 @@ public final class Channel<T> {
                             expandBuffer();
                             return c.getPayload();
                         } else {
-                            // cell interrupted -> trying with a new one
+                            // when cell interrupted -> trying with a new one
                             // the state will be set to INTERRUPTED_SEND by the continuation, meanwhile everybody else will observe RESUMING
+                            // when close in progress -> the cell state will be updated to CLOSED, subsequent cells are already closed,
+                            // which will be detected in the next iteration
+                            return ReceiveResult.FAILED;
+                        }
+                    }
+                    // else: CAS unsuccessful, repeat
+                }
+                case StoredSelect ss -> {
+                    // resolving a potential race with `expandBuffer`
+                    if (segment.casCell(i, state, RESUMING)) {
+                        // a send clause is waiting -> trying to resume
+                        if (ss.getSelect().trySelect(ss, 0)) {
+                            segment.setCell(i, DONE);
+                            expandBuffer();
+                            return ss.getClause().getPayload();
+                        } else {
+                            // when select fails (another clause is selected, select is interrupted, closed etc.) -> trying with a new one
+                            // the state will be set to INTERRUPTED_SEND by the cleanup, meanwhile everybody else will observe RESUMING
                             return ReceiveResult.FAILED;
                         }
                     }
@@ -462,32 +541,33 @@ public final class Channel<T> {
 
             // check if `bufferEndSegment` stores a previous segment, if so move the reference forward
             if (segment.getId() != id) {
-                segment = findAndMoveForward(bufferEndSegment, segment, id, true);
+                segment = findAndMoveForward(bufferEndSegment, segment, id);
                 if (segment == null) {
                     // the channel has been closed, b points to a segment which doesn't exist, nowhere to expand
                     return;
                 }
 
                 // if we still have another segment, the segment must have been removed; this can happen if the current
-                // cell has been an interrupted sender (such cells are immediately marked as processed, which can cause
-                // segment removal); other cells might have been both interrupted senders/receivers
+                // cell has been an interrupted receiver (such cells are immediately marked as processed, which can cause
+                // segment removal); other cells might have been both interrupted senders/receivers (but all interrupted
+                // senders must have already been processed by expandBuffer)
                 if (segment.getId() != id) {
-                    // skipping all interrupted cells, and trying with a new one
+                    // skipping all interrupted cells as an optimization
                     bufferEnd.compareAndSet(b, segment.getId() * Segment.SEGMENT_SIZE);
-                    continue;
+                    // another buffer expansion already happened for this cell (in the removed segment)
+                    return;
                 }
             }
 
             var result = updateCellExpandBuffer(segment, i);
-            if (result == ExpandBufferResult.DONE) {
-                // letting the segment know that the cell is processed, and the segment can be potentially removed
-                segment.cellProcessed_notInterruptedSender();
-                return;
-            } else if (result == ExpandBufferResult.CLOSED) {
-                // the cell is already counted as processed by the close procedure
+            if (result == ExpandBufferResult.FAILED) {
+                // the cell must have been an interrupted sender; notifying the segment that the cell is now processed
+                // and trying with a new cell
+                segment.cellProcessed();
+            } else {
+                // done or closed
                 return;
             }
-            // else, the cell must have been an interrupted sender; `Continuation` the properly notifies the segment
         }
     }
 
@@ -503,8 +583,10 @@ public final class Channel<T> {
                             segment.setCell(i, new Buffered(c.getPayload()));
                             return ExpandBufferResult.DONE;
                         } else {
-                            // cell interrupted -> trying with a new one
+                            // when cell interrupted -> trying with a new one
                             // the state will be set to INTERRUPTED_SEND by the continuation, meanwhile everybody else will observe RESUMING
+                            // when close in progress -> the cell state will be updated to CLOSED, subsequent cells are already closed,
+                            // which will be detected in the next iteration
                             return ExpandBufferResult.FAILED;
                         }
                     }
@@ -512,6 +594,24 @@ public final class Channel<T> {
                 }
                 case Continuation c -> {
                     // must be a receiver continuation - another buffer expansion already happened
+                    return ExpandBufferResult.DONE;
+                }
+                case StoredSelect ss when ss.isSender() -> {
+                    if (segment.casCell(i, state, RESUMING)) {
+                        // a send clause is waiting -> trying to resume
+                        if (ss.getSelect().trySelect(ss, 0)) {
+                            segment.setCell(i, new Buffered(ss.getClause().getPayload()));
+                            return ExpandBufferResult.DONE;
+                        } else {
+                            // select unsuccessful -> trying with a new one
+                            // the state will be set to INTERRUPTED_SEND by the cleanup, meanwhile everybody else will observe RESUMING
+                            return ExpandBufferResult.FAILED;
+                        }
+                    }
+                    // else: CAS unsuccessful, repeat
+                }
+                case StoredSelect ss -> {
+                    // must be a receiver clause of the select - another buffer expansion already happened
                     return ExpandBufferResult.DONE;
                 }
                 case Buffered b -> {
@@ -679,36 +779,46 @@ public final class Channel<T> {
             switch (state) {
                 case null -> {
                     if (segment.casCell(i, null, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        // we treat closing a cell same as if it there was an interrupted receiver: there's no need
+                        // for the cell to be processed by `expandBuffer`, and segments full of closed cells can be
+                        // safely removed
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
                 case IN_BUFFER -> {
                     if (segment.casCell(i, state, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
                 case Buffered b -> {
                     // discarding the buffered value
                     if (segment.casCell(i, state, CLOSED)) {
-                        segment.cellInterruptedSender_orClosed();
+                        segment.cellInterruptedReceiver();
                         return;
                     }
                 }
                 case Continuation c -> {
-                    if (segment.casCell(i, state, RESUMING)) {
-                        if (c.tryResume(ChannelClosedMarker.CLOSED)) {
-                            segment.setCell(i, CLOSED);
-                            segment.cellInterruptedSender_orClosed();
-                            return;
-                        } else {
-                            // cell interrupted - the segment counters will be appropriately decremented from the
-                            // continuation, depending if this is a sender or receiver; moreover, the cell is already
-                            // processed in case this is a receiver
-                            return;
-                        }
+                    // potential race wih sender/receiver resuming the continuation - resolved by synchronizing on
+                    // `Continuation.data`: only one thread will successfully change its value from `null`
+                    if (c.tryResume(ChannelClosedMarker.CLOSED)) {
+                        segment.setCell(i, CLOSED);
+                        segment.cellInterruptedReceiver();
+                        return;
+                    } else {
+                        // when cell interrupted - the segment counters will be appropriately decremented from the
+                        // continuation, depending on if this is a sender or receiver; moreover, for interrupted senders
+                        // this will be processed by expandBuffer as we are closing cells from the end
+                        // otherwise, the cell might be completed with a value, and the result is processed normally
+                        // on another thread
+                        return;
                     }
+                }
+                case StoredSelect ss -> {
+                    ss.getSelect().channelClosed(closedReason.get());
+                    // not setting the state & updating counters, as each non-selected stored select cell will be
+                    // cleaned up, setting an interrupted state (and informing the segment)
                 }
                 case DONE, BROKEN -> {
                     return; // nothing to do - a sender & receiver have already met
@@ -739,6 +849,108 @@ public final class Channel<T> {
             return e.cause();
         } else {
             return null;
+        }
+    }
+
+    // **************
+    // Select clauses
+    // **************
+
+    private static final Function<Object, Object> IDENTITY = Function.identity();
+
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
+     * the current channel.
+     */
+    public SelectClause<T> receiveClause() {
+        //noinspection unchecked
+        return receiveClause((Function<T, T>) IDENTITY);
+    }
+
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
+     * the current channel, and transform it using the provided {@code callback}.
+     */
+    public <U> SelectClause<U> receiveClause(Function<T, U> callback) {
+        return new SelectClause<>(null) {
+            @Override
+            Channel<?> getChannel() {
+                return Channel.this;
+            }
+
+            @Override
+            Object register(SelectInstance select) {
+                try {
+                    return doReceive(select, this);
+                } catch (InterruptedException e) {
+                    // not possible, as we provide a select, so no suspension should happen
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            @Override
+            U transformedRawValue() {
+                //noinspection unchecked
+                return callback.apply((T) getPayload());
+            }
+        };
+    }
+
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
+     * to the current channel, and return {@code null} as the clause's result.
+     */
+    public SelectClause<Void> sendClause(T value) {
+        return sendClause(value, () -> null);
+    }
+
+    /**
+     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
+     * to the current channel, and return the value of the provided callback as the clause's result.
+     */
+    public <U> SelectClause<U> sendClause(T value, Supplier<U> callback) {
+        return new SelectClause<>(value) {
+            @Override
+            Channel<?> getChannel() {
+                return Channel.this;
+            }
+
+            @Override
+            Object register(SelectInstance select) {
+                try {
+                    var result = doSend(value, select, this);
+                    // we can't return null, the actual value doesn't matter
+                    return result == null ? SentClauseMarker.SENT : result;
+                } catch (InterruptedException e) {
+                    // not possible, as we provide a select, so no suspension should happen
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            @Override
+            U transformedRawValue() {
+                return callback.get();
+            }
+
+            @Override
+            void setPayload(Object payload) {
+                // ignoring, the payload is set during creation
+            }
+        };
+    }
+
+    void cleanupStoredSelect(Segment segment, int i, boolean isSender) {
+        // We treat the cell as if it was interrupted - the code is same as in `Continuation.await`;
+        // there's no need to resolve races with `SelectInstance.trySelect`, as cleanup is called either when a clause
+        // is selected, a channel is closed, or during re-registration. In all cases `trySelect` would fail.
+        // In other words, the races are resolved by synchronizing on `SelectInstance.state`.
+        segment.setCell(i, isSender ? INTERRUPTED_SEND : INTERRUPTED_RECEIVE);
+
+        // notifying the segment - if all cells become interrupted, the segment can be removed
+        if (isSender) {
+            segment.cellInterruptedSender();
+        } else {
+            segment.cellInterruptedReceiver();
         }
     }
 
@@ -795,6 +1007,8 @@ public final class Channel<T> {
                     case Buffered b -> sb.append("V(").append(b.value()).append(")");
                     case Continuation c when c.isSender() -> sb.append("WS(").append(c.getPayload()).append(")");
                     case Continuation c -> sb.append("WR");
+                    case StoredSelect ss when ss.isSender() -> sb.append("SS");
+                    case StoredSelect ss -> sb.append("SR");
                     default -> throw new IllegalStateException("Unexpected value: " + state);
                 }
                 if (i != Segment.SEGMENT_SIZE - 1) sb.append(",");
@@ -818,12 +1032,14 @@ enum SendResult {
 }
 
 /**
- * Possible return values of {@code Channel#updateCellReceive}: one of the enum constants below, or the received value.
+ * Possible return values of {@code Channel#updateCellReceive}: one of the enum constants below, the received value or {@link SelectStored} (used for cleanup).
  */
 enum ReceiveResult {
     FAILED,
     CLOSED
 }
+
+record SelectStored(Segment segment, int i) {}
 
 /**
  * Possible return values of {@code Channel#expandBuffer}: one of the enum constants below, or the received value.
@@ -834,7 +1050,7 @@ enum ExpandBufferResult {
     CLOSED
 }
 
-// possible states of a cell: one of the enum constants below, Buffered, or Continuation
+// possible states of a cell: one of the enum constants below, Buffered, Continuation or SelectInstance
 
 enum CellState {
     DONE,
@@ -853,7 +1069,7 @@ final class Continuation {
      * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
      * {@code 0}, if there's a single CPU.
      */
-    private static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : 10000;
+    static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : 10000;
 
     private final Thread creatingThread;
     private volatile Object data; // set using DATA var handle
@@ -908,7 +1124,7 @@ final class Continuation {
 
                         // notifying the segment - if all cells become interrupted, the segment can be removed
                         if (isSender) {
-                            segment.cellInterruptedSender_orClosed();
+                            segment.cellInterruptedSender();
                         } else {
                             segment.cellInterruptedReceiver();
                         }
@@ -952,4 +1168,9 @@ enum ContinuationMarker {
 // used to resume the continuation when a channel is closed - a special type, not possible to be referenced by the user
 enum ChannelClosedMarker {
     CLOSED
+}
+
+// used as a result of SendClause.register, instead of null, to indicate that the select clause has been selected during registration
+enum SentClauseMarker {
+    SENT
 }

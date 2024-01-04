@@ -3,11 +3,22 @@ package com.softwaremill.jox;
 import java.util.*;
 import java.util.concurrent.*;
 
+import static com.softwaremill.jox.Select.selectSafe;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class ChannelStressTest {
+public class StressTest {
+    @TestWithCapacities
+    void testMultipleOperationsDirect(int capacity) throws Exception {
+        testAndVerify(capacity, true);
+    }
+
+    @TestWithCapacities
+    void testMultipleOperationsSelect(int capacity) throws Exception {
+        testAndVerify(capacity, false);
+    }
+
     /**
      * Runs a large number of send/receive operations in multiple threads, occasionally interrupting them. At the end,
      * closes the channel as "done".
@@ -15,16 +26,17 @@ public class ChannelStressTest {
      * Verifies that messages are not duplicated and sent/received properly, as well as the channel's internal state is
      * correct.
      */
-    @TestWithCapacities
-    void testMultipleOperations(int capacity) throws Exception {
-        System.out.println();
-
+    private void testAndVerify(int capacity, boolean direct) throws Exception {
         int numberOfRepetitions = 20;
         int numberOfThreads = 8;
         int numberOfIterations = 2000;
+        int numberOfChannels = direct ? 1 : 10;
 
         for (int r = 0; r < numberOfRepetitions; r++) {
-            var ch = new Channel<String>(capacity);
+            var chs = new ArrayList<Channel<String>>();
+            for (int i = 0; i < numberOfChannels; i++) {
+                chs.add(new Channel<>(capacity));
+            }
             try {
                 scoped(scope -> {
                     // start forks
@@ -32,14 +44,17 @@ public class ChannelStressTest {
                     for (int i = 0; i < numberOfThreads; i++) {
                         int finalI = i;
                         forks.add(fork(scope, () -> {
-                            // in each fork, run the given number of iterations
-                            var data = new StressTestThreadData(scope, ch, new Random(), finalI, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
+                            // in each fork, run the given number of iterations; copying the channels list as it might be mutated by each thread
+                            var data = new StressTestThreadData(scope, new ArrayList<>(chs), new Random(), finalI, direct,
+                                    new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
                             for (int j = 0; j < numberOfIterations; j++) {
                                 stressTestIteration(data, j);
                             }
                             // if this is the first fork, after all the iterations complete, close the channel
                             if (finalI == 0) {
-                                ch.done();
+                                for (var ch : chs) {
+                                    ch.done();
+                                }
                             }
                             return data;
                         }));
@@ -72,27 +87,34 @@ public class ChannelStressTest {
                     receivedNotSent.removeAll(allSent);
                     assertEquals(Set.of(), receivedNotSent, "each received message should have been sent");
 
-                    List<String> remainingInChannel = drainChannel(scope, ch);
-                    allReceived.addAll(remainingInChannel);
+                    for (var ch : chs) {
+                        List<String> remainingInChannel = drainChannel(ch);
+                        allReceived.addAll(remainingInChannel);
+                    }
                     assertEquals(allSent, allReceived, "each sent message should have been received, or drained");
 
-                    var segments = countOccurrences(ch.toString(), "Segment{");
-                    // +1, as the buffer might be entirely in the next segment
-                    // and another +1, as the send segment might not be moved forward, if in the next segment there are only IRs
-                    var expectedSegments = Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + 2;
-                    assertTrue(segments <= expectedSegments, "there can be at most as much segments as needed to store the buffer + 1");
+                    for (var ch : chs) {
+                        var segments = countOccurrences(ch.toString(), "Segment{");
+                        // +1, as the buffer might be entirely in the next segment
+                        // and another +1, as the send segment might not be moved forward, if in the next segment there are only IRs
+                        var expectedSegments = Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + 2;
+                        assertTrue(segments <= expectedSegments, "there can be at most as much segments as needed to store the buffer + 1");
+                    }
                 });
             } finally {
                 System.out.println("\nChannel state:");
-                System.out.println(ch);
+                for (var ch : chs) {
+                    System.out.println(ch);
+                }
+                System.out.println();
             }
         }
     }
 
     //
 
-    private record StressTestThreadData(StructuredTaskScope<Object> scope, Channel<String> ch, Random random,
-                                        int threadId,
+    private record StressTestThreadData(StructuredTaskScope<Object> scope, List<Channel<String>> chs, Random random,
+                                        int threadId, boolean direct,
                                         List<String> sent, List<String> received,
                                         List<String> sendInterrupted, Counter receiveInterrupted) {}
 
@@ -103,7 +125,14 @@ public class ChannelStressTest {
                 var msg = "T" + data.threadId + "I" + iteration;
                 var shouldCancel = data.random.nextInt(4) == 0;
 
-                var f = forkCancelable(data.scope, () -> data.ch.sendSafe(msg));
+                Fork<Object> f;
+                if (data.direct) {
+                    f = forkCancelable(data.scope, () -> data.chs.get(0).sendSafe(msg));
+                } else {
+                    var channels = data.chs;
+                    Collections.shuffle(channels);
+                    f = forkCancelable(data.scope, () -> selectSafe(channels.stream().map(ch -> ch.sendClause(msg)).toArray(SelectClause[]::new)));
+                }
 
                 Object result;
                 if (shouldCancel) {
@@ -130,7 +159,14 @@ public class ChannelStressTest {
                 // receive
                 var shouldCancel = data.random.nextInt(4) == 0;
 
-                var f = forkCancelable(data.scope, data.ch::receiveSafe);
+                Fork<Object> f;
+                if (data.direct) {
+                    f = forkCancelable(data.scope, data.chs.get(0)::receiveSafe);
+                } else {
+                    var channels = data.chs;
+                    Collections.shuffle(channels);
+                    f = forkCancelable(data.scope, () -> selectSafe(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+                }
 
                 Object result;
                 if (shouldCancel) {
@@ -160,29 +196,5 @@ public class ChannelStressTest {
 
     private static class Counter {
         int value;
-    }
-
-    private List<String> drainChannel(StructuredTaskScope<Object> scope, Channel<String> ch) throws ExecutionException, InterruptedException {
-        var result = new ArrayList<String>();
-        while (true) {
-            var e = ch.receiveSafe();
-            if (e instanceof ChannelDone) {
-                return result;
-            } else {
-                result.add((String) e);
-            }
-        }
-    }
-
-    private int countOccurrences(String str, String subStr) {
-        int count = 0;
-        int idx = 0;
-
-        while ((idx = str.indexOf(subStr, idx)) != -1) {
-            count++;
-            idx += subStr.length();
-        }
-
-        return count;
     }
 }

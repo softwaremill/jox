@@ -5,12 +5,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 
 final class Segment {
-    // in the first 6 bits, we store the number of cells that haven't been interrupted yet
-    // in the second 6 bits, we store the number of cells which haven't been processed by expandBuffer yet (in buffered channels)
-    // in bits 13 & 14, we store the number of incoming pointers to this segment
+    /*
+    - in the first 6 bits, we store the number of cells that haven't been both interrupted & processed.
+      In rendezvous channels, cells are processed immediately when they become interrupted.
+      In buffered channels:
+      - interrupted send cells become processed by `expandBuffer`
+      - interrupted receive cells become processed immediately when interrupted
+    - in bits 7 & 8, we store the number of incoming pointers to this segment
+     */
+
     static final int SEGMENT_SIZE = 32; // 2^5
-    private static final int PROCESSED_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
-    private static final int POINTERS_SHIFT = 12;
+    private static final int POINTERS_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
     /**
@@ -30,22 +35,17 @@ final class Segment {
     /**
      * A single counter that can be inspected & modified atomically, which includes:
      * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
-     * - the number of cells, which haven't been processed by {@code Channel.expandBuffer} or closed yet
-     * (shifted by {@link Segment#PROCESSED_SHIFT} to the left)
-     * - the number of cells, which haven't been interrupted or closed yet (in the first 6 bits)
+     * - the number of cells, which haven't been interrupted & processed yet (in the first 6 bits)
      * When this reaches 0, the segment is logically removed.
      */
-    private final AtomicInteger pointers_notProcessed_notInterrupted;
-    private final boolean countProcessed;
+    private final AtomicInteger pointers_notProcessedAndInterrupted;
+    private final boolean isRendezvous;
 
-    Segment(long id, Segment prev, int pointers, boolean countProcessed) {
+    Segment(long id, Segment prev, int pointers, boolean isRendezvous) {
         this.id = id;
         this.prev = new AtomicReference<>(prev);
-        this.pointers_notProcessed_notInterrupted = new AtomicInteger(
-                SEGMENT_SIZE +
-                        (countProcessed ? (SEGMENT_SIZE << PROCESSED_SHIFT) : 0) +
-                        (pointers << POINTERS_SHIFT));
-        this.countProcessed = countProcessed;
+        this.pointers_notProcessedAndInterrupted = new AtomicInteger(SEGMENT_SIZE + (pointers << POINTERS_SHIFT));
+        this.isRendezvous = isRendezvous;
     }
 
     long getId() {
@@ -86,11 +86,11 @@ final class Segment {
     }
 
     /**
-     * @return {@code true} if this segment is logically removed, that is there are no incoming pointers, all cells
-     * have been processed by expandBuffer, and all cells have been interrupted.
+     * @return {@code true} if this segment is logically removed, that is there are no incoming pointers and all cells
+     * have been interrupted & processed.
      */
     boolean isRemoved() {
-        return pointers_notProcessed_notInterrupted.get() == 0;
+        return pointers_notProcessedAndInterrupted.get() == 0;
     }
 
     /**
@@ -101,11 +101,11 @@ final class Segment {
     boolean tryIncPointers() {
         int p;
         do {
-            p = pointers_notProcessed_notInterrupted.get();
+            p = pointers_notProcessedAndInterrupted.get();
             if (p == 0) {
                 return false;
             }
-        } while (!pointers_notProcessed_notInterrupted.compareAndSet(p, p + (1 << POINTERS_SHIFT)));
+        } while (!pointers_notProcessedAndInterrupted.compareAndSet(p, p + (1 << POINTERS_SHIFT)));
         return true;
     }
 
@@ -115,40 +115,37 @@ final class Segment {
      * @return {@code true} if the segment becomes logically removed.
      */
     boolean decPointers() {
-        return pointers_notProcessed_notInterrupted.updateAndGet(p -> p - (1 << POINTERS_SHIFT)) == 0;
+        return pointers_notProcessedAndInterrupted.updateAndGet(p -> p - (1 << POINTERS_SHIFT)) == 0;
     }
 
     /**
      * Notify the segment that a `receive` has been interrupted in the cell.
-     * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
-     */
-    void cellInterruptedReceiver() {
-        if (pointers_notProcessed_notInterrupted.decrementAndGet() == 0) remove();
-    }
-
-    /**
-     * Notify the segment that a `send` has been interrupted in the cell, or that the cell has been closed. Also marks
-     * the cell as processed.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellInterruptedSender_orClosed() {
-        if (countProcessed) {
-            // decrementing both counters in a single operation
-            if (pointers_notProcessed_notInterrupted.addAndGet(-(1 << PROCESSED_SHIFT) - 1) == 0) remove();
-        } else {
-            if (pointers_notProcessed_notInterrupted.decrementAndGet() == 0) remove();
+    void cellInterruptedReceiver() {
+        if (pointers_notProcessedAndInterrupted.decrementAndGet() == 0) remove();
+    }
+
+    /**
+     * Notify the segment that a `send` has been interrupted in the cell.
+     * <p>
+     * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
+     */
+    void cellInterruptedSender() {
+        // in rendezvous channels, cells are immediately processed when interrupted
+        if (isRendezvous) {
+            if (pointers_notProcessedAndInterrupted.decrementAndGet() == 0) remove();
         }
     }
 
     /**
-     * Notify the segment that a cell has been processed by {@code Channel.expandBuffer}. Should not be called
-     * if the cell has an interrupted sender.
+     * Notify the segment that an interrupted sender cell has been processed by {@code Channel.expandBuffer}.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellProcessed_notInterruptedSender() {
-        if (pointers_notProcessed_notInterrupted.addAndGet(-(1 << PROCESSED_SHIFT)) == 0) remove();
+    void cellProcessed() {
+        if (pointers_notProcessedAndInterrupted.decrementAndGet() == 0) remove();
     }
 
     /**
@@ -224,9 +221,9 @@ final class Segment {
      *
      * @return The found segment, or {@code null} if the segment chain is closed.
      */
-    static Segment findAndMoveForward(AtomicReference<Segment> ref, Segment start, long id, boolean countProcessed) {
+    static Segment findAndMoveForward(AtomicReference<Segment> ref, Segment start, long id) {
         while (true) {
-            var segment = findSegment(start, id, countProcessed);
+            var segment = findSegment(start, id);
             if (segment == null) {
                 return null;
             }
@@ -242,7 +239,7 @@ final class Segment {
      *
      * @return The found segment, or {@code null} if the segment chain is closed.
      */
-    private static Segment findSegment(Segment start, long id, boolean countProcessed) {
+    private static Segment findSegment(Segment start, long id) {
         var current = start;
         while (current.getId() < id || current.isRemoved()) {
             var n = current.next.get();
@@ -251,7 +248,7 @@ final class Segment {
                 return null;
             } else if (n == null) {
                 // create a new segment if needed
-                var newSegment = new Segment(current.getId() + 1, current, 0, countProcessed);
+                var newSegment = new Segment(current.getId() + 1, current, 0, start.isRendezvous);
                 if (current.setNextIfNull(newSegment)) {
                     if (current.isRemoved()) {
                         // the current segment was a tail segment, so if it was logically removed, we need to remove it physically
@@ -306,10 +303,9 @@ final class Segment {
     public String toString() {
         var n = next.get();
         var p = prev.get();
-        var c = pointers_notProcessed_notInterrupted.get();
+        var c = pointers_notProcessedAndInterrupted.get();
 
-        var notInterrupted = c & ((1 << PROCESSED_SHIFT) - 1);
-        var notProcessed = (c & ((1 << POINTERS_SHIFT) - 1)) >> PROCESSED_SHIFT;
+        var notProcessedAndInterrupted = (c & ((1 << POINTERS_SHIFT) - 1));
         var pointers = c >> POINTERS_SHIFT;
 
         return "Segment{" +
@@ -317,8 +313,7 @@ final class Segment {
                 ", next=" + (n == null ? "null" : (n == State.CLOSED ? "closed" : ((Segment) n).id)) +
                 ", prev=" + (p == null ? "null" : p.id) +
                 ", pointers=" + pointers +
-                ", notProcessed=" + notProcessed +
-                ", notInterrupted=" + notInterrupted +
+                ", notProcessedAndInterrupted=" + notProcessedAndInterrupted +
                 '}';
     }
 

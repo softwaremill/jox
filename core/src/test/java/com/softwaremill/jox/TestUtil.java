@@ -1,5 +1,7 @@
 package com.softwaremill.jox;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.*;
 
 public class TestUtil {
@@ -115,5 +117,30 @@ public class TestUtil {
         block.run();
         var end = System.nanoTime();
         System.out.println(label + " took: " + (end - start) / 1_000_000 + " ms");
+    }
+
+
+    public static List<String> drainChannel(Channel<String> ch) throws InterruptedException {
+        var result = new ArrayList<String>();
+        while (true) {
+            var e = ch.receiveSafe();
+            if (e instanceof ChannelDone) {
+                return result;
+            } else {
+                result.add((String) e);
+            }
+        }
+    }
+
+    public static int countOccurrences(String str, String subStr) {
+        int count = 0;
+        int idx = 0;
+
+        while ((idx = str.indexOf(subStr, idx)) != -1) {
+            count++;
+            idx += subStr.length();
+        }
+
+        return count;
     }
 }

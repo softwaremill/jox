@@ -128,6 +128,64 @@ class Demo3 {
 }
 ```
 
+### Selecting from multiple channels
+
+The `select` method selects exactly one clause to complete. For example, you can receive a value from exactly one
+channel:
+
+```java
+import com.softwaremill.jox.Channel;
+
+import static com.softwaremill.jox.Select.select;
+
+class Demo4 {
+    public static void main(String[] args) throws InterruptedException {
+        // creates a buffered channel (buffer of size 3)
+        var ch1 = new Channel<Integer>(3);
+        var ch2 = new Channel<Integer>(3);
+        var ch3 = new Channel<Integer>(3);
+
+        // send a value to two channels
+        ch2.send(29);
+        ch3.send(32);
+
+        var received = select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
+
+        // prints: Received: 29
+        System.out.println("Received: " + received);
+        // ch3 still holds a value that can be received
+    }
+}
+```
+
+The received value can be optionally transformed by a provided function.
+
+`select` is biased: if a couple of the clauses can be completed immediately, the one that appears first will be
+selected.
+
+Similarly, you can select from a send clause to complete. Apart from the `Channel.sendClause()` method, there's also a
+variant which runs a callback, once the clause is selected:
+
+```java
+import com.softwaremill.jox.Channel;
+
+import static com.softwaremill.jox.Select.select;
+
+class Demo5 {
+    public static void main(String[] args) throws InterruptedException {
+        var ch1 = new Channel<Integer>(1);
+        var ch2 = new Channel<Integer>(1);
+
+        ch1.send(12); // buffer is now full
+
+        var sent = select(ch1.sendClause(13, () -> "first"), ch2.sendClause(25, () -> "second"));
+
+        // prints: Sent: second
+        System.out.println("Sent: " + sent);
+    }
+}
+```
+
 ## Performance
 
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java
@@ -191,13 +249,13 @@ Let us know in the issues, or our [community forum](https://softwaremill.communi
 
 ## Further work
 
-Comparing to the Kotlin implementation, there's a number of features missing. Most notably, we plan to work on
-Go-like `select`s next!
+There's some interesting features which we're planning to work on. Check out
+the [open issues](https://github.com/softwaremill/jox/issues)!
 
 ## Project sponsor
 
-We offer commercial development services. [Contact us](https://softwaremill.com) to learn more about us!
+We offer commercial development services. [Contact us](https://softwaremill.com) to learn more!
 
 ## Copyright
 
-Copyright (C) 2023 SoftwareMill [https://softwaremill.com](https://softwaremill.com).
+Copyright (C) 2023-2024 SoftwareMill [https://softwaremill.com](https://softwaremill.com).

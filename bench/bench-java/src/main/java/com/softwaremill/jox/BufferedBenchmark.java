@@ -1,6 +1,5 @@
 package com.softwaremill.jox;
 
-import com.softwaremill.jox.Channel;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.concurrent.ArrayBlockingQueue;
