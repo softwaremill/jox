@@ -3,6 +3,7 @@ package com.softwaremill.jox;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -115,32 +116,49 @@ public class SelectSendTest {
         int channelsCount = 5;
         int msgsCount = 10000;
 
-        var channels = new ArrayList<Channel<String>>();
-        for (int i = 0; i < channelsCount; i++) {
-            channels.add(new Channel<>(capacity));
-        }
+        for (int k = 0; k < 200; k++) {
+            var channels = new ArrayList<Channel<String>>();
+            for (int i = 0; i < channelsCount; i++) {
+                channels.add(new Channel<>(capacity));
+            }
 
-        scoped(scope -> {
-            var received = ConcurrentHashMap.newKeySet();
-            forkVoid(scope, () -> {
-                for (int i = 0; i < channelsCount * msgsCount; i++) {
-                    received.add(select(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+            try {
+                scoped(scope -> {
+                    var received = ConcurrentHashMap.newKeySet();
+                    forkVoid(scope, () -> {
+                        for (int i = 0; i < channelsCount * msgsCount; i++) {
+                            received.add(select(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+                        }
+                    });
+
+                    // when
+                    for (int i = 0; i < channelsCount * msgsCount; i++) {
+                        int finalI = i;
+                        select(channels.stream().map(ch -> ch.sendClause("v_" + finalI)).toArray(SelectClause[]::new));
+                    }
+
+                    // then
+                    var expectedReceived = new HashSet<>();
+                    for (int i = 0; i < channelsCount * msgsCount; i++) {
+                        expectedReceived.add("v_" + i);
+                    }
+
+                    var notReceived = new HashSet<>(expectedReceived);
+                    notReceived.removeAll(received);
+                    assertEquals(Collections.emptySet(), notReceived);
+
+                    var extraReceived = new HashSet<>(received);
+                    extraReceived.removeAll(expectedReceived);
+                    assertEquals(Collections.emptySet(), extraReceived);
+                });
+            } catch (Exception e) {
+                System.out.println("Channels:");
+                for (var ch : channels) {
+                    System.out.println(ch);
                 }
-            });
-
-            // when
-            for (int i = 0; i < channelsCount * msgsCount; i++) {
-                int finalI = i;
-                select(channels.stream().map(ch -> ch.sendClause("v_" + finalI)).toArray(SelectClause[]::new));
+                throw e;
             }
-
-            // then
-            var expectedReceived = new HashSet<>();
-            for (int i = 0; i < channelsCount * msgsCount; i++) {
-                expectedReceived.add("v_" + i);
-            }
-            assertEquals(expectedReceived, received);
-        });
+        }
     }
 
     @Test
