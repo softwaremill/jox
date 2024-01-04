@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SelectSendTest {
     @Test
-    public void testSelectToFirstBuffered() throws InterruptedException {
+    public void testSelectToFirst_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -27,7 +27,7 @@ public class SelectSendTest {
     }
 
     @Test
-    public void testSelectToSecondBuffered() throws InterruptedException {
+    public void testSelectToSecond_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -42,7 +42,47 @@ public class SelectSendTest {
     }
 
     @Test
-    public void testSelectBiasedTowardsFirstBuffered() throws InterruptedException {
+    public void testSelectBiasedTowardsToFirst_rendezvous_immediate() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>();
+        Channel<String> ch2 = new Channel<>();
+
+        scoped(scope -> {
+            // when
+            forkVoid(scope, () -> {
+                Thread.sleep(100); // making sure receives suspend
+                select(ch1.sendClause("v1"), ch2.sendClause("v2"));
+            });
+
+            // then
+            var received = select(ch1.receiveClause(), ch2.receiveClause());
+            assertEquals("v1", received);
+        });
+    }
+
+    @Test
+    public void testSelect_rendezvous_suspend() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>();
+        Channel<String> ch2 = new Channel<>();
+
+        scoped(scope -> {
+            // when
+            var f = fork(scope, () -> select(ch1.sendClause("v1", () -> "1"), ch2.sendClause("v2", () -> "2")));
+            Thread.sleep(100); // making sure send suspends
+
+            // then
+            var received = select(ch1.receiveClause(), ch2.receiveClause());
+            if (f.get().equals("1")) {
+                assertEquals("v1", received);
+            } else {
+                assertEquals("v2", received);
+            }
+        });
+    }
+
+    @Test
+    public void testSelectBiasedTowardsFirst_buffered() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -53,22 +93,6 @@ public class SelectSendTest {
         // then
         var result = select(ch1.receiveClause(), ch2.receiveClause());
         assertEquals("v1", result);
-    }
-
-    @Test
-    public void testSelectToReadyRendezvous() throws InterruptedException, ExecutionException {
-        // given
-        Channel<String> ch1 = new Channel<>();
-        Channel<String> ch2 = new Channel<>();
-
-        scoped(scope -> {
-            // when
-            forkVoid(scope, () -> select(ch1.sendClause("v1"), ch2.sendClause("v2")));
-
-            // then
-            var received = select(ch1.receiveClause(), ch2.receiveClause());
-            assertEquals("v1", received);
-        });
     }
 
     @Test

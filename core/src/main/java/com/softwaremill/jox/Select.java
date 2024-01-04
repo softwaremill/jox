@@ -103,17 +103,23 @@ class SelectInstance {
      * - {@link Thread} to wake up
      * - {@link ChannelClosed}
      * - a {@link List} of clauses to re-register
-     * - {@link SelectClause} (the selected clause)
+     * - when selected, {@link SelectClause} (during registration) or {@link StoredSelectClause} (with suspension)
      */
     private final AtomicReference<Object> state = new AtomicReference<>(SelectState.REGISTERING);
 
     /**
      * The content of the list will be written & read only by the main select thread. Hence, no synchronization is necessary.
      */
-    private final List<StoredSelect> storedSelects;
+    private final List<StoredSelectClause> storedClauses;
+
+    /**
+     * The result of registering a clause, if it was selected immediately (during registration).
+     * Only written & read only by the main select thread. Hence, no synchronization is necessary.
+     */
+    private Object resultSelectedDuringRegistration;
 
     SelectInstance(int clausesCount) {
-        storedSelects = new ArrayList<>(clausesCount);
+        storedClauses = new ArrayList<>(clausesCount);
     }
 
     // registration
@@ -128,9 +134,9 @@ class SelectInstance {
         // register the clause
         var result = clause.register(this);
         switch (result) {
-            case StoredSelect ss -> {
+            case StoredSelectClause ss -> {
                 // keeping the stored select to later call cleanup()
-                storedSelects.add(ss);
+                storedClauses.add(ss);
                 return true;
             }
             case ChannelClosed cc -> {
@@ -142,7 +148,7 @@ class SelectInstance {
             }
             default -> {
                 // else: the clause was selected
-                clause.setPayload(result); // might be a no-op for send clauses
+                resultSelectedDuringRegistration = result; // used in checkStateAndWait() later
                 // when setting the state, we might override another state:
                 // - a list of clauses to re-register - there's no point in doing that anyway (since we already selected a clause)
                 // - a closed state - the closure must have happened concurrently with registration; we give priority to immediate selects then
@@ -202,7 +208,7 @@ class SelectInstance {
                         //noinspection unchecked
                         for (var clause : (List<SelectClause<?>>) clausesToReRegister) {
                             // cleaning up & removing the stored select for the clause which we'll re-register
-                            var storedSelectsIterator = storedSelects.iterator();
+                            var storedSelectsIterator = storedClauses.iterator();
                             while (storedSelectsIterator.hasNext()) {
                                 var stored = storedSelectsIterator.next();
                                 if (stored.getClause() == clause) {
@@ -222,10 +228,20 @@ class SelectInstance {
                     }
                     // else: CAS unsuccessful, retry
                 }
+                // clause selected during registration - result in `resultSelectedDuringRegistration`
                 case SelectClause<?> selectedClause -> {
                     cleanup(selectedClause);
+
                     // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
-                    return selectedClause.transformedRawValue();
+                    return selectedClause.transformedRawValue(resultSelectedDuringRegistration);
+                }
+                // clause selected with suspension - result in `StoredSelect.payload`
+                case StoredSelectClause ss -> {
+                    var selectedClause = ss.getClause();
+                    cleanup(selectedClause);
+
+                    // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
+                    return selectedClause.transformedRawValue(ss.getPayload());
                 }
                 default -> throw new IllegalStateException("Unknown state: " + currentState);
             }
@@ -234,12 +250,12 @@ class SelectInstance {
 
     private void cleanup(SelectClause<?> selected) {
         // cleaning up of all the clauses that were registered, except for the selected one
-        for (var stored : storedSelects) {
+        for (var stored : storedClauses) {
             if (stored.getClause() != selected) {
                 stored.cleanup();
             }
         }
-        storedSelects.clear();
+        storedClauses.clear();
     }
 
     // callbacks from select, that a clause is selected / the channel is closed
@@ -248,12 +264,12 @@ class SelectInstance {
      * @return {@code true} if the given clause was successfully selected, {@code false} otherwise (a channel is closed,
      * another clause is selected, registration is in progress, select is interrupted).
      */
-    boolean trySelect(StoredSelect storedSelect, Object rawValue) {
+    boolean trySelect(StoredSelectClause storedSelectClause) {
         while (true) {
             var currentState = state.get();
             switch (currentState) {
                 case SelectState.REGISTERING -> {
-                    if (state.compareAndSet(currentState, Collections.singletonList(storedSelect.getClause()))) {
+                    if (state.compareAndSet(currentState, Collections.singletonList(storedSelectClause.getClause()))) {
                         return false; // concurrent clause selection is not possible during registration
                     }
                     // else: CAS unsuccessful, retry
@@ -263,7 +279,7 @@ class SelectInstance {
                     var newClausesToReRegister = new ArrayList<SelectClause<?>>(clausesToReRegister.size() + 1);
                     //noinspection unchecked
                     newClausesToReRegister.addAll((Collection<? extends SelectClause<?>>) clausesToReRegister);
-                    newClausesToReRegister.add(storedSelect.getClause());
+                    newClausesToReRegister.add(storedSelectClause.getClause());
                     if (state.compareAndSet(currentState, newClausesToReRegister)) {
                         return false; // concurrent clause selection is not possible during registration
                     }
@@ -281,16 +297,14 @@ class SelectInstance {
                     // already selected, will be cleaned up soon
                     return false;
                 }
+                case StoredSelectClause ss -> {
+                    // already selected, will be cleaned up soon
+                    return false;
+                }
                 case Thread t -> {
-                    var clause = storedSelect.getClause();
-                    // for receives, setting the value first, before the memory barrier created by setting (and in the
-                    // main loop thread, reading) the state.
-                    clause.setPayload(rawValue);
-                    if (state.compareAndSet(currentState, clause)) {
+                    if (state.compareAndSet(currentState, storedSelectClause)) {
                         LockSupport.unpark(t);
                         return true;
-                    } else {
-                        clause.setPayload(null); // preventing memory leaks
                     }
                     // else: CAS unsuccessful, retry
                 }
@@ -329,6 +343,10 @@ class SelectInstance {
                     // already selected
                     return;
                 }
+                case StoredSelectClause ss -> {
+                    // already selected
+                    return;
+                }
                 case Thread t -> {
                     if (state.compareAndSet(currentState, channelClosed)) {
                         LockSupport.unpark(t);
@@ -352,19 +370,21 @@ enum SelectState {
 /**
  * Used to keep information about a select instance that is stored in a channel, awaiting completion.
  */
-class StoredSelect {
+class StoredSelectClause {
     private final SelectInstance select;
     private final Segment segment;
     private final int i;
     private final boolean isSender;
     private final SelectClause<?> clause;
+    private Object payload;
 
-    public StoredSelect(SelectInstance select, Segment segment, int i, boolean isSender, SelectClause<?> clause) {
+    public StoredSelectClause(SelectInstance select, Segment segment, int i, boolean isSender, SelectClause<?> clause, Object payload) {
         this.select = select;
         this.segment = segment;
         this.i = i;
         this.isSender = isSender;
         this.clause = clause;
+        this.payload = payload;
     }
 
     public SelectInstance getSelect() {
@@ -380,6 +400,14 @@ class StoredSelect {
     }
 
     void cleanup() {
-        clause.getChannel().cleanupStoredSelect(segment, i, isSender);
+        clause.getChannel().cleanupStoredSelectClause(segment, i, isSender);
+    }
+
+    public Object getPayload() {
+        return payload;
+    }
+
+    public void setPayload(Object payload) {
+        this.payload = payload;
     }
 }
