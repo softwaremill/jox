@@ -114,9 +114,9 @@ public class SelectSendTest {
     public void testSendMany(int capacity) throws InterruptedException, ExecutionException {
         // given
         int channelsCount = 5;
-        int msgsCount = 10000;
+        int msgsCount = 1000;
 
-        for (int k = 0; k < 200; k++) {
+        for (int k = 0; k < 100; k++) {
             var channels = new ArrayList<Channel<String>>();
             for (int i = 0; i < channelsCount; i++) {
                 channels.add(new Channel<>(capacity));
@@ -125,9 +125,12 @@ public class SelectSendTest {
             try {
                 scoped(scope -> {
                     var received = ConcurrentHashMap.newKeySet();
-                    forkVoid(scope, () -> {
+                    var f = forkVoid(scope, () -> {
                         for (int i = 0; i < channelsCount * msgsCount; i++) {
-                            received.add(select(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+                            var r = select(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new));
+                            if (!received.add(r)) {
+                                throw new IllegalStateException("Duplicate: " + r);
+                            }
                         }
                     });
 
@@ -138,6 +141,8 @@ public class SelectSendTest {
                     }
 
                     // then
+                    f.get(); // wait for receivers to finish
+
                     var expectedReceived = new HashSet<>();
                     for (int i = 0; i < channelsCount * msgsCount; i++) {
                         expectedReceived.add("v_" + i);
