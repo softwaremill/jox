@@ -8,13 +8,12 @@ import java.util.concurrent.ExecutionException;
 
 import static com.softwaremill.jox.Select.select;
 import static com.softwaremill.jox.Select.selectSafe;
-import static com.softwaremill.jox.TestUtil.forkVoid;
-import static com.softwaremill.jox.TestUtil.scoped;
+import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SelectReceiveTest {
     @Test
-    public void testSelectFromFirstBuffered() throws InterruptedException {
+    public void testSelectFromFirst_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -28,7 +27,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromSecondBuffered() throws InterruptedException {
+    public void testSelectFromSecond_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -42,7 +41,26 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectBiasedTowardsFirstBuffered() throws InterruptedException {
+    public void testSelectFromFirst_buffered_suspend() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+
+        scoped(scope -> {
+            // when
+            var f = fork(scope, () -> select(ch1.receiveClause(), ch2.receiveClause()));
+            forkVoid(scope, () -> {
+                Thread.sleep(100); // making sure receive suspends
+                ch1.send("v");
+            });
+
+            // then
+            assertEquals("v", f.get());
+        });
+    }
+
+    @Test
+    public void testSelectBiasedTowardsFirst_buffered() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -57,7 +75,27 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromReadyRendezvous() throws InterruptedException, ExecutionException {
+    public void testSelectFromReady_rendezvous_suspend() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>();
+        Channel<String> ch2 = new Channel<>();
+
+        scoped(scope -> {
+            forkVoid(scope, () -> {
+                Thread.sleep(100); // making sure receive suspends
+                ch2.send("v");
+            });
+
+            // when
+            String received = select(ch1.receiveClause(), ch2.receiveClause());
+
+            // then
+            assertEquals("v", received);
+        });
+    }
+
+    @Test
+    public void testSelectFromReady_rendezvous_immediate() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>();
         Channel<String> ch2 = new Channel<>();
@@ -66,6 +104,7 @@ public class SelectReceiveTest {
             forkVoid(scope, () -> ch2.send("v"));
 
             // when
+            Thread.sleep(100); // making sure send is ready
             String received = select(ch1.receiveClause(), ch2.receiveClause());
 
             // then
