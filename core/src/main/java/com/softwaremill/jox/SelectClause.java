@@ -3,6 +3,8 @@ package com.softwaremill.jox;
 /**
  * A clause to use as part of {@link Select#select(SelectClause[])}. Clauses can be created having a channel instance,
  * using {@link Channel#receiveClause()} and {@link Channel#sendClause(Object)}}.
+ * <p>
+ * A clause instance is immutable and can be reused in multiple `select` calls.
  */
 public abstract class SelectClause<T> {
     abstract Channel<?> getChannel();
