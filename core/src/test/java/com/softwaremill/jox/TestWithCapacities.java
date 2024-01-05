@@ -11,5 +11,5 @@ import java.lang.annotation.Target;
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @ParameterizedTest
-@ValueSource(strings = {"0", "1", "2", "10", "100"})
+@ValueSource(strings = {"0", "1", "2", "10", "100", "-1"})
 @interface TestWithCapacities {}
