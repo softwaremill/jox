@@ -186,6 +186,28 @@ class Demo5 {
 }
 ```
 
+Optionally, you can also provide a default clause, which will be selected if none of the other clauses can be completed
+immediately:
+
+```java
+import com.softwaremill.jox.Channel;
+
+import static com.softwaremill.jox.Select.defaultClause;
+import static com.softwaremill.jox.Select.select;
+
+class Demo6 {
+    public static void main(String[] args) throws InterruptedException {
+        var ch1 = new Channel<Integer>(3);
+        var ch2 = new Channel<Integer>(3);
+
+        var received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(52));
+
+        // prints: Received: 52
+        System.out.println("Received: " + received);
+    }
+}
+```
+
 ## Performance
 
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java

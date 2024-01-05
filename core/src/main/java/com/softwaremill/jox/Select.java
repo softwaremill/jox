@@ -3,6 +3,7 @@ package com.softwaremill.jox;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.Supplier;
 
 public class Select {
     /*
@@ -75,7 +76,11 @@ public class Select {
         verifyChannelsUnique(clauses);
 
         var si = new SelectInstance(clauses.length);
-        for (var clause : clauses) {
+        for (int i = 0; i < clauses.length; i++) {
+            SelectClause<U> clause = clauses[i];
+            if (clause instanceof DefaultClause<U> && i != clauses.length - 1) {
+                throw new IllegalArgumentException("The default clause can only be the last one.");
+            }
             if (!si.register(clause)) {
                 break; // channel is closed, or a clause was selected - in both cases, no point in further registrations
             }
@@ -93,6 +98,14 @@ public class Select {
                 }
             }
         }
+    }
+
+    public static <T> SelectClause<T> defaultClause(T value) {
+        return defaultClause(() -> value);
+    }
+
+    public static <T> SelectClause<T> defaultClause(Supplier<T> callback) {
+        return new DefaultClause<>(callback);
     }
 }
 
