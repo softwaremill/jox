@@ -121,7 +121,6 @@ public final class Channel<T> {
 
     /**
      * Creates a buffered channel (when capacity is positive), or a rendezvous channel if the capacity is 0.
-     * Capacity cannot be negative.
      */
     public Channel(int capacity) {
         if (capacity < UNLIMITED_CAPACITY) {

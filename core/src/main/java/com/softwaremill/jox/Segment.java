@@ -41,11 +41,11 @@ final class Segment {
     private final AtomicInteger pointers_notProcessedAndInterrupted;
     private final boolean isRendezvousOrUnlimited;
 
-    Segment(long id, Segment prev, int pointers, boolean isRendezvous) {
+    Segment(long id, Segment prev, int pointers, boolean isRendezvousOrUnlimited) {
         this.id = id;
         this.prev = new AtomicReference<>(prev);
         this.pointers_notProcessedAndInterrupted = new AtomicInteger(SEGMENT_SIZE + (pointers << POINTERS_SHIFT));
-        this.isRendezvousOrUnlimited = isRendezvous;
+        this.isRendezvousOrUnlimited = isRendezvousOrUnlimited;
     }
 
     long getId() {
