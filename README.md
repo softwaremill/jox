@@ -1,15 +1,14 @@
 # jox
 
-Fast and Scalable Channels in Java.
-
-Designed to be used with [Project Loom](https://openjdk.org/projects/loom/).
+Fast and Scalable Channels in Java. Designed to be used with Java 21+ and virtual threads,
+see [Project Loom](https://openjdk.org/projects/loom/).
 
 Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" [paper](https://arxiv.org/abs/2211.04986), and
 the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
 
 Articles:
 
-* [Announcing jox: Fast and Scalable Channels in Java](https://softwaremill.com/announcing-jox-fast-and-scalable-channels-in-java/).
+* [Announcing jox: Fast and Scalable Channels in Java](https://softwaremill.com/announcing-jox-fast-and-scalable-channels-in-java/)
 
 ## Dependencies
 
@@ -46,8 +45,8 @@ import com.softwaremill.jox.Channel;
 class Demo1 {
     public static void main(String[] args) throws InterruptedException {
         // creates a rendezvous channel
-        // (buffer of size 0 - a sender & receiver must meet to pass a value)
-        var ch = new Channel<Integer>(0);
+        // (a sender & receiver must meet to pass a value: as if the buffer had size 0)
+        var ch = new Channel<Integer>();
 
         Thread.ofVirtual().start(() -> {
             try {
