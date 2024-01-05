@@ -27,9 +27,12 @@ public class StressTest {
      * correct.
      */
     private void testAndVerify(int capacity, boolean direct) throws Exception {
-        int numberOfRepetitions = 20;
+        boolean ci = System.getenv("CI") != null;
+        System.out.println("Running in ci: " + ci);
+
+        int numberOfRepetitions = ci ? 20 : 5;
         int numberOfThreads = 8;
-        int numberOfIterations = 2000;
+        int numberOfIterations = ci ? 2000 : 100;
         int numberOfChannels = direct ? 1 : 10;
 
         for (int r = 0; r < numberOfRepetitions; r++) {
