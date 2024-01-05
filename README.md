@@ -97,6 +97,8 @@ class Demo2 {
 }
 ```
 
+Unlimited channels can be created with `Channel.newUnlimitedChannel()`. Such channels will never block on send().
+
 ### Closing a channel
 
 Channels can be closed, either because the source is `done` with sending values, or when there's an `error` while

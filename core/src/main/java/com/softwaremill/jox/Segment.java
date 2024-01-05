@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 final class Segment {
     /*
     - in the first 6 bits, we store the number of cells that haven't been both interrupted & processed.
-      In rendezvous channels, cells are processed immediately when they become interrupted.
+      In rendezvous/unlimited channels, cells are processed immediately when they become interrupted.
       In buffered channels:
       - interrupted send cells become processed by `expandBuffer`
       - interrupted receive cells become processed immediately when interrupted
@@ -39,13 +39,13 @@ final class Segment {
      * When this reaches 0, the segment is logically removed.
      */
     private final AtomicInteger pointers_notProcessedAndInterrupted;
-    private final boolean isRendezvous;
+    private final boolean isRendezvousOrUnlimited;
 
-    Segment(long id, Segment prev, int pointers, boolean isRendezvous) {
+    Segment(long id, Segment prev, int pointers, boolean isRendezvousOrUnlimited) {
         this.id = id;
         this.prev = new AtomicReference<>(prev);
         this.pointers_notProcessedAndInterrupted = new AtomicInteger(SEGMENT_SIZE + (pointers << POINTERS_SHIFT));
-        this.isRendezvous = isRendezvous;
+        this.isRendezvousOrUnlimited = isRendezvousOrUnlimited;
     }
 
     long getId() {
@@ -133,8 +133,8 @@ final class Segment {
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
     void cellInterruptedSender() {
-        // in rendezvous channels, cells are immediately processed when interrupted
-        if (isRendezvous) {
+        // in rendezvous/unlimited channels, cells are immediately processed when interrupted
+        if (isRendezvousOrUnlimited) {
             if (pointers_notProcessedAndInterrupted.decrementAndGet() == 0) remove();
         }
     }
@@ -248,7 +248,7 @@ final class Segment {
                 return null;
             } else if (n == null) {
                 // create a new segment if needed
-                var newSegment = new Segment(current.getId() + 1, current, 0, start.isRendezvous);
+                var newSegment = new Segment(current.getId() + 1, current, 0, start.isRendezvousOrUnlimited);
                 if (current.setNextIfNull(newSegment)) {
                     if (current.isRemoved()) {
                         // the current segment was a tail segment, so if it was logically removed, we need to remove it physically

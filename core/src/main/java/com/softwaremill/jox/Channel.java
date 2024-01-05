@@ -20,14 +20,15 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  * - {@link Channel#receive()}-ing a value from the channel
  * - closing the channel using {@link Channel#done()} or {@link Channel#error(Throwable)}
  * <p>
- * There are two channel flavors:
+ * There are three channel flavors:
  * <p>
  * - rendezvous channels, where senders and receivers must meet to exchange values
- * - buffered channels, where a given number of sent elements might be buffered, before subsequent sends block
+ * - buffered channels, where a given number of sent elements might be buffered, before subsequent `send`s block
+ * - unlimited channels, where an unlimited number of elements might be buffered, hence `send` never blocks
  * <p>
  * The no-argument {@link Channel} constructor creates a rendezvous channel, while a buffered channel can be created
  * by providing a positive integer to the constructor. A rendezvous channel behaves like a buffered channel with
- * buffer size 0.
+ * buffer size 0. An unlimited channel can be created using {@link Channel#newUnlimitedChannel()}.
  * <p>
  * In a rendezvous channel, senders and receivers block, until a matching party arrives (unless one is already waiting).
  * Similarly, buffered channels block if the buffer is full (in case of senders), or in case of receivers, if the
@@ -109,6 +110,7 @@ public final class Channel<T> {
     private final AtomicReference<ChannelClosed> closedReason;
 
     private final boolean isRendezvous;
+    private final boolean isUnlimited;
 
     /**
      * Creates a rendezvous channel.
@@ -119,28 +121,35 @@ public final class Channel<T> {
 
     /**
      * Creates a buffered channel (when capacity is positive), or a rendezvous channel if the capacity is 0.
-     * Capacity cannot be negative.
      */
     public Channel(int capacity) {
-        if (capacity < 0) {
-            throw new IllegalArgumentException("Capacity must be non-negative.");
+        if (capacity < UNLIMITED_CAPACITY) {
+            throw new IllegalArgumentException("Capacity must be 0 (rendezvous), positive (buffered) or -1 (unlimited channels).");
         }
 
         this.capacity = capacity;
         isRendezvous = capacity == 0L;
+        isUnlimited = capacity == UNLIMITED_CAPACITY;
+        var isRendezvousOrUnlimited = isRendezvous || isUnlimited;
 
-        var firstSegment = new Segment(0, null, isRendezvous ? 2 : 3, isRendezvous);
+        var firstSegment = new Segment(0, null, isRendezvousOrUnlimited ? 2 : 3, isRendezvousOrUnlimited);
 
         sendSegment = new AtomicReference<>(firstSegment);
         receiveSegment = new AtomicReference<>(firstSegment);
-        // If the capacity is 0, buffer expansion never happens, so the buffer end segment points to a null segment,
+        // If the capacity is 0 or -1, buffer expansion never happens, so the buffer end segment points to a null segment,
         // not the first one. This is also reflected in the pointer counter of firstSegment.
-        bufferEndSegment = new AtomicReference<>(isRendezvous ? Segment.NULL_SEGMENT : firstSegment);
+        bufferEndSegment = new AtomicReference<>(isRendezvousOrUnlimited ? Segment.NULL_SEGMENT : firstSegment);
 
         bufferEnd = new AtomicLong(capacity);
 
         closedReason = new AtomicReference<>(null);
     }
+
+    public static <T> Channel<T> newUnlimitedChannel() {
+        return new Channel<>(UNLIMITED_CAPACITY);
+    }
+
+    private static final int UNLIMITED_CAPACITY = -1;
 
     // *******
     // Sending
@@ -257,7 +266,7 @@ public final class Channel<T> {
             switch (state) {
                 case null -> {
                     // reading the buffer end & receiver's counter if needed
-                    if (s >= (isRendezvous ? 0 : bufferEnd.get()) && s >= receivers.get()) {
+                    if (!isUnlimited && s >= (isRendezvous ? 0 : bufferEnd.get()) && s >= receivers.get()) {
                         // cell is empty, and no receiver, not in buffer -> suspend
                         if (select != null) {
                             // cell is empty, no receiver, and we are in a select -> store the select instance
@@ -533,7 +542,7 @@ public final class Channel<T> {
     // ****************
 
     private void expandBuffer() {
-        if (isRendezvous) return;
+        if (isRendezvous || isUnlimited) return;
         while (true) {
             // reading the segment before the counter increment - this is needed to find the required segment later
             var segment = bufferEndSegment.get();
