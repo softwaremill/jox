@@ -42,7 +42,7 @@ jobs:
         id: benchmark_java
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rff jmh-result-java.json -e ".*Chained.*" | tee out.txt
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-java.json -e ".*Chained.*" | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
