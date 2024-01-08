@@ -51,7 +51,7 @@ jobs:
         id: benchmark_java_chained
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rff jmh-result-java-chained.json -p channelCount=100 ".*Chained.*" | tee out.txt
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rff jmh-result-java-chained.json -p channelCount=10 ".*Chained.*" | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
@@ -67,7 +67,7 @@ jobs:
       - name: Run kotlin benchmarks (chained) # on CI, running chained tests only with up to 100 channels
         id: benchmark_kotlin_chained
         run: |
-          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin-chained.json -p channelCount=100 ".*Chained.*" | tee out.txt
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin-chained.json -p channelCount=10 ".*Chained.*" | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
