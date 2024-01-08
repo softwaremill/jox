@@ -38,19 +38,19 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
           cache: 'maven'
-      - name: Run java benchmarks # java benchmarks, excluding the chained tests
+      - name: Run java benchmarks
         id: benchmark_java
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-java.json -e ".*Chained.*" | tee out.txt
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-java.json | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
-      - name: Run kotlin benchmarks # kotlin benchmarks, excluding the chained tests
+      - name: Run kotlin benchmarks
         id: benchmark_kotlin
         run: |
-          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin.json -e ".*Chained.*" | tee out.txt
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin.json | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
