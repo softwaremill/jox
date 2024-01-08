@@ -38,25 +38,42 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
           cache: 'maven'
-      - name: Run java benchmarks
+      - name: Run java benchmarks # java benchmarks, excluding the chained tests
         id: benchmark_java
         run: |
           mvn package -DskipTests=true
-          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json | tee out.txt
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rff jmh-result-java.json -e ".*Chained.*" | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
-      - name: Run kotlin benchmarks
+      - name: Run java benchmarks (chained) # on CI, running chained tests only with up to 100 channels
+        id: benchmark_java_chained
+        run: |
+          mvn package -DskipTests=true
+          java -Djmh.executor=VIRTUAL -jar bench/bench-java/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rff jmh-result-java-chained.json -p channelCount=100 ".*Chained.*" | tee out.txt
+          
+          echo 'output<<EOF' >> $GITHUB_OUTPUT
+          cat out.txt >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+      - name: Run kotlin benchmarks # kotlin benchmarks, excluding the chained tests
         id: benchmark_kotlin
         run: |
-          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 3 -to 2100ms -r 2000ms -w 2000ms -rf json -rff jmh-result-kotlin.json | tee out.txt
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin.json -e ".*Chained.*" | tee out.txt
+          
+          echo 'output<<EOF' >> $GITHUB_OUTPUT
+          cat out.txt >> $GITHUB_OUTPUT
+          echo 'EOF' >> $GITHUB_OUTPUT
+      - name: Run kotlin benchmarks (chained) # on CI, running chained tests only with up to 100 channels
+        id: benchmark_kotlin_chained
+        run: |
+          java -jar bench/bench-kotlin/target/benchmarks.jar -i 5 -wi 5 -f 1 -to 1100ms -r 1000ms -w 1000ms -rf json -rff jmh-result-kotlin-chained.json -p channelCount=100 ".*Chained.*" | tee out.txt
           
           echo 'output<<EOF' >> $GITHUB_OUTPUT
           cat out.txt >> $GITHUB_OUTPUT
           echo 'EOF' >> $GITHUB_OUTPUT
       - name: Merge java and kotlin benchmark results
-        run: jq -s '.[0] + .[1]' jmh-result.json jmh-result-kotlin.json > jmh-result-both.json
+        run: jq -s '.[0] + .[1] + .[2] + .[3]' jmh-result-java.json jmh-result-java-chained.json jmh-result-kotlin.json jmh-result-kotlin-chained.json > jmh-result-all.json
       - name: Extract branch name
         shell: bash
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
@@ -67,7 +84,7 @@ jobs:
         if: steps.extract_branch.outputs.branch == 'main'
         with:
           tool: 'jmh'
-          output-file-path: jmh-result-both.json
+          output-file-path: jmh-result-all.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
@@ -84,7 +101,9 @@ jobs:
         uses: actions/github-script@v7
         env:
           JAVA_OUTPUT: ${{ steps.benchmark_java.outputs.output }}
+          JAVA_OUTPUT_CHAINED: ${{ steps.benchmark_java_chained.outputs.output }}
           KOTLIN_OUTPUT: ${{ steps.benchmark_kotlin.outputs.output }}
+          KOTLIN_OUTPUT_CHAINED: ${{ steps.benchmark_kotlin_chained.outputs.output }}
         with:
           script: |
             function extractContent(str) {
@@ -96,7 +115,9 @@ jobs:
             // Only if there's a PR within which we run
             if (context.issue.number) {
               let javaResults = extractContent(`${process.env.JAVA_OUTPUT}`);
+              let javaChainedResults = extractContent(`${process.env.JAVA_OUTPUT_CHAINED}`);
               let kotlinResults = extractContent(`${process.env.KOTLIN_OUTPUT}`);
+              let kotlinChainedResults = extractContent(`${process.env.KOTLIN_OUTPUT_CHAINED}`);
             
               let comment = `<details><summary>Benchmark results</summary>
 
@@ -104,8 +125,14 @@ jobs:
               Java:
               ${javaResults}
             
+              Java chained:
+              ${javaChainedResults}
+            
               Kotlin:
               ${kotlinResults}
+            
+              Kotlin chained:
+              ${kotlinChainedResults}
               \`\`\`
 
               </details>`;
