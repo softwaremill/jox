@@ -1078,7 +1078,7 @@ final class Continuation {
      * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
      * {@code 0}, if there's a single CPU.
      */
-    static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : 1000;
+    static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : (1 << 10);
 
     private final Thread creatingThread;
     private volatile Object data; // set using DATA var handle
@@ -1118,10 +1118,20 @@ final class Continuation {
      */
     Object await(Segment segment, int cellIndex) throws InterruptedException {
         var spinIterations = SPINS;
+        var h = 0; // TODO
         while (data == null) {
             if (spinIterations > 0) {
-                Thread.onSpinWait();
-                spinIterations -= 1;
+                h ^= h << 1;
+                h ^= h >>> 3;
+                h ^= h << 10; // xorshift
+                if (h == 0) {                // initialize hash
+                    h = SPINS | (int) creatingThread.threadId();
+                } else if (h < 0 &&          // approx 50% true
+                        (--spinIterations & ((SPINS >>> 1) - 1)) == 0) {
+                    Thread.yield();        // two yields per wait
+                } else {
+                    Thread.onSpinWait();
+                }
             } else {
                 LockSupport.park();
 
