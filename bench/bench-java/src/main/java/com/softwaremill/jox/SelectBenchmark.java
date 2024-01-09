@@ -2,8 +2,6 @@ package com.softwaremill.jox;
 
 import org.openjdk.jmh.annotations.*;
 
-import java.util.concurrent.Exchanger;
-import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
 import static com.softwaremill.jox.Select.select;

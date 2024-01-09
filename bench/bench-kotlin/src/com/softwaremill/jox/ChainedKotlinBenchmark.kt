@@ -23,7 +23,7 @@ open class ChainedKotlinBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION_CHAINED)
-    fun sendReceiveInChain_defaultDispatcher() {
+    fun chain_defaultDispatcher() {
         runBlocking {
             // we want to measure the amount of time a send-receive pair takes
             var elements = OPERATIONS_PER_INVOCATION_CHAINED / channelCount
@@ -53,7 +53,7 @@ open class ChainedKotlinBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION_CHAINED)
-    fun sendReceiveInChain_eventLoop() {
+    fun chain_eventLoop() {
         runBlocking {
             // we want to measure the amount of time a send-receive pair takes
             var elements = OPERATIONS_PER_INVOCATION_CHAINED / channelCount
