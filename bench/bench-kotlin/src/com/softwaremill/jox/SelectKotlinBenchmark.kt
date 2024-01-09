@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 open class SelectKotlinBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
-    fun sendReceiveUsingSelect_singleChannel_defaultDispatcher() {
+    fun selectWithSingleClause_defaultDispatcher() {
         runBlocking {
             val channel = Channel<Long>(0)
             launch(Dispatchers.Default) {
@@ -34,7 +34,7 @@ open class SelectKotlinBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
-    fun sendReceiveUsingSelect_twoChannels_defaultDispatcher() {
+    fun selectWithTwoClauses_defaultDispatcher() {
         runBlocking {
             val channel1 = Channel<Long>(0)
             val channel2 = Channel<Long>(0)

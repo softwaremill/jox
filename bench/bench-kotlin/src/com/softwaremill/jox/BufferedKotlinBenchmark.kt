@@ -21,7 +21,7 @@ open class BufferedKotlinBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
-    fun sendReceiveUsingDefaultDispatcher() {
+    fun channel_defaultDispatcher() {
         runBlocking {
             val channel = Channel<Long>(capacity)
             launch(Dispatchers.Default) {

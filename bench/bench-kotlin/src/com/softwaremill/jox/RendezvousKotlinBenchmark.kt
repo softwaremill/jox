@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 open class RendezvousKotlinBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
-    fun sendReceiveUsingDefaultDispatcher() {
+    fun channel_defaultDispatcher() {
         runBlocking {
             val channel = Channel<Long>(0)
             launch(Dispatchers.Default) {
