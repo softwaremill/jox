@@ -19,24 +19,24 @@ open class ChainedKotlinBenchmark {
     var capacity: Int = 0
 
     @Param("100", "1000", "10000")
-    var channelCount: Int = 0
+    var chainLength: Int = 0
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION_CHAINED)
-    fun chain_defaultDispatcher() {
+    fun channelChain_defaultDispatcher() {
         runBlocking {
             // we want to measure the amount of time a send-receive pair takes
-            var elements = OPERATIONS_PER_INVOCATION_CHAINED / channelCount
+            var elements = OPERATIONS_PER_INVOCATION_CHAINED / chainLength
 
             // create an array of channelCount channels
-            val channels = Array(channelCount) { Channel<Long>(capacity) }
+            val channels = Array(chainLength) { Channel<Long>(capacity) }
 
             launch(Dispatchers.Default) {
                 var ch = channels[0]
                 for (x in 1..elements) ch.send(63)
             }
 
-            for (t in 1 until channelCount) {
+            for (t in 1 until chainLength) {
                 val ch1 = channels[t - 1]
                 val ch2 = channels[t]
                 launch(Dispatchers.Default) {
@@ -45,7 +45,7 @@ open class ChainedKotlinBenchmark {
             }
 
             launch(Dispatchers.Default) {
-                var ch = channels[channelCount - 1]
+                var ch = channels[chainLength - 1]
                 for (x in 1..elements) ch.receive()
             }
         }
@@ -53,20 +53,20 @@ open class ChainedKotlinBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION_CHAINED)
-    fun chain_eventLoop() {
+    fun channelChain_eventLoop() {
         runBlocking {
             // we want to measure the amount of time a send-receive pair takes
-            var elements = OPERATIONS_PER_INVOCATION_CHAINED / channelCount
+            var elements = OPERATIONS_PER_INVOCATION_CHAINED / chainLength
 
             // create an array of channelCount channels
-            val channels = Array(channelCount) { Channel<Long>(capacity) }
+            val channels = Array(chainLength) { Channel<Long>(capacity) }
 
             launch {
                 var ch = channels[0]
                 for (x in 1..elements) ch.send(63)
             }
 
-            for (t in 1 until channelCount) {
+            for (t in 1 until chainLength) {
                 val ch1 = channels[t - 1]
                 val ch2 = channels[t]
                 launch {
@@ -75,7 +75,7 @@ open class ChainedKotlinBenchmark {
             }
 
             launch {
-                var ch = channels[channelCount - 1]
+                var ch = channels[chainLength - 1]
                 for (x in 1..elements) ch.receive()
             }
         }
