@@ -214,54 +214,70 @@ class Demo6 {
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java
 synchronisation primitives (queues), as well as the Kotlin channel implementation.
 
-The test results for version 0.0.1, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
+The test results for version 0.0.4, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
 
 ```
-Benchmark                                                          (capacity)  Mode  Cnt     Score     Error  Units
+Benchmark                                                      (capacity)  (chainLength)  Mode  Cnt     Score     Error  Units
 
-// jox
-RendezvousBenchmark.channel                                               N/A  avgt   30   176.499 ±  14.964  ns/op
-RendezvousBenchmark.channel:receiveFromChannel                            N/A  avgt   30   176.499 ±  14.964  ns/op
-RendezvousBenchmark.channel:sendToChannel                                 N/A  avgt   30   176.499 ±  14.964  ns/op
-RendezvousBenchmark.channel_iterative                                     N/A  avgt   30   209.041 ±  30.397  ns/op
+// jox - single channel
+BufferedBenchmark.channel                                               1            N/A  avgt   20   210.366 ±  18.979  ns/op
+BufferedBenchmark.channel                                              10            N/A  avgt   20   148.691 ±  25.368  ns/op
+BufferedBenchmark.channel                                             100            N/A  avgt   20   149.499 ±  22.495  ns/op
 
-BufferedBenchmark.channel                                                   1  avgt   30   177.547 ±  14.626  ns/op
-BufferedBenchmark.channel:receiveFromChannel                                1  avgt   30   177.547 ±  14.626  ns/op
-BufferedBenchmark.channel:sendToChannel                                     1  avgt   30   177.547 ±  14.626  ns/op
-BufferedBenchmark.channel                                                  10  avgt   30   135.838 ±  14.578  ns/op
-BufferedBenchmark.channel:receiveFromChannel                               10  avgt   30   135.838 ±  14.578  ns/op
-BufferedBenchmark.channel:sendToChannel                                    10  avgt   30   135.838 ±  14.578  ns/op
-BufferedBenchmark.channel                                                 100  avgt   30    92.837 ±  13.936  ns/op
-BufferedBenchmark.channel:receiveFromChannel                              100  avgt   30    92.837 ±  13.936  ns/op
-BufferedBenchmark.channel:sendToChannel                                   100  avgt   30    92.836 ±  13.935  ns/op
-BufferedBenchmark.channel_iterative                                         1  avgt   30   185.138 ±  14.382  ns/op
-BufferedBenchmark.channel_iterative                                        10  avgt   30   126.594 ±  12.089  ns/op
-BufferedBenchmark.channel_iterative                                       100  avgt   30    83.534 ±   6.540  ns/op
+RendezvousBenchmark.channel                                           N/A            N/A  avgt   20   187.940 ±   8.783  ns/op
 
-// java
-RendezvousBenchmark.exchanger                                             N/A  avgt   30   177.630 ± 152.388  ns/op
-RendezvousBenchmark.exchanger:exchange1                                   N/A  avgt   30   177.630 ± 152.388  ns/op
-RendezvousBenchmark.exchanger:exchange2                                   N/A  avgt   30   177.630 ± 152.388  ns/op
-RendezvousBenchmark.synchronous_queue                                     N/A  avgt   30   978.826 ± 188.831  ns/op
-RendezvousBenchmark.synchronous_queue:putToSynchronousQueue               N/A  avgt   30   978.826 ± 188.830  ns/op
-RendezvousBenchmark.synchronous_queue:takeFromSynchronousQueue            N/A  avgt   30   978.825 ± 188.832  ns/op
+// kotlin - single channel
+BufferedKotlinBenchmark.channel_defaultDispatcher                       1            N/A  avgt   30    85.027 ±  0.709  ns/op
+BufferedKotlinBenchmark.channel_defaultDispatcher                      10            N/A  avgt   30    40.095 ±  0.452  ns/op
+BufferedKotlinBenchmark.channel_defaultDispatcher                     100            N/A  avgt   30    26.879 ±  0.063  ns/op
 
-BufferedBenchmark.array_blocking_queue                                      1  avgt   30  2266.799 ± 231.198  ns/op
-BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue              1  avgt   30  2266.798 ± 231.197  ns/op
-BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue           1  avgt   30  2266.799 ± 231.199  ns/op
-BufferedBenchmark.array_blocking_queue                                     10  avgt   30   450.796 ±  93.496  ns/op
-BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue             10  avgt   30   450.795 ±  93.495  ns/op
-BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue          10  avgt   30   450.797 ±  93.497  ns/op
-BufferedBenchmark.array_blocking_queue                                    100  avgt   30   147.962 ±   9.743  ns/op
-BufferedBenchmark.array_blocking_queue:putToArrayBlockingQueue            100  avgt   30   147.962 ±   9.743  ns/op
-BufferedBenchmark.array_blocking_queue:takeFromArrayBlockingQueue         100  avgt   30   147.962 ±   9.743  ns/op
+RendezvousKotlinBenchmark.channel_defaultDispatcher                   N/A            N/A  avgt   30   116.664 ± 10.099  ns/op
 
-// kotlin
-RendezvousKotlinBenchmark.sendReceiveUsingDefaultDispatcher               N/A  avgt   30  108.338  ±   0.538  ns/op
+// jox - selects
+SelectBenchmark.selectWithSingleClause                                N/A            N/A  avgt   20   353.074 ±  27.860  ns/op
+SelectBenchmark.selectWithTwoClauses                                  N/A            N/A  avgt   20   651.050 ±  31.037  ns/op
 
-BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher                   1  avgt   30   86.614  ±   0.784  ns/op
-BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher                  10  avgt   30   40.153  ±   0.221  ns/op
-BufferedKotlinBenchmark.sendReceiveUsingDefaultDispatcher                 100  avgt   30   26.764  ±   0.022  ns/op
+// kotlin - selects
+SelectKotlinBenchmark.selectWithSingleClause_defaultDispatcher        N/A            N/A  avgt   30   169.823 ±   1.250  ns/op
+SelectKotlinBenchmark.selectWithTwoClauses_defaultDispatcher          N/A            N/A  avgt   30   227.413 ±   2.659  ns/op
+
+// java built-in - single queue
+BufferedBenchmark.arrayBlockingQueue                                    1            N/A  avgt   20  2447.455 ± 427.354  ns/op
+BufferedBenchmark.arrayBlockingQueue                                   10            N/A  avgt   20   546.227 ±  96.690  ns/op
+BufferedBenchmark.arrayBlockingQueue                                  100            N/A  avgt   20   125.287 ±   4.387  ns/op
+
+RendezvousBenchmark.exchanger                                         N/A            N/A  avgt   20   106.114 ±  20.360  ns/op
+RendezvousBenchmark.synchronousQueue                                  N/A            N/A  avgt   20   869.988 ± 101.291  ns/op
+
+// jox - multi channel
+ChainedBenchmark.channelChain                                           0            100  avgt   20   225.370 ±   4.693  ns/op
+ChainedBenchmark.channelChain                                           0           1000  avgt   20   173.997 ±   4.160  ns/op
+ChainedBenchmark.channelChain                                           0          10000  avgt   20   160.097 ±   4.520  ns/op
+ChainedBenchmark.channelChain                                         100            100  avgt   20     8.377 ±   0.133  ns/op
+ChainedBenchmark.channelChain                                         100           1000  avgt   20     6.147 ±   0.054  ns/op
+ChainedBenchmark.channelChain                                         100          10000  avgt   20     7.942 ±   0.447  ns/op
+                                                                                                                
+// kotlin - multi channel                                                                                       
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                   0            100  avgt   30    96.106 ±   1.247  ns/op
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                   0           1000  avgt   30    74.858 ±   0.810  ns/op
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                   0          10000  avgt   30    72.894 ±   0.787  ns/op
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                 100            100  avgt   30     5.164 ±   0.104  ns/op
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                 100           1000  avgt   30     4.157 ±   0.029  ns/op
+ChainedKotlinBenchmark.channelChain_defaultDispatcher                 100          10000  avgt   30     4.965 ±   0.043  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                           0            100  avgt   30    70.484 ±   0.431  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                           0           1000  avgt   30    98.400 ±   1.003  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                           0          10000  avgt   30    92.579 ±   1.650  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                         100            100  avgt   30    27.052 ±   0.121  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                         100           1000  avgt   30    25.982 ±   0.111  ns/op
+ChainedKotlinBenchmark.channelChain_eventLoop                         100          10000  avgt   30    27.276 ±   0.316  ns/op
+                                                                                                                
+// java built-in - multi queues                                                                                 
+ChainedBenchmark.queueChain                                             0            100  avgt   20   186.677 ±   2.564  ns/op
+ChainedBenchmark.queueChain                                             0           1000  avgt   20   108.954 ±  13.825  ns/op
+ChainedBenchmark.queueChain                                             0          10000  avgt   20   101.643 ±  10.526  ns/op
+ChainedBenchmark.queueChain                                           100            100  avgt   20     7.933 ±   0.546  ns/op
+ChainedBenchmark.queueChain                                           100           1000  avgt   20     5.281 ±   0.261  ns/op
+ChainedBenchmark.queueChain                                           100          10000  avgt   20     5.798 ±   0.058  ns/op
 ```
 
 ## Feedback
