@@ -1078,7 +1078,12 @@ final class Continuation {
      * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
      * {@code 0}, if there's a single CPU.
      */
-    static final int SPINS = Runtime.getRuntime().availableProcessors() == 1 ? 0 : (1 << 10);
+    static final int SPINS;
+
+    static {
+        var nproc = Runtime.getRuntime().availableProcessors();
+        SPINS = (nproc == 1) ? 0 : ((nproc == 2) ? (1 << 7) : (1 << 10));
+    }
 
     private final Thread creatingThread;
     private volatile Object data; // set using DATA var handle
