@@ -19,20 +19,20 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>core</artifactId>
-    <version>0.0.3</version>
+    <version>0.0.4</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:core:0.0.3'
+implementation 'com.softwaremill.jox:core:0.0.4'
 ```
 
 SBT:
 
 ```scala
-libraryDependencies += "com.softwaremill.jox" % "core" % "0.0.3"
+libraryDependencies += "com.softwaremill.jox" % "core" % "0.0.4"
 ```
 
 ## Usage
