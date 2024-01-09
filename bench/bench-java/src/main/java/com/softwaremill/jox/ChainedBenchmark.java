@@ -7,12 +7,12 @@ import java.util.concurrent.TimeUnit;
 /**
  * Chained send-receive test for {@link Channel} - a series of threads proxying values to subsequent channels.
  */
-@Warmup(iterations = 3, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
-@Measurement(iterations = 10, time = 5000, timeUnit = TimeUnit.MILLISECONDS)
-@Fork(value = 3)
+@Warmup(iterations = 3, time = 4000, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 10, time = 4000, timeUnit = TimeUnit.MILLISECONDS)
+@Fork(value = 2)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-@State(Scope.Group)
+@State(Scope.Benchmark)
 public class ChainedBenchmark {
     @Param({"0", "100"})
     public int capacity;
@@ -24,8 +24,7 @@ public class ChainedBenchmark {
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
-    @Group("chain_iterative")
-    public void sendReceiveInChain() throws InterruptedException {
+    public void chain() throws InterruptedException {
         // we want to measure the amount of time a send-receive pair takes
         int elements = OPERATIONS_PER_INVOCATION / channelCount;
         Channel<Integer>[] channels = new Channel[channelCount];
