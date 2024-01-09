@@ -1076,14 +1076,15 @@ record Buffered(Object value) {}
 final class Continuation {
     /**
      * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
-     * {@code 0}, if there's a single CPU.
+     * {@code 0}, if there's a single CPU. When there's no more than 4 CPUs, we use {@code 128} iterations: this is
+     * based on the (limited) testing that we've done with various systems. Otherwise, we use 1024 iterations.
+     * This might need revisiting when more testing & more benchmarks are available.
      */
     static final int SPINS;
 
     static {
         var nproc = Runtime.getRuntime().availableProcessors();
-        System.out.println("XXX " + nproc);
-        SPINS = (nproc == 1) ? 0 : ((nproc == 2) ? (1 << 7) : (1 << 10));
+        SPINS = (nproc == 1) ? 0 : ((nproc <= 4) ? (1 << 7) : (1 << 10));
     }
 
     private final Thread creatingThread;
