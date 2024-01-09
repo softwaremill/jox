@@ -1079,11 +1079,10 @@ final class Continuation {
      * {@code 0}, if there's a single CPU.
      */
     static final int SPINS;
-    static final boolean YIELD;
 
     static {
         var nproc = Runtime.getRuntime().availableProcessors();
-        YIELD = nproc > 2;
+        System.out.println("XXX " + nproc);
         SPINS = (nproc == 1) ? 0 : ((nproc == 2) ? (1 << 7) : (1 << 10));
     }
 
@@ -1125,19 +1124,10 @@ final class Continuation {
      */
     Object await(Segment segment, int cellIndex) throws InterruptedException {
         var spinIterations = SPINS;
-        // inspired by Exchanger
-        // pseudo-random hash for spins
-        var h = SPINS | (int) creatingThread.threadId(); // initialize
         while (data == null) {
             if (spinIterations > 0) {
-                h ^= h << 1;
-                h ^= h >>> 3;
-                h ^= h << 10; // xorshift
-                if (YIELD && /* approx 50% true */ h < 0 && (--spinIterations & ((SPINS >>> 1) - 1)) == 0) {
-                    Thread.yield(); // two yields per wait
-                } else {
-                    Thread.onSpinWait();
-                }
+                Thread.onSpinWait();
+                spinIterations -= 1;
             } else {
                 LockSupport.park();
 
