@@ -50,7 +50,7 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  *
  * @param <T> The type of the elements processed by the channel.
  */
-public final class Channel<T> {
+public final class Channel<T> implements Source<T>, Sink<T> {
     /*
     Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" paper (https://arxiv.org/abs/2211.04986), and
     the Kotlin implementation (https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
@@ -155,12 +155,7 @@ public final class Channel<T> {
     // Sending
     // *******
 
-    /**
-     * Send a value to the channel.
-     *
-     * @param value The value to send. Not {@code null}.
-     * @throws ChannelClosedException When the channel is closed.
-     */
+    @Override
     public void send(T value) throws InterruptedException {
         var r = sendSafe(value);
         if (r instanceof ChannelClosed c) {
@@ -168,12 +163,7 @@ public final class Channel<T> {
         }
     }
 
-    /**
-     * Send a value to the channel. Doesn't throw exceptions when the channel is closed, but returns a value.
-     *
-     * @param value The value to send. Not {@code null}.
-     * @return Either {@code null}, or {@link ChannelClosed}, when the channel is closed.
-     */
+    @Override
     public Object sendSafe(T value) throws InterruptedException {
         return doSend(value, null, null);
     }
@@ -345,11 +335,7 @@ public final class Channel<T> {
     // Receiving
     // *********
 
-    /**
-     * Receive a value from the channel.
-     *
-     * @throws ChannelClosedException When the channel is closed.
-     */
+    @Override
     public T receive() throws InterruptedException {
         var r = receiveSafe();
         if (r instanceof ChannelClosed c) {
@@ -360,11 +346,7 @@ public final class Channel<T> {
         }
     }
 
-    /**
-     * Receive a value from the channel. Doesn't throw exceptions when the channel is closed, but returns a value.
-     *
-     * @return Either a value of type {@code T}, or {@link ChannelClosed}, when the channel is closed.
-     */
+    @Override
     public Object receiveSafe() throws InterruptedException {
         return doReceive(null, null);
     }
@@ -670,16 +652,7 @@ public final class Channel<T> {
     // Closing
     // *******
 
-    /**
-     * Close the channel, indicating that no more elements will be sent.
-     * <p>
-     * Any elements that are already buffered will be delivered. Any send operations that are in progress will complete
-     * normally, when a receiver arrives. Any pending receive operations will complete with a channel closed result.
-     * <p>
-     * Subsequent {@link #send(Object)} operations will throw {@link ChannelClosedException}.
-     *
-     * @throws ChannelClosedException When the channel is already closed.
-     */
+    @Override
     public void done() {
         var r = doneSafe();
         if (r instanceof ChannelClosed c) {
@@ -687,32 +660,12 @@ public final class Channel<T> {
         }
     }
 
-    /**
-     * Close the channel, indicating that no more elements will be sent. Doesn't throw exceptions when the channel is
-     * closed, but returns a value.
-     * <p>
-     * Any elements that are already buffered will be delivered. Any send operations that are in progress will complete
-     * normally, when a receiver arrives. Any pending receive operations will complete with a channel closed result.
-     * <p>
-     * Subsequent {@link #send(Object)} operations will throw {@link ChannelClosedException}.
-     *
-     * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
-     */
+    @Override
     public Object doneSafe() {
         return closeSafe(new ChannelDone());
     }
 
-    /**
-     * Close the channel, indicating an error.
-     * <p>
-     * Any elements that are already buffered won't be delivered. Any send or receive operations that are in progress
-     * will complete with a channel closed result.
-     * <p>
-     * Subsequent {@link #send(Object)} and {@link #receive()} operations will throw {@link ChannelClosedException}.
-     *
-     * @param reason The reason of the error. Not {@code null}.
-     * @throws ChannelClosedException When the channel is already closed.
-     */
+    @Override
     public void error(Throwable reason) {
         if (reason == null) {
             throw new NullPointerException("Error reason cannot be null");
@@ -723,16 +676,7 @@ public final class Channel<T> {
         }
     }
 
-    /**
-     * Close the channel, indicating an error. Doesn't throw exceptions when the channel is closed, but returns a value.
-     * <p>
-     * Any elements that are already buffered won't be delivered. Any send or receive operations that are in progress
-     * will complete with a channel closed result.
-     * <p>
-     * Subsequent {@link #send(Object)} and {@link #receive()} operations will throw {@link ChannelClosedException}.
-     *
-     * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
-     */
+    @Override
     public Object errorSafe(Throwable reason) {
         return closeSafe(new ChannelError(reason));
     }
@@ -846,17 +790,17 @@ public final class Channel<T> {
         }
     }
 
+    @Override
     public boolean isClosed() {
         return closedReason.get() != null;
     }
 
+    @Override
     public boolean isDone() {
         return closedReason.get() instanceof ChannelDone;
     }
 
-    /**
-     * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelDone}.
-     */
+    @Override
     public Throwable isError() {
         var reason = closedReason.get();
         if (reason instanceof ChannelError e) {
@@ -872,19 +816,13 @@ public final class Channel<T> {
 
     private static final Function<Object, Object> IDENTITY = Function.identity();
 
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
-     * the current channel.
-     */
+    @Override
     public SelectClause<T> receiveClause() {
         //noinspection unchecked
         return receiveClause((Function<T, T>) IDENTITY);
     }
 
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
-     * the current channel, and transform it using the provided {@code callback}.
-     */
+    @Override
     public <U> SelectClause<U> receiveClause(Function<T, U> callback) {
         return new SelectClause<>() {
             @Override
@@ -910,18 +848,12 @@ public final class Channel<T> {
         };
     }
 
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
-     * to the current channel, and return {@code null} as the clause's result.
-     */
+    @Override
     public SelectClause<Void> sendClause(T value) {
         return sendClause(value, () -> null);
     }
 
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will send the given value
-     * to the current channel, and return the value of the provided callback as the clause's result.
-     */
+    @Override
     public <U> SelectClause<U> sendClause(T value, Supplier<U> callback) {
         return new SelectClause<>() {
             @Override
