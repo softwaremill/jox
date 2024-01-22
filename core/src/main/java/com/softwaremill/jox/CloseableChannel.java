@@ -14,7 +14,7 @@ package com.softwaremill.jox;
  * <p>
  * Closing the channel is thread-safe.
  */
-public interface CloseableChannel {
+public interface CloseableChannel extends AutoCloseable {
     /**
      * Close the channel, indicating that no more elements will be sent.
      * <p>
@@ -39,6 +39,15 @@ public interface CloseableChannel {
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
     Object doneSafe();
+
+    /**
+     * Same as {@link #done()}: close the channel, indicating that no more elements will be sent.
+     * <p>
+     * Enables using channel in {@code try-with-resources} blocks.
+     */
+    default void close() {
+        done();
+    }
 
     //
 
