@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SelectReceiveTest {
     @Test
-    public void testSelectFromFirst_buffered_immediate() throws InterruptedException {
+    void testSelectFromFirst_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -27,7 +27,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromSecond_buffered_immediate() throws InterruptedException {
+    void testSelectFromSecond_buffered_immediate() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -41,7 +41,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromFirst_buffered_suspend() throws InterruptedException, ExecutionException {
+    void testSelectFromFirst_buffered_suspend() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -60,7 +60,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectBiasedTowardsFirst_buffered() throws InterruptedException {
+    void testSelectBiasedTowardsFirst_buffered() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -75,7 +75,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromReady_rendezvous_suspend() throws InterruptedException, ExecutionException {
+    void testSelectFromReady_rendezvous_suspend() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>();
         Channel<String> ch2 = new Channel<>();
@@ -95,7 +95,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectFromReady_rendezvous_immediate() throws InterruptedException, ExecutionException {
+    void testSelectFromReady_rendezvous_immediate() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>();
         Channel<String> ch2 = new Channel<>();
@@ -113,10 +113,62 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectWhenDone() throws InterruptedException {
+    void testSelectOrDoneWhenDone() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
+        ch2.done();
+
+        // when
+        Object received = selectSafe(ch1.receiveOrDoneClause(), ch2.receiveOrDoneClause());
+
+        // then
+        assertEquals(new ChannelDone(), received);
+    }
+
+    @Test
+    void testSkipDone_immediate() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.done();
+        ch2.send("x");
+
+        // when
+        Object received = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+
+        // then
+        assertEquals("x", received);
+    }
+
+    @Test
+    void testSkipDone_suspend() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.done();
+
+        scoped(scope -> {
+            // when
+            forkVoid(scope, () -> {
+                Thread.sleep(100); // making sure receive suspends
+                ch2.send("x");
+            });
+
+            // when
+            Object received = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+
+            // then
+            assertEquals("x", received);
+        });
+    }
+
+    @Test
+    void testSelectWhenAllDone_immediate() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.done();
         ch2.done();
 
         // when
@@ -126,8 +178,30 @@ public class SelectReceiveTest {
         assertEquals(new ChannelDone(), received);
     }
 
+    @Test
+    void testSelectWhenAllDone_suspend() throws InterruptedException, ExecutionException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+
+        scoped(scope -> {
+            // when
+            forkVoid(scope, () -> {
+                Thread.sleep(100); // making sure receive suspends
+                ch1.done();
+                ch2.done();
+            });
+
+            // when
+            Object received = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+
+            // then
+            assertEquals(new ChannelDone(), received);
+        });
+    }
+
     @TestWithCapacities
-    public void testReceiveMany(int capacity) throws InterruptedException, ExecutionException {
+    void testReceiveMany(int capacity) throws InterruptedException, ExecutionException {
         // given
         int channelsCount = 5;
         int msgsCount = 10000;
@@ -166,7 +240,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testSelectWithTransformation() throws InterruptedException {
+    void testSelectWithTransformation() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
         Channel<String> ch2 = new Channel<>(1);
@@ -180,7 +254,7 @@ public class SelectReceiveTest {
     }
 
     @Test
-    public void testBufferExpandedWhenSelecting() throws InterruptedException {
+    void testBufferExpandedWhenSelecting() throws InterruptedException {
         // given
         Channel<String> ch = new Channel<>(2);
 
@@ -200,5 +274,10 @@ public class SelectReceiveTest {
         assertEquals("v2", r2);
         assertEquals("v3", r3);
         assertEquals("v4", r4);
+    }
+
+    @Test
+    void testSelectFromNone() throws InterruptedException {
+        assertEquals(new ChannelDone(), selectSafe());
     }
 }

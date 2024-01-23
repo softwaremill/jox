@@ -209,6 +209,15 @@ class Demo6 {
 }
 ```
 
+### Selecting from "done" channels
+
+Receive clauses, for which channels are "done", will be skipped, and `select` with restart (as long as there are any
+clauses left). This is motivated by the fact that a "done" channel is not in an error state, but signals that there are
+no more values; while there might be more values available from other clauses.
+
+Optionally, clauses created with `Channel.receiveOrDoneClause`, will cause `select` to throw/ return when the associated
+channel is done, bypassing the behavior described above.
+
 ## Performance
 
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java

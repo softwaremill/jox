@@ -774,7 +774,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 case StoredSelectClause ss -> {
-                    ss.getSelect().channelClosed(closedReason.get());
+                    ss.getSelect().channelClosed(ss, closedReason.get());
                     // not setting the state & updating counters, as each non-selected stored select cell will be
                     // cleaned up, setting an interrupted state (and informing the segment)
                 }
@@ -824,6 +824,21 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public <U> SelectClause<U> receiveClause(Function<T, U> callback) {
+        return receiveClause(callback, true);
+    }
+
+    @Override
+    public SelectClause<T> receiveOrDoneClause() {
+        //noinspection unchecked
+        return receiveOrDoneClause((Function<T, T>) IDENTITY);
+    }
+
+    @Override
+    public <U> SelectClause<U> receiveOrDoneClause(Function<T, U> callback) {
+        return receiveClause(callback, false);
+    }
+
+    private <U> SelectClause<U> receiveClause(Function<T, U> callback, boolean skipWhenDone) {
         return new SelectClause<>() {
             @Override
             Channel<?> getChannel() {
@@ -844,6 +859,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             U transformedRawValue(Object rawValue) {
                 //noinspection unchecked
                 return callback.apply((T) rawValue);
+            }
+
+            @Override
+            boolean skipWhenDone() {
+                return skipWhenDone;
             }
         };
     }
@@ -876,6 +896,12 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             @Override
             U transformedRawValue(Object rawValue) {
                 return callback.get();
+            }
+
+            @Override
+            boolean skipWhenDone() {
+                // sending to a done channel is probably wrong, skipping such channels is not allowed
+                return false;
             }
         };
     }
