@@ -16,15 +16,15 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
 /**
  * Channel is a thread-safe data structure which exposes three basic operations:
  * <p>
- * - {@link Channel#send(Object)}-ing a value to the channel
+ * - {@link Channel#send(Object)}-ing a value to the channel. Values can't be {@code null}.
  * - {@link Channel#receive()}-ing a value from the channel
  * - closing the channel using {@link Channel#done()} or {@link Channel#error(Throwable)}
  * <p>
  * There are three channel flavors:
  * <p>
  * - rendezvous channels, where senders and receivers must meet to exchange values
- * - buffered channels, where a given number of sent elements might be buffered, before subsequent `send`s block
- * - unlimited channels, where an unlimited number of elements might be buffered, hence `send` never blocks
+ * - buffered channels, where a given number of sent values might be buffered, before subsequent `send`s block
+ * - unlimited channels, where an unlimited number of values might be buffered, hence `send` never blocks
  * <p>
  * The no-argument {@link Channel} constructor creates a rendezvous channel, while a buffered channel can be created
  * by providing a positive integer to the constructor. A rendezvous channel behaves like a buffered channel with
@@ -36,11 +36,11 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  * <p>
  * All blocking operations behave properly upon interruption.
  * <p>
- * Channels might be closed, either because no more elements will be produced by the source (using
- * {@link Channel#done()}), or because there was an error while producing or processing the received elements (using
+ * Channels might be closed, either because no more values will be produced by the source (using
+ * {@link Channel#done()}), or because there was an error while producing or processing the received values (using
  * {@link Channel#error(Throwable)}).
  * <p>
- * After closing, no more elements can be sent to the channel. If the channel is "done", any pending sends will be
+ * After closing, no more values can be sent to the channel. If the channel is "done", any pending sends will be
  * completed normally. If the channel is in an "error" state, pending sends will be interrupted and will return with
  * the reason for the closure.
  * <p>
@@ -48,7 +48,7 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  * the less type-safe, but more exception-safe {@link Channel#sendSafe(Object)} and {@link Channel#receiveSafe()}
  * methods, which do not throw in case the channel is closed, but return one of the {@link ChannelClosed} values.
  *
- * @param <T> The type of the elements processed by the channel.
+ * @param <T> The type of the values processed by the channel.
  */
 public final class Channel<T> implements Source<T>, Sink<T> {
     /*
@@ -57,13 +57,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     Notable differences from the Kotlin implementation:
     * we block (virtual) threads, instead of suspend functions
-    * in Kotlin's channels, the buffer stores both the elements (in even indexes), and the state for each cell (in odd
+    * in Kotlin's channels, the buffer stores both the values (in even indexes), and the state for each cell (in odd
       indexes). This would be also possible here, but in two-thread rendezvous tests, this is slightly slower than the
-      approach below: we transmit the elements inside objects representing state. This does incur an additional
+      approach below: we transmit the values inside objects representing state. This does incur an additional
       allocation in case of the `Buffered` state (when there's a waiting receiver - we can't simply use a constant).
       However, we add a field to `Continuation` (which is a channel-specific class, unlike in Kotlin), to avoid the
       allocation when the sender suspends.
-    * as we don't directly store elements in the buffer, we don't need to clear them on interrupt etc. This is done
+    * as we don't directly store values in the buffer, we don't need to clear them on interrupt etc. This is done
       automatically when the cell's state is set to something else than a Continuation/Buffered.
     * instead of the `completedExpandBuffersAndPauseFlag` counter, we maintain a counter of cells which haven't been
       interrupted & processed by `expandBuffer` in each segment. The segment becomes logically removed, only once all
@@ -611,7 +611,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     return ExpandBufferResult.DONE;
                 }
                 case Buffered b -> {
-                    // an element is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
+                    // a value is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
                     return ExpandBufferResult.DONE;
                 }
                 case INTERRUPTED_SEND -> {
