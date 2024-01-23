@@ -79,6 +79,32 @@ public class CollectSource<V, T> implements Source<T> {
         });
     }
 
+    @Override
+    public SelectClause<T> receiveOrDoneClause() {
+        return original.receiveOrDoneClause(v -> {
+            var t = f.apply(v);
+            if (t != null) {
+                return t;
+            } else {
+                //noinspection unchecked
+                return (T) RestartSelectMarker.RESTART;
+            }
+        });
+    }
+
+    @Override
+    public <U> SelectClause<U> receiveOrDoneClause(Function<T, U> callback) {
+        return original.receiveOrDoneClause(v -> {
+            var t = f.apply(v);
+            if (t != null) {
+                return callback.apply(t);
+            } else {
+                //noinspection unchecked
+                return (U) RestartSelectMarker.RESTART;
+            }
+        });
+    }
+
     // delegates for closeable channel
 
     @Override
@@ -120,8 +146,4 @@ public class CollectSource<V, T> implements Source<T> {
     public Throwable isError() {
         return original.isError();
     }
-}
-
-enum RestartSelectMarker {
-    RESTART
 }

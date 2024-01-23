@@ -23,6 +23,8 @@ public abstract class SelectClause<T> {
      * Might throw any exceptions that the provided transformation function throws.
      */
     abstract T transformedRawValue(Object rawValue);
+
+    abstract boolean skipWhenDone();
 }
 
 class DefaultClause<T> extends SelectClause<T> {
@@ -46,11 +48,16 @@ class DefaultClause<T> extends SelectClause<T> {
     T transformedRawValue(Object rawValue) {
         return callback.get();
     }
+
+    @Override
+    boolean skipWhenDone() {
+        return false; // no associated channel, this value is never used
+    }
 }
 
 /**
- * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of null, to indicate that the select
- * clause has been selected during registration.
+ * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of {@code null}, to indicate that the
+ * default clause has been selected during registration.
  */
 enum DefaultClauseMarker {
     DEFAULT
