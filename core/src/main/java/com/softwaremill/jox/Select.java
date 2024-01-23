@@ -72,6 +72,19 @@ public class Select {
      */
     @SafeVarargs
     public static <U> Object selectSafe(SelectClause<U>... clauses) throws InterruptedException {
+        while (true) {
+            var r = doSelectSafe(clauses);
+            // in case a `CollectSource` function filters out the element (the transformation function returns `null`,
+            // which is represented as a marker because `null` is a valid result of `doSelectSafe`, e.g. for send clauses),
+            // we need to restart the selection process
+            if (r != RestartSelectMarker.RESTART) {
+                return r;
+            }
+        }
+    }
+
+    @SafeVarargs
+    private static <U> Object doSelectSafe(SelectClause<U>... clauses) throws InterruptedException {
         // check that the clause doesn't refer to a channel that is already used in a different clause
         verifyChannelsUnique(clauses);
 
