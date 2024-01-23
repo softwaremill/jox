@@ -118,11 +118,6 @@ public class CollectSource<V, T> implements Source<T> {
     }
 
     @Override
-    public void close() {
-        original.close();
-    }
-
-    @Override
     public void error(Throwable reason) {
         original.error(reason);
     }
