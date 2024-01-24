@@ -33,9 +33,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.12.1</version>
                 <configuration>
-                    <!-- IntelliJ doesn't recognize this, the flag needs to be manually added in -->
+                    <!-- IntelliJ doesn't recognize this, the flag needs to be manually added in:
+                         Settings -> Build -> Compiler -> Java compiler -> Override compiler parameters per-module -->
                     <fork>true</fork>
                     <testCompilerArgument>--enable-preview</testCompilerArgument>
                 </configuration>
