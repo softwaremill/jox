@@ -9,6 +9,7 @@ the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/ma
 Articles:
 
 * [Announcing jox: Fast and Scalable Channels in Java](https://softwaremill.com/announcing-jox-fast-and-scalable-channels-in-java/)
+* [Go-like selects using jox channels in Java](https://softwaremill.com/go-like-selects-using-jox-channels-in-java/)
 
 ## Dependencies
 
