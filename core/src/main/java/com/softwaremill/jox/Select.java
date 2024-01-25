@@ -91,6 +91,7 @@ public class Select {
             }
 
             var r = doSelectSafe(currentClauses);
+            //noinspection StatementWithEmptyBody
             if (r == RestartSelectMarker.RESTART) {
                 // in case a `CollectSource` function filters out the element (the transformation function returns `null`,
                 // which is represented as a marker because `null` is a valid result of `doSelectSafe`, e.g. for send clauses),
@@ -187,6 +188,7 @@ class SelectInstance {
      * @return {@code true}, if the registration was successful, and the clause has been stored. {@code false}, if the
      * channel is closed, or the clause has been immediately selected.
      */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     <U> boolean register(SelectClause<U> clause) {
         // register the clause
         var result = clause.register(this);
@@ -252,12 +254,6 @@ class SelectInstance {
                     // inspect the updated state in next iteration
                 }
                 // else: CAS unsuccessful, retry
-            } else if (currentState == SelectState.SKIP_DONE) {
-                cleanup(null);
-                return RestartSelectMarker.RESTART_WITHOUT_DONE;
-            } else if (currentState instanceof ChannelClosed cc) {
-                cleanup(null);
-                return cc;
             } else if (currentState instanceof List) {
                 // moving the state back to registering
                 if (state.compareAndSet(currentState, SelectState.REGISTERING)) {
@@ -298,6 +294,14 @@ class SelectInstance {
 
                 // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
                 return selectedClause.transformedRawValue(ss.getPayload());
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // a channel which was referenced through a receive clause (skipWhenDone=true) became done - restarting
+
+                cleanup(null);
+                return RestartSelectMarker.RESTART_WITHOUT_DONE;
+            } else if (currentState instanceof ChannelClosed cc) {
+                cleanup(null);
+                return cc;
             } else {
                 throw new IllegalStateException("Unknown state: " + currentState);
             }
@@ -338,15 +342,6 @@ class SelectInstance {
                     return false; // concurrent clause selection is not possible during registration
                 }
                 // else: CAS unsuccessful, retry
-            } else if (currentState == SelectState.INTERRUPTED) {
-                // already interrupted, will be cleaned up soon
-                return false;
-            } else if (currentState == SelectState.SKIP_DONE) {
-                // closed, will be cleaned up soon (& restarted)
-                return false;
-            } else if (currentState instanceof ChannelClosed) {
-                // closed, will be cleaned up soon
-                return false;
             } else if (currentState instanceof SelectClause) {
                 // already selected, will be cleaned up soon
                 return false;
@@ -359,6 +354,15 @@ class SelectInstance {
                     return true;
                 }
                 // else: CAS unsuccessful, retry
+            } else if (currentState == SelectState.INTERRUPTED) {
+                // already interrupted, will be cleaned up soon
+                return false;
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // closed, will be cleaned up soon (& restarted)
+                return false;
+            } else if (currentState instanceof ChannelClosed) {
+                // closed, will be cleaned up soon
+                return false;
             } else {
                 throw new IllegalStateException("Unknown state: " + currentState);
             }
@@ -386,15 +390,6 @@ class SelectInstance {
                     return;
                 }
                 // else: CAS unsuccessful, retry
-            } else if (currentState == SelectState.INTERRUPTED) {
-                // already interrupted
-                return;
-            } else if (currentState == SelectState.SKIP_DONE) {
-                // already closed
-                return;
-            } else if (currentState instanceof ChannelClosed) {
-                // already closed
-                return;
             } else if (currentState instanceof SelectClause) {
                 // already selected
                 return;
@@ -407,6 +402,15 @@ class SelectInstance {
                     return;
                 }
                 // else: CAS unsuccessful, retry
+            } else if (currentState == SelectState.INTERRUPTED) {
+                // already interrupted
+                return;
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // already closed
+                return;
+            } else if (currentState instanceof ChannelClosed) {
+                // already closed
+                return;
             } else {
                 throw new IllegalStateException("Unknown state: " + currentState);
             }
