@@ -1,7 +1,7 @@
 # jox
 
 Fast and Scalable Channels in Java. Designed to be used with Java 21+ and virtual threads,
-see [Project Loom](https://openjdk.org/projects/loom/).
+see [Project Loom](https://openjdk.org/projects/loom/) (although the `core` module can be used with Java 17+).
 
 Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" [paper](https://arxiv.org/abs/2211.04986), and
 the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).

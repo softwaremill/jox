@@ -8,12 +8,13 @@
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>parent</artifactId>
     <packaging>pom</packaging>
+    <version>0.0.5</version>
+
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
     </properties>
-    <version>0.0.5</version>
 
     <modules>
         <module>core</module>

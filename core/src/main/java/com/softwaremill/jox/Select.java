@@ -91,6 +91,7 @@ public class Select {
             }
 
             var r = doSelectSafe(currentClauses);
+            //noinspection StatementWithEmptyBody
             if (r == RestartSelectMarker.RESTART) {
                 // in case a `CollectSource` function filters out the element (the transformation function returns `null`,
                 // which is represented as a marker because `null` is a valid result of `doSelectSafe`, e.g. for send clauses),
@@ -187,35 +188,31 @@ class SelectInstance {
      * @return {@code true}, if the registration was successful, and the clause has been stored. {@code false}, if the
      * channel is closed, or the clause has been immediately selected.
      */
+    @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     <U> boolean register(SelectClause<U> clause) {
         // register the clause
         var result = clause.register(this);
-        switch (result) {
-            case StoredSelectClause ss -> {
-                // keeping the stored select to later call cleanup()
-                storedClauses.add(ss);
-                return true;
-            }
-            case ChannelDone cd when clause.skipWhenDone() -> {
-                state.set(SelectState.SKIP_DONE);
-                return false;
-            }
-            case ChannelClosed cc -> {
-                // when setting the state, we might override another state:
-                // - a list of clauses to re-register - there's no point in doing that anyway (since the channel is closed)
-                // - another closed state (set concurrently)
-                state.set(cc);
-                return false;
-            }
-            default -> {
-                // else: the clause was selected
-                resultSelectedDuringRegistration = result; // used in checkStateAndWait() later
-                // when setting the state, we might override another state:
-                // - a list of clauses to re-register - there's no point in doing that anyway (since we already selected a clause)
-                // - a closed state - the closure must have happened concurrently with registration; we give priority to immediate selects then
-                state.set(clause);
-                return false;
-            }
+        if (result instanceof StoredSelectClause ss) {
+            // keeping the stored select to later call cleanup()
+            storedClauses.add(ss);
+            return true;
+        } else if (result instanceof ChannelDone && clause.skipWhenDone()) {
+            state.set(SelectState.SKIP_DONE);
+            return false;
+        } else if (result instanceof ChannelClosed cc) {
+            // when setting the state, we might override another state:
+            // - a list of clauses to re-register - there's no point in doing that anyway (since the channel is closed)
+            // - another closed state (set concurrently)
+            state.set(cc);
+            return false;
+        } else {
+            // else: the clause was selected
+            resultSelectedDuringRegistration = result; // used in checkStateAndWait() later
+            // when setting the state, we might override another state:
+            // - a list of clauses to re-register - there's no point in doing that anyway (since we already selected a clause)
+            // - a closed state - the closure must have happened concurrently with registration; we give priority to immediate selects then
+            state.set(clause);
+            return false;
         }
     }
 
@@ -227,88 +224,86 @@ class SelectInstance {
     Object checkStateAndWait() throws InterruptedException {
         while (true) {
             var currentState = state.get();
-            switch (currentState) {
-                case SelectState.REGISTERING -> {
-                    // registering done, waiting until a clause is selected - setting the thread to wake up as the state
-                    // we won't leave this case until the state is changed from Thread
-                    var currentThread = Thread.currentThread();
-                    if (state.compareAndSet(SelectState.REGISTERING, currentThread)) {
-                        var spinIterations = Continuation.SPINS;
-                        while (state.get() == currentThread) {
-                            // same logic as in Continuation
-                            if (spinIterations > 0) {
-                                Thread.onSpinWait();
-                                spinIterations -= 1;
-                            } else {
-                                LockSupport.park();
+            if (currentState == SelectState.REGISTERING) {
+                // registering done, waiting until a clause is selected - setting the thread to wake up as the state
+                // we won't leave this case until the state is changed from Thread
+                var currentThread = Thread.currentThread();
+                if (state.compareAndSet(SelectState.REGISTERING, currentThread)) {
+                    var spinIterations = Continuation.SPINS;
+                    while (state.get() == currentThread) {
+                        // same logic as in Continuation
+                        if (spinIterations > 0) {
+                            Thread.onSpinWait();
+                            spinIterations -= 1;
+                        } else {
+                            LockSupport.park();
 
-                                if (Thread.interrupted()) {
-                                    if (state.compareAndSet(currentThread, SelectState.INTERRUPTED)) {
-                                        // since we changed the state, we know that none of the clauses will become completed
-                                        cleanup(null);
-                                        throw new InterruptedException();
-                                    } else {
-                                        // another thread already changed the state; setting the interrupt status (so that
-                                        // the next blocking operation throws), and continuing
-                                        Thread.currentThread().interrupt();
-                                    }
+                            if (Thread.interrupted()) {
+                                if (state.compareAndSet(currentThread, SelectState.INTERRUPTED)) {
+                                    // since we changed the state, we know that none of the clauses will become completed
+                                    cleanup(null);
+                                    throw new InterruptedException();
+                                } else {
+                                    // another thread already changed the state; setting the interrupt status (so that
+                                    // the next blocking operation throws), and continuing
+                                    Thread.currentThread().interrupt();
                                 }
                             }
                         }
-                        // inspect the updated state in next iteration
                     }
-                    // else: CAS unsuccessful, retry
+                    // inspect the updated state in next iteration
                 }
-                case SelectState.SKIP_DONE -> {
-                    cleanup(null);
-                    return RestartSelectMarker.RESTART_WITHOUT_DONE;
-                }
-                case ChannelClosed cc -> {
-                    cleanup(null);
-                    return cc;
-                }
-                case List<?> clausesToReRegister -> {
-                    // moving the state back to registering
-                    if (state.compareAndSet(currentState, SelectState.REGISTERING)) {
-                        //noinspection unchecked
-                        for (var clause : (List<SelectClause<?>>) clausesToReRegister) {
-                            // cleaning up & removing the stored select for the clause which we'll re-register
-                            var storedSelectsIterator = storedClauses.iterator();
-                            while (storedSelectsIterator.hasNext()) {
-                                var stored = storedSelectsIterator.next();
-                                if (stored.getClause() == clause) {
-                                    stored.cleanup();
-                                    storedSelectsIterator.remove();
-                                    break;
-                                }
-                            }
-
-                            if (!register(clause)) {
-                                // channel is closed, or clause was selected - in both cases, no point in further
-                                // re-registrations; the state should be appropriately updated
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof List) {
+                // moving the state back to registering
+                if (state.compareAndSet(currentState, SelectState.REGISTERING)) {
+                    //noinspection unchecked
+                    for (var clause : (List<SelectClause<?>>) currentState) {
+                        // cleaning up & removing the stored select for the clause which we'll re-register
+                        var storedSelectsIterator = storedClauses.iterator();
+                        while (storedSelectsIterator.hasNext()) {
+                            var stored = storedSelectsIterator.next();
+                            if (stored.getClause() == clause) {
+                                stored.cleanup();
+                                storedSelectsIterator.remove();
                                 break;
                             }
                         }
-                        // inspect the updated state in next iteration
+
+                        if (!register(clause)) {
+                            // channel is closed, or clause was selected - in both cases, no point in further
+                            // re-registrations; the state should be appropriately updated
+                            break;
+                        }
                     }
-                    // else: CAS unsuccessful, retry
+                    // inspect the updated state in next iteration
                 }
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof SelectClause<?> selectedClause) {
                 // clause selected during registration - result in `resultSelectedDuringRegistration`
-                case SelectClause<?> selectedClause -> {
-                    cleanup(selectedClause);
 
-                    // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
-                    return selectedClause.transformedRawValue(resultSelectedDuringRegistration);
-                }
+                cleanup(selectedClause);
+
+                // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
+                return selectedClause.transformedRawValue(resultSelectedDuringRegistration);
+            } else if (currentState instanceof StoredSelectClause ss) {
                 // clause selected with suspension - result in `StoredSelect.payload`
-                case StoredSelectClause ss -> {
-                    var selectedClause = ss.getClause();
-                    cleanup(selectedClause);
 
-                    // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
-                    return selectedClause.transformedRawValue(ss.getPayload());
-                }
-                default -> throw new IllegalStateException("Unknown state: " + currentState);
+                var selectedClause = ss.getClause();
+                cleanup(selectedClause);
+
+                // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
+                return selectedClause.transformedRawValue(ss.getPayload());
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // a channel which was referenced through a receive clause (skipWhenDone=true) became done - restarting
+
+                cleanup(null);
+                return RestartSelectMarker.RESTART_WITHOUT_DONE;
+            } else if (currentState instanceof ChannelClosed cc) {
+                cleanup(null);
+                return cc;
+            } else {
+                throw new IllegalStateException("Unknown state: " + currentState);
             }
         }
     }
@@ -332,52 +327,44 @@ class SelectInstance {
     boolean trySelect(StoredSelectClause storedSelectClause) {
         while (true) {
             var currentState = state.get();
-            switch (currentState) {
-                case SelectState.REGISTERING -> {
-                    if (state.compareAndSet(currentState, Collections.singletonList(storedSelectClause.getClause()))) {
-                        return false; // concurrent clause selection is not possible during registration
-                    }
-                    // else: CAS unsuccessful, retry
+            if (currentState == SelectState.REGISTERING) {
+                if (state.compareAndSet(currentState, Collections.singletonList(storedSelectClause.getClause()))) {
+                    return false; // concurrent clause selection is not possible during registration
                 }
-                case List<?> clausesToReRegister -> {
-                    // we need a new object for CAS
-                    var newClausesToReRegister = new ArrayList<SelectClause<?>>(clausesToReRegister.size() + 1);
-                    //noinspection unchecked
-                    newClausesToReRegister.addAll((Collection<? extends SelectClause<?>>) clausesToReRegister);
-                    newClausesToReRegister.add(storedSelectClause.getClause());
-                    if (state.compareAndSet(currentState, newClausesToReRegister)) {
-                        return false; // concurrent clause selection is not possible during registration
-                    }
-                    // else: CAS unsuccessful, retry
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof List<?> clausesToReRegister) {
+                // we need a new object for CAS
+                var newClausesToReRegister = new ArrayList<SelectClause<?>>(clausesToReRegister.size() + 1);
+                //noinspection unchecked
+                newClausesToReRegister.addAll((Collection<? extends SelectClause<?>>) clausesToReRegister);
+                newClausesToReRegister.add(storedSelectClause.getClause());
+                if (state.compareAndSet(currentState, newClausesToReRegister)) {
+                    return false; // concurrent clause selection is not possible during registration
                 }
-                case SelectState.INTERRUPTED -> {
-                    // already interrupted, will be cleaned up soon
-                    return false;
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof SelectClause) {
+                // already selected, will be cleaned up soon
+                return false;
+            } else if (currentState instanceof StoredSelectClause) {
+                // already selected, will be cleaned up soon
+                return false;
+            } else if (currentState instanceof Thread t) {
+                if (state.compareAndSet(currentState, storedSelectClause)) {
+                    LockSupport.unpark(t);
+                    return true;
                 }
-                case SelectState.SKIP_DONE -> {
-                    // closed, will be cleaned up soon (& restarted)
-                    return false;
-                }
-                case ChannelClosed cc -> {
-                    // closed, will be cleaned up soon
-                    return false;
-                }
-                case SelectClause<?> selectedClause -> {
-                    // already selected, will be cleaned up soon
-                    return false;
-                }
-                case StoredSelectClause ss -> {
-                    // already selected, will be cleaned up soon
-                    return false;
-                }
-                case Thread t -> {
-                    if (state.compareAndSet(currentState, storedSelectClause)) {
-                        LockSupport.unpark(t);
-                        return true;
-                    }
-                    // else: CAS unsuccessful, retry
-                }
-                default -> throw new IllegalStateException("Unknown state: " + currentState);
+                // else: CAS unsuccessful, retry
+            } else if (currentState == SelectState.INTERRUPTED) {
+                // already interrupted, will be cleaned up soon
+                return false;
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // closed, will be cleaned up soon (& restarted)
+                return false;
+            } else if (currentState instanceof ChannelClosed) {
+                // closed, will be cleaned up soon
+                return false;
+            } else {
+                throw new IllegalStateException("Unknown state: " + currentState);
             }
         }
     }
@@ -391,49 +378,41 @@ class SelectInstance {
             } else {
                 targetState = channelClosed;
             }
-            switch (currentState) {
-                case SelectState.REGISTERING -> {
-                    // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
-                    if (state.compareAndSet(currentState, targetState)) {
-                        return;
-                    }
-                    // else: CAS unsuccessful, retry
-                }
-                case List<?> clausesToReRegister -> {
-                    // same as above
-                    if (state.compareAndSet(currentState, targetState)) {
-                        return;
-                    }
-                    // else: CAS unsuccessful, retry
-                }
-                case SelectState.INTERRUPTED -> {
-                    // already interrupted
+            if (currentState == SelectState.REGISTERING) {
+                // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
+                if (state.compareAndSet(currentState, targetState)) {
                     return;
                 }
-                case SelectState.SKIP_DONE -> {
-                    // already closed
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof List) {
+                // same as above
+                if (state.compareAndSet(currentState, targetState)) {
                     return;
                 }
-                case ChannelClosed cc -> {
-                    // already closed
+                // else: CAS unsuccessful, retry
+            } else if (currentState instanceof SelectClause) {
+                // already selected
+                return;
+            } else if (currentState instanceof StoredSelectClause) {
+                // already selected
+                return;
+            } else if (currentState instanceof Thread t) {
+                if (state.compareAndSet(currentState, targetState)) {
+                    LockSupport.unpark(t);
                     return;
                 }
-                case SelectClause<?> selectedClause -> {
-                    // already selected
-                    return;
-                }
-                case StoredSelectClause ss -> {
-                    // already selected
-                    return;
-                }
-                case Thread t -> {
-                    if (state.compareAndSet(currentState, targetState)) {
-                        LockSupport.unpark(t);
-                        return;
-                    }
-                    // else: CAS unsuccessful, retry
-                }
-                default -> throw new IllegalStateException("Unknown state: " + currentState);
+                // else: CAS unsuccessful, retry
+            } else if (currentState == SelectState.INTERRUPTED) {
+                // already interrupted
+                return;
+            } else if (currentState == SelectState.SKIP_DONE) {
+                // already closed
+                return;
+            } else if (currentState instanceof ChannelClosed) {
+                // already closed
+                return;
+            } else {
+                throw new IllegalStateException("Unknown state: " + currentState);
             }
         }
     }
