@@ -207,18 +207,21 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             }
 
             var sendResult = updateCellSend(segment, i, s, value, select, selectClause);
-            if (sendResult == SendResult.AWAITED) {
-                // the thread was suspended and then resumed by a receiver or by buffer expansion
-                // not clearing the previous pointer, because of the buffering possibility
-                return null;
-            } else if (sendResult == SendResult.BUFFERED) {
+            if (sendResult == SendResult.BUFFERED) {
                 // a receiver is coming, or we are in buffer
                 // similarly as above, not clearing the previous pointer
+                return null;
+            } else if (sendResult == SendResult.AWAITED) {
+                // the thread was suspended and then resumed by a receiver or by buffer expansion
+                // not clearing the previous pointer, because of the buffering possibility
                 return null;
             } else if (sendResult == SendResult.RESUMED) {
                 // we resumed a receiver - we can be sure that R > s
                 segment.cleanPrev();
                 return null;
+            } else if (sendResult instanceof StoredSelectClause ss) {
+                // we stored a select instance - there's no matching receive, not clearing the previous segment
+                return ss;
             } else if (sendResult == SendResult.FAILED) {
                 // the cell was broken (hence already processed by a receiver) or interrupted (also a receiver
                 // must have been there); in both cases R > s
@@ -227,9 +230,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (sendResult == SendResult.CLOSED) {
                 // not cleaning the previous segments - the close procedure might still need it
                 return closedReason.get();
-            } else if (sendResult instanceof StoredSelectClause ss) {
-                // we stored a select instance - there's no matching receive, not clearing the previous segment
-                return ss;
             } else {
                 throw new IllegalStateException("Unexpected result: " + sendResult);
             }
@@ -413,9 +413,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private Object updateCellReceive(Segment segment, int i, long r, SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
-            var switchState = state == null ? IN_BUFFER : state; // we can't combine null+IN_BUFFER in the switch statement, hence cheating a bit here
 
-            if (switchState == IN_BUFFER) { // means that state == null || state == IN_BUFFER
+            if (state == null || state == IN_BUFFER) { // means that state == null || state == IN_BUFFER
                 if (r >= getSendersCounter(sendersAndClosedFlag.get())) { // reading the sender's counter
                     if (select != null) {
                         // cell is empty, no sender, and we are in a select -> store the select instance
@@ -449,7 +448,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                     // else: CAS unsuccessful, repeat
                 }
-            } else if (switchState instanceof Continuation c) {
+            } else if (state instanceof Continuation c) {
                 // resolving a potential race with `expandBuffer`
                 if (segment.casCell(i, state, RESUMING)) {
                     // a sender is waiting -> trying to resume
@@ -466,7 +465,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (switchState instanceof StoredSelectClause ss) {
+            } else if (state instanceof StoredSelectClause ss) {
                 // resolving a potential race with `expandBuffer`
                 if (segment.casCell(i, state, RESUMING)) {
                     // a send clause is waiting -> trying to resume
@@ -481,18 +480,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (switchState instanceof Buffered b) {
+            } else if (state instanceof Buffered b) {
                 segment.setCell(i, DONE);
                 expandBuffer();
                 // an elimination has happened -> finish
                 return b.value();
-            } else if (switchState == INTERRUPTED_SEND) {
+            } else if (state == INTERRUPTED_SEND) {
                 // cell interrupted -> trying with a new one
                 return ReceiveResult.FAILED;
-            } else if (switchState == RESUMING) {
+            } else if (state == RESUMING) {
                 // expandBuffer() is resuming the sender -> repeat
                 Thread.onSpinWait();
-            } else if (switchState == CLOSED) {
+            } else if (state == CLOSED) {
                 return ReceiveResult.CLOSED;
             } else {
                 throw new IllegalStateException("Unexpected state: " + state);
@@ -552,7 +551,19 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
 
-            if (state instanceof Continuation c && c.isSender()) {
+            if (state == null) {
+                // the cell is empty, a sender is or will be coming - set the cell as "in buffer" to let the sender know in case it's in progress
+                if (segment.casCell(i, null, IN_BUFFER)) {
+                    return ExpandBufferResult.DONE;
+                }
+                // else: CAS unsuccessful, repeat
+            } else if (state == DONE) {
+                // sender & receiver have already paired up, another buffer expansion already happened
+                return ExpandBufferResult.DONE;
+            } else if (state instanceof Buffered) {
+                // a value is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
+                return ExpandBufferResult.DONE;
+            } else if (state instanceof Continuation c && c.isSender()) {
                 if (segment.casCell(i, state, RESUMING)) {
                     // a sender is waiting -> trying to resume
                     if (c.tryResume(0)) {
@@ -567,7 +578,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (state instanceof Continuation c) {
+            } else if (state instanceof Continuation) {
                 // must be a receiver continuation - another buffer expansion already happened
                 return ExpandBufferResult.DONE;
             } else if (state instanceof StoredSelectClause ss && ss.isSender()) {
@@ -583,11 +594,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (state instanceof StoredSelectClause ss) {
+            } else if (state instanceof StoredSelectClause) {
                 // must be a receiver clause of the select - another buffer expansion already happened
-                return ExpandBufferResult.DONE;
-            } else if (state instanceof Buffered b) {
-                // a value is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
                 return ExpandBufferResult.DONE;
             } else if (state == INTERRUPTED_SEND) {
                 // a sender was interrupted - restart
@@ -595,17 +603,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (state == INTERRUPTED_RECEIVE) {
                 // a receiver continuation must have been here before - another buffer expansion already happened
                 return ExpandBufferResult.DONE;
-            } else if (state == null) {
-                // the cell is empty, a sender is or will be coming - set the cell as "in buffer" to let the sender know in case it's in progress
-                if (segment.casCell(i, null, IN_BUFFER)) {
-                    return ExpandBufferResult.DONE;
-                }
-                // else: CAS unsuccessful, repeat
             } else if (state == BROKEN) {
                 // the cell is broken, receive() started another buffer expansion
-                return ExpandBufferResult.DONE;
-            } else if (state == DONE) {
-                // sender & receiver have already paired up, another buffer expansion already happened
                 return ExpandBufferResult.DONE;
             } else if (state == RESUMING) {
                 Thread.onSpinWait(); // receive() is resuming the sender -> repeat
@@ -718,7 +717,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     segment.cellInterruptedReceiver();
                     return;
                 }
-            } else if (state instanceof Buffered b) {
+            } else if (state instanceof Buffered) {
                 // discarding the buffered value
                 if (segment.casCell(i, state, CLOSED)) {
                     segment.cellInterruptedReceiver();
@@ -909,6 +908,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public String toString() {
+        //noinspection OptionalGetWithoutIsPresent
         var smallestSegment = Stream.of(sendSegment.get(), receiveSegment.get(), bufferEndSegment.get())
                 .filter(s -> s != Segment.NULL_SEGMENT)
                 .min(Comparator.comparingLong(Segment::getId)).get();
@@ -949,11 +949,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     sb.append("V(").append(b.value()).append(")");
                 } else if (state instanceof Continuation c && c.isSender()) {
                     sb.append("WS(").append(c.getPayload()).append(")");
-                } else if (state instanceof Continuation c) {
+                } else if (state instanceof Continuation) {
                     sb.append("WR");
                 } else if (state instanceof StoredSelectClause ss && ss.isSender()) {
                     sb.append("SS");
-                } else if (state instanceof StoredSelectClause ss) {
+                } else if (state instanceof StoredSelectClause) {
                     sb.append("SR");
                 } else {
                     throw new IllegalStateException("Unexpected value: " + state);
@@ -1026,6 +1026,7 @@ final class Continuation {
     }
 
     private final Thread creatingThread;
+    @SuppressWarnings("unused")
     private volatile Object data; // set using DATA var handle
 
     private final Object payload;
