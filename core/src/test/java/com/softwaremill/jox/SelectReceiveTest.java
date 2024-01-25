@@ -179,6 +179,24 @@ public class SelectReceiveTest {
     }
 
     @Test
+    void testSelectWhenAllDone_withValues_immediate() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.done();
+        ch2.send("x");
+        ch2.done();
+
+        // when
+        Object received1 = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+        Object received2 = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+
+        // then
+        assertEquals("x", received1);
+        assertEquals(new ChannelDone(), received2);
+    }
+
+    @Test
     void testSelectWhenAllDone_suspend() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>(1);

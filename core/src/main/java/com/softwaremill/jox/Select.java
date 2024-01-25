@@ -98,15 +98,24 @@ public class Select {
                 // we need to restart the selection process
 
                 // next loop
-            } else if (r == RestartSelectMarker.RESTART_WITHOUT_DONE) {
+            } else if (r instanceof RestartSelectWithout rsw) {
                 // a channel is closed, for which there is a receive clause with skipWhenDone = true
-                // filtering out done channels, and if there are any left, restarting the selection process
+                // filtering out the done channel, and restarting the selection process
 
+                // as the channel reported that it's done, we know that there are no more pending elements to receive
+
+                // there will be one channel less
+                var newClauses = new SelectClause[currentClauses.length - 1];
+                var j = 0;
+                for (int i = 0; i < currentClauses.length; i++) {
+                    SelectClause<U> currentClause = currentClauses[i];
+                    if (currentClause.getChannel() != rsw.ch()) {
+                        newClauses[j] = currentClause;
+                        j += 1;
+                    }
+                }
                 //noinspection unchecked
-                currentClauses = Arrays.stream(currentClauses).filter(clause -> {
-                    var channel = clause.getChannel();
-                    return !clause.skipWhenDone() || channel == null || !channel.isDone();
-                }).toArray(SelectClause[]::new);
+                currentClauses = newClauses;
 
                 // next loop, with filtered clauses
             } else {
@@ -162,6 +171,7 @@ class SelectInstance {
      * - {@link ChannelClosed}
      * - a {@link List} of clauses to re-register
      * - when selected, {@link SelectClause} (during registration) or {@link StoredSelectClause} (with suspension)
+     * - {@link SkipBecauseDone}, to skip channels which are done, and are referenced through a receive clause (skipWhenDone=true)
      */
     private final AtomicReference<Object> state = new AtomicReference<>(SelectState.REGISTERING);
 
@@ -197,7 +207,7 @@ class SelectInstance {
             storedClauses.add(ss);
             return true;
         } else if (result instanceof ChannelDone && clause.skipWhenDone()) {
-            state.set(SelectState.SKIP_DONE);
+            state.set(new SkipBecauseDone(clause.getChannel()));
             return false;
         } else if (result instanceof ChannelClosed cc) {
             // when setting the state, we might override another state:
@@ -219,7 +229,8 @@ class SelectInstance {
     // main loop
 
     /**
-     * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any of the channels is closed.
+     * @return Either the value returned by the selected clause (which can include {@link RestartSelectMarker#RESTART}),
+     * {@link RestartSelectWithout}, or {@link ChannelClosed}, when any of the channels is closed.
      */
     Object checkStateAndWait() throws InterruptedException {
         while (true) {
@@ -294,11 +305,11 @@ class SelectInstance {
 
                 // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
                 return selectedClause.transformedRawValue(ss.getPayload());
-            } else if (currentState == SelectState.SKIP_DONE) {
-                // a channel which was referenced through a receive clause (skipWhenDone=true) became done - restarting
+            } else if (currentState instanceof SkipBecauseDone s) {
+                // a channel which was referenced through a receive clause (skipWhenDone=true) became done - restarting without that clause
 
                 cleanup(null);
-                return RestartSelectMarker.RESTART_WITHOUT_DONE;
+                return new RestartSelectWithout(s.ch());
             } else if (currentState instanceof ChannelClosed cc) {
                 cleanup(null);
                 return cc;
@@ -357,7 +368,7 @@ class SelectInstance {
             } else if (currentState == SelectState.INTERRUPTED) {
                 // already interrupted, will be cleaned up soon
                 return false;
-            } else if (currentState == SelectState.SKIP_DONE) {
+            } else if (currentState instanceof SkipBecauseDone) {
                 // closed, will be cleaned up soon (& restarted)
                 return false;
             } else if (currentState instanceof ChannelClosed) {
@@ -374,7 +385,7 @@ class SelectInstance {
             var currentState = state.get();
             Object targetState;
             if (channelClosed instanceof ChannelDone && storedSelectClause.getClause().skipWhenDone()) {
-                targetState = SelectState.SKIP_DONE;
+                targetState = new SkipBecauseDone(storedSelectClause.getClause().getChannel());
             } else {
                 targetState = channelClosed;
             }
@@ -405,7 +416,7 @@ class SelectInstance {
             } else if (currentState == SelectState.INTERRUPTED) {
                 // already interrupted
                 return;
-            } else if (currentState == SelectState.SKIP_DONE) {
+            } else if (currentState instanceof SkipBecauseDone) {
                 // already closed
                 return;
             } else if (currentState instanceof ChannelClosed) {
@@ -420,9 +431,10 @@ class SelectInstance {
 
 enum SelectState {
     REGISTERING,
-    INTERRUPTED,
-    SKIP_DONE
+    INTERRUPTED
 }
+
+record SkipBecauseDone(Channel<?> ch) {}
 
 //
 
@@ -472,6 +484,7 @@ class StoredSelectClause {
 }
 
 enum RestartSelectMarker {
-    RESTART,
-    RESTART_WITHOUT_DONE
+    RESTART
 }
+
+record RestartSelectWithout(Channel<?> ch) {}
