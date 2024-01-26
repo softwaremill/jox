@@ -71,16 +71,22 @@ public interface CloseableChannel {
 
     /**
      * @return {@code true} if the channel is closed using {@link #done()} or {@link #error(Throwable)}.
+     * When closed, {@link Sink#send(Object)} will throw {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant),
+     * while {@link Source#receive()} might return values, if some are still not received (if the channel is done, not in an error).
      */
     boolean isClosed();
 
     /**
      * @return {@code true} if the channel is closed using {@link #done()}. {@code false} if it's not closed, or closed with an error.
+     * When done, {@link Sink#send(Object)} will throw {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant),
+     * while {@link Source#receive()} might return values, if some are still not received.
      */
     boolean isDone();
 
     /**
      * @return {@code null} if the channel is not closed, or if it's closed with {@link ChannelDone}.
+     * When the channel is in an error, {@link Sink#send(Object)} and {@link Source#receive()} will always throw
+     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant).
      */
     Throwable isError();
 }

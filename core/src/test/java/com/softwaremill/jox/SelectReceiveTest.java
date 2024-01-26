@@ -3,6 +3,7 @@ package com.softwaremill.jox;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 
@@ -179,6 +180,24 @@ public class SelectReceiveTest {
     }
 
     @Test
+    void testSelectWhenAllDone_withValues_immediate() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.done();
+        ch2.send("x");
+        ch2.done();
+
+        // when
+        Object received1 = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+        Object received2 = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+
+        // then
+        assertEquals("x", received1);
+        assertEquals(new ChannelDone(), received2);
+    }
+
+    @Test
     void testSelectWhenAllDone_suspend() throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = new Channel<>(1);
@@ -235,6 +254,52 @@ public class SelectReceiveTest {
                     expectedReceived.add("ch" + i + "_" + j);
                 }
             }
+            assertEquals(expectedReceived, received);
+        });
+    }
+
+    @TestWithCapacities
+    void testReceiveManyUntilAllDone(int capacity) throws ExecutionException, InterruptedException {
+        // given
+        int channelsCount = 10;
+        int msgsCount = 100;
+
+        var channels = new ArrayList<Channel<String>>();
+        for (int i = 0; i < channelsCount; i++) {
+            channels.add(new Channel<>(capacity));
+        }
+
+        scoped(scope -> {
+            for (int i = 0; i < channelsCount; i++) {
+                var ch = channels.get(i);
+                int finalI = i;
+                forkVoid(scope, () -> {
+                    for (int j = 0; j < msgsCount; j++) {
+                        ch.send("ch" + finalI + "_" + j);
+                    }
+                    Thread.sleep(10);
+                    ch.done();
+                });
+            }
+
+            // when
+            var received = new HashSet<>();
+            var loop = true;
+            while (loop) {
+                var result = selectSafe(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new));
+                received.add(result);
+                loop = !(result instanceof ChannelDone);
+            }
+
+            // then
+            var expectedReceived = new HashSet<>();
+            for (int i = 0; i < channelsCount; i++) {
+                for (int j = 0; j < msgsCount; j++) {
+                    expectedReceived.add("ch" + i + "_" + j);
+                }
+            }
+            expectedReceived.add(new ChannelDone());
+
             assertEquals(expectedReceived, received);
         });
     }

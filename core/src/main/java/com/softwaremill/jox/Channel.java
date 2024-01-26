@@ -742,6 +742,12 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 ss.getSelect().channelClosed(ss, closedReason.get());
                 // not setting the state & updating counters, as each non-selected stored select cell will be
                 // cleaned up, setting an interrupted state (and informing the segment)
+                // until this happens, other (concurrent) invocations of `channelClosed` or `trySelect` will still
+                // observe the `StoredSelectClause` here: however, the select's internal state is changed, making
+                // senders/receivers proceed to the next cell; in other words, the race in changing the cell's state
+                // is delegated to the select's state
+
+                return;
             } else if (state == DONE || state == BROKEN) {
                 // nothing to do - a sender & receiver have already met
                 return;
@@ -1047,7 +1053,7 @@ final class Continuation {
      * Resume the continuation with the given value.
      *
      * @param value Should not be {@code null}.
-     * @return {@code true} tf the continuation was resumed successfully. {@code false} if it was interrupted.
+     * @return {@code true} if the continuation was resumed successfully. {@code false} if it was interrupted.
      */
     boolean tryResume(Object value) {
         var result = Continuation.DATA.compareAndSet(this, null, value);
