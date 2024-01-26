@@ -3,6 +3,7 @@ package com.softwaremill.jox;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 
@@ -257,15 +258,15 @@ public class SelectReceiveTest {
         });
     }
 
-    @Test
-    void testReceiveManyUntilAllDone() throws ExecutionException, InterruptedException {
+    @TestWithCapacities
+    void testReceiveManyUntilAllDone(int capacity) throws ExecutionException, InterruptedException {
         // given
         int channelsCount = 10;
-        int msgsCount = 10;
+        int msgsCount = 100;
 
         var channels = new ArrayList<Channel<String>>();
         for (int i = 0; i < channelsCount; i++) {
-            channels.add(new Channel<>(10));
+            channels.add(new Channel<>(capacity));
         }
 
         scoped(scope -> {
@@ -285,7 +286,7 @@ public class SelectReceiveTest {
             var received = new HashSet<>();
             var loop = true;
             while (loop) {
-                var result = selectSafe(channels.stream().map(Channel::receiveOrDoneClause).toArray(SelectClause[]::new));
+                var result = selectSafe(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new));
                 received.add(result);
                 loop = !(result instanceof ChannelDone);
             }
@@ -298,6 +299,7 @@ public class SelectReceiveTest {
                 }
             }
             expectedReceived.add(new ChannelDone());
+
             assertEquals(expectedReceived, received);
         });
     }
