@@ -6,11 +6,11 @@
     <parent>
         <groupId>com.softwaremill.jox</groupId>
         <artifactId>bench</artifactId>
-        <version>0.0.6</version>
+        <version>0.0.7</version>
     </parent>
 
     <artifactId>bench-java</artifactId>
-    <version>0.0.6</version>
+    <version>0.0.7</version>
     <packaging>jar</packaging>
 
     <build>
