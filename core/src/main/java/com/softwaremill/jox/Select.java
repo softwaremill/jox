@@ -381,14 +381,15 @@ class SelectInstance {
     }
 
     void channelClosed(StoredSelectClause storedSelectClause, ChannelClosed channelClosed) {
+        Object targetState;
+        if (channelClosed instanceof ChannelDone && storedSelectClause.getClause().skipWhenDone()) {
+            targetState = new SkipBecauseDone(storedSelectClause.getClause().getChannel());
+        } else {
+            targetState = channelClosed;
+        }
+
         while (true) {
             var currentState = state.get();
-            Object targetState;
-            if (channelClosed instanceof ChannelDone && storedSelectClause.getClause().skipWhenDone()) {
-                targetState = new SkipBecauseDone(storedSelectClause.getClause().getChannel());
-            } else {
-                targetState = channelClosed;
-            }
             if (currentState == SelectState.REGISTERING) {
                 // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
                 if (state.compareAndSet(currentState, targetState)) {

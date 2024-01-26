@@ -258,6 +258,51 @@ public class SelectReceiveTest {
     }
 
     @Test
+    void testReceiveManyUntilAllDone() throws ExecutionException, InterruptedException {
+        // given
+        int channelsCount = 10;
+        int msgsCount = 10;
+
+        var channels = new ArrayList<Channel<String>>();
+        for (int i = 0; i < channelsCount; i++) {
+            channels.add(new Channel<>(10));
+        }
+
+        scoped(scope -> {
+            for (int i = 0; i < channelsCount; i++) {
+                var ch = channels.get(i);
+                int finalI = i;
+                forkVoid(scope, () -> {
+                    for (int j = 0; j < msgsCount; j++) {
+                        ch.send("ch" + finalI + "_" + j);
+                    }
+                    Thread.sleep(10);
+                    ch.done();
+                });
+            }
+
+            // when
+            var received = new HashSet<>();
+            var loop = true;
+            while (loop) {
+                var result = selectSafe(channels.stream().map(Channel::receiveOrDoneClause).toArray(SelectClause[]::new));
+                received.add(result);
+                loop = !(result instanceof ChannelDone);
+            }
+
+            // then
+            var expectedReceived = new HashSet<>();
+            for (int i = 0; i < channelsCount; i++) {
+                for (int j = 0; j < msgsCount; j++) {
+                    expectedReceived.add("ch" + i + "_" + j);
+                }
+            }
+            expectedReceived.add(new ChannelDone());
+            assertEquals(expectedReceived, received);
+        });
+    }
+
+    @Test
     void testSelectWithTransformation() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(1);
