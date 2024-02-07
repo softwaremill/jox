@@ -24,36 +24,14 @@ public interface Source<T> extends CloseableChannel {
     /**
      * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
      * the current channel.
-     * <p>
-     * If the source is/becomes done, {@link Select#select(SelectClause[])} will restart with channels that are not done yet.
      */
     SelectClause<T> receiveClause();
 
     /**
      * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
      * the current channel, and transform it using the provided {@code callback}.
-     * <p>
-     * If the source is/becomes done, {@link Select#select(SelectClause[])} will restart with channels that are not done yet.
      */
     <U> SelectClause<U> receiveClause(Function<T, U> callback);
-
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
-     * the current channel.
-     * <p>
-     * If the source is/becomes done, {@link Select#select(SelectClause[])} will stop and throw {@link ChannelDoneException}
-     * or return a {@link ChannelDone} value (in the {@code safe} variant).
-     */
-    SelectClause<T> receiveOrDoneClause();
-
-    /**
-     * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from
-     * the current channel, and transform it using the provided {@code callback}.
-     * <p>
-     * If the source is/becomes done, {@link Select#select(SelectClause[])} will stop and throw {@link ChannelDoneException}
-     * or return a {@link ChannelDone} value (in the {@code safe} variant).
-     */
-    <U> SelectClause<U> receiveOrDoneClause(Function<T, U> callback);
 
     //
 

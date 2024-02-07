@@ -2,12 +2,8 @@ package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.concurrent.ExecutionException;
-
-import static com.softwaremill.jox.Select.*;
-import static com.softwaremill.jox.TestUtil.*;
+import static com.softwaremill.jox.Select.defaultClause;
+import static com.softwaremill.jox.Select.select;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
