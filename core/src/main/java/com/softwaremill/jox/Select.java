@@ -46,13 +46,10 @@ public class Select {
      * first.
      * <p>
      * If no clauses are given, or all clauses become filtered out, throws {@link ChannelDoneException}.
-     * <p>
-     * If a receive clause is selected for a channel that is done, select restarts, unless the clause is created with
-     * {@link Source#receiveOrDoneClause()}.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return The value returned by the selected clause.
-     * @throws ChannelClosedException When any of the channels is closed (done or in error), and the select doesn't restart.
+     * @throws ChannelClosedException When any of the channels is closed (done or in error).
      */
     @SafeVarargs
     public static <U> U select(SelectClause<U>... clauses) throws InterruptedException {
@@ -73,24 +70,20 @@ public class Select {
      * first.
      * <p>
      * If no clauses are given, or all clauses become filtered out, returns {@link ChannelDone}.
-     * <p>
-     * If a receive clause is selected for a channel that is done, select restarts, unless the clause is created with
-     * {@link Source#receiveOrDoneClause()}.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any of the channels
-     * is closed (done or in error), and the select doesn't restart.
+     * is closed (done or in error).
      */
     @SafeVarargs
     public static <U> Object selectSafe(SelectClause<U>... clauses) throws InterruptedException {
-        var currentClauses = clauses;
         while (true) {
-            if (currentClauses.length == 0) {
+            if (clauses.length == 0) {
                 // no clauses given, or all clauses were filtered out
                 return new ChannelDone();
             }
 
-            var r = doSelectSafe(currentClauses);
+            var r = doSelectSafe(clauses);
             //noinspection StatementWithEmptyBody
             if (r == RestartSelectMarker.RESTART) {
                 // in case a `CollectSource` function filters out the element (the transformation function returns `null`,
@@ -98,26 +91,6 @@ public class Select {
                 // we need to restart the selection process
 
                 // next loop
-            } else if (r instanceof RestartSelectWithout rsw) {
-                // a channel is closed, for which there is a receive clause with skipWhenDone = true
-                // filtering out the done channel, and restarting the selection process
-
-                // as the channel reported that it's done, we know that there are no more pending elements to receive
-
-                // there will be one channel less
-                var newClauses = new SelectClause[currentClauses.length - 1];
-                var j = 0;
-                for (int i = 0; i < currentClauses.length; i++) {
-                    SelectClause<U> currentClause = currentClauses[i];
-                    if (currentClause.getChannel() != rsw.ch()) {
-                        newClauses[j] = currentClause;
-                        j += 1;
-                    }
-                }
-                //noinspection unchecked
-                currentClauses = newClauses;
-
-                // next loop, with filtered clauses
             } else {
                 return r;
             }
@@ -171,7 +144,6 @@ class SelectInstance {
      * - {@link ChannelClosed}
      * - a {@link List} of clauses to re-register
      * - when selected, {@link SelectClause} (during registration) or {@link StoredSelectClause} (with suspension)
-     * - {@link SkipBecauseDone}, to skip channels which are done, and are referenced through a receive clause (skipWhenDone=true)
      */
     private final AtomicReference<Object> state = new AtomicReference<>(SelectState.REGISTERING);
 
@@ -206,9 +178,6 @@ class SelectInstance {
             // keeping the stored select to later call cleanup()
             storedClauses.add(ss);
             return true;
-        } else if (result instanceof ChannelDone && clause.skipWhenDone()) {
-            state.set(new SkipBecauseDone(clause.getChannel()));
-            return false;
         } else if (result instanceof ChannelClosed cc) {
             // when setting the state, we might override another state:
             // - a list of clauses to re-register - there's no point in doing that anyway (since the channel is closed)
@@ -230,7 +199,7 @@ class SelectInstance {
 
     /**
      * @return Either the value returned by the selected clause (which can include {@link RestartSelectMarker#RESTART}),
-     * {@link RestartSelectWithout}, or {@link ChannelClosed}, when any of the channels is closed.
+     * or {@link ChannelClosed}, when any of the channels is closed.
      */
     Object checkStateAndWait() throws InterruptedException {
         while (true) {
@@ -305,11 +274,6 @@ class SelectInstance {
 
                 // running the transformation at the end, after the cleanup is done, in case this throws any exceptions
                 return selectedClause.transformedRawValue(ss.getPayload());
-            } else if (currentState instanceof SkipBecauseDone s) {
-                // a channel which was referenced through a receive clause (skipWhenDone=true) became done - restarting without that clause
-
-                cleanup(null);
-                return new RestartSelectWithout(s.ch());
             } else if (currentState instanceof ChannelClosed cc) {
                 cleanup(null);
                 return cc;
@@ -368,9 +332,6 @@ class SelectInstance {
             } else if (currentState == SelectState.INTERRUPTED) {
                 // already interrupted, will be cleaned up soon
                 return false;
-            } else if (currentState instanceof SkipBecauseDone) {
-                // closed, will be cleaned up soon (& restarted)
-                return false;
             } else if (currentState instanceof ChannelClosed) {
                 // closed, will be cleaned up soon
                 return false;
@@ -381,24 +342,17 @@ class SelectInstance {
     }
 
     void channelClosed(StoredSelectClause storedSelectClause, ChannelClosed channelClosed) {
-        Object targetState;
-        if (channelClosed instanceof ChannelDone && storedSelectClause.getClause().skipWhenDone()) {
-            targetState = new SkipBecauseDone(storedSelectClause.getClause().getChannel());
-        } else {
-            targetState = channelClosed;
-        }
-
         while (true) {
             var currentState = state.get();
             if (currentState == SelectState.REGISTERING) {
                 // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
-                if (state.compareAndSet(currentState, targetState)) {
+                if (state.compareAndSet(currentState, channelClosed)) {
                     return;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState instanceof List) {
                 // same as above
-                if (state.compareAndSet(currentState, targetState)) {
+                if (state.compareAndSet(currentState, channelClosed)) {
                     return;
                 }
                 // else: CAS unsuccessful, retry
@@ -409,16 +363,13 @@ class SelectInstance {
                 // already selected
                 return;
             } else if (currentState instanceof Thread t) {
-                if (state.compareAndSet(currentState, targetState)) {
+                if (state.compareAndSet(currentState, channelClosed)) {
                     LockSupport.unpark(t);
                     return;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState == SelectState.INTERRUPTED) {
                 // already interrupted
-                return;
-            } else if (currentState instanceof SkipBecauseDone) {
-                // already closed
                 return;
             } else if (currentState instanceof ChannelClosed) {
                 // already closed
@@ -434,8 +385,6 @@ enum SelectState {
     REGISTERING,
     INTERRUPTED
 }
-
-record SkipBecauseDone(Channel<?> ch) {}
 
 //
 
@@ -487,5 +436,3 @@ class StoredSelectClause {
 enum RestartSelectMarker {
     RESTART
 }
-
-record RestartSelectWithout(Channel<?> ch) {}

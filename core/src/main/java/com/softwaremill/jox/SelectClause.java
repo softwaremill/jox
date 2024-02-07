@@ -23,8 +23,6 @@ public abstract class SelectClause<T> {
      * Might throw any exceptions that the provided transformation function throws.
      */
     abstract T transformedRawValue(Object rawValue);
-
-    abstract boolean skipWhenDone();
 }
 
 class DefaultClause<T> extends SelectClause<T> {
@@ -47,11 +45,6 @@ class DefaultClause<T> extends SelectClause<T> {
     @Override
     T transformedRawValue(Object rawValue) {
         return callback.get();
-    }
-
-    @Override
-    boolean skipWhenDone() {
-        return false; // no associated channel, this value is never used
     }
 }
 
