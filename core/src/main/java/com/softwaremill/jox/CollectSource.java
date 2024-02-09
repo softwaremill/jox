@@ -102,17 +102,12 @@ public class CollectSource<V, T> implements Source<T> {
     }
 
     @Override
-    public boolean isClosed() {
-        return original.isClosed();
+    public ChannelClosed closedForSend() {
+        return original.closedForSend();
     }
 
     @Override
-    public boolean isDone() {
-        return original.isDone();
-    }
-
-    @Override
-    public Throwable isError() {
-        return original.isError();
+    public ChannelClosed closedForReceive() {
+        return original.closedForReceive();
     }
 }

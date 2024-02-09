@@ -414,7 +414,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         while (true) {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
 
-            if (state == null || state == IN_BUFFER) { // means that state == null || state == IN_BUFFER
+            if (state == null || state == IN_BUFFER) {
                 if (r >= getSendersCounter(sendersAndClosedFlag.get())) { // reading the sender's counter
                     if (select != null) {
                         // cell is empty, no sender, and we are in a select -> store the select instance
@@ -763,22 +763,99 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     @Override
-    public boolean isClosed() {
-        return closedReason.get() != null;
+    public ChannelClosed closedForSend() {
+        return isClosed(sendersAndClosedFlag.get()) ? closedReason.get() : null;
     }
 
     @Override
-    public boolean isDone() {
-        return closedReason.get() instanceof ChannelDone;
-    }
-
-    @Override
-    public Throwable isError() {
-        var reason = closedReason.get();
-        if (reason instanceof ChannelError e) {
-            return e.cause();
+    public ChannelClosed closedForReceive() {
+        if (isClosed(sendersAndClosedFlag.get())) {
+            var cr = closedReason.get(); // cannot be null
+            if (cr instanceof ChannelError) {
+                return cr;
+            } else {
+                // channel is done, checking if there's anything left to receive
+                return hasValuesToReceive() ? null : cr;
+            }
         } else {
             return null;
+        }
+    }
+
+    private boolean hasValuesToReceive() {
+        while (true) {
+            // reading the segment before the counter - this is needed to find the required segment later
+            var segment = receiveSegment.get();
+            // r is the cell which will be used by the next receive
+            var r = receivers.get();
+            var s = getSendersCounter(sendersAndClosedFlag.get());
+
+            if (s <= r) {
+                // for sure, nothing is buffered / no senders are waiting
+                return false;
+            }
+
+            // calculating the segment id and the index within the segment
+            var id = r / Segment.SEGMENT_SIZE;
+            var i = (int) (r % Segment.SEGMENT_SIZE);
+
+            // check if `receiveSegment` stores a previous segment, if so move the reference forward
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(receiveSegment, segment, id);
+                if (segment == null) {
+                    // the channel has been closed, r points to a segment which doesn't exist
+                    return false;
+                }
+
+                // if we still have another segment, the segment must have been removed
+                if (segment.getId() != id) {
+                    // skipping all interrupted cells, and trying with a new one
+                    receivers.compareAndSet(r, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            // we know that s > r
+            segment.cleanPrev();
+
+            if (hasValueToReceive(segment, i, r)) {
+                return true;
+            } else {
+                // nothing to receive, we can (try to, if not already done) bump the counter and try again
+                receivers.compareAndSet(r, r + 1);
+            }
+        }
+    }
+
+    private boolean hasValueToReceive(Segment segment, int i, long r) {
+        while (true) {
+            var state = segment.getCell(i); // reading the current state of the cell
+
+            if (state == null || state == IN_BUFFER) {
+                // this can only happen if a sender is in progress (we checked before that s > r)
+                // waiting what the sender is going to do -> repeat
+                Thread.onSpinWait();
+            } else if (state instanceof Continuation c) {
+                // a receiver might have gotten suspended while hasValuesToReceive() is running - then, no value to receive here & the r counter is updated.
+                return c.isSender();
+            } else if (state instanceof StoredSelectClause ss) {
+                return ss.isSender(); // as above
+            } else if (state instanceof Buffered) {
+                return true;
+            } else if (state == INTERRUPTED_SEND || state == INTERRUPTED_RECEIVE) {
+                // cell interrupted -> nothing to receive; in case of an interrupted receiver, the counter is already updated
+                return false;
+            } else if (state == RESUMING) {
+                // receive() or expandBuffer() is resuming the sender -> repeat
+                Thread.onSpinWait();
+            } else if (state == CLOSED) {
+                return false;
+            } else if (state == DONE || state == BROKEN) {
+                // a concurrent receiver already finished / poisoned the cell
+                return false;
+            } else {
+                throw new IllegalStateException("Unexpected state: " + state);
+            }
         }
     }
 
