@@ -3,10 +3,6 @@ package com.softwaremill.jox;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.concurrent.ExecutionException;
-
-import static com.softwaremill.jox.TestUtil.forkVoid;
-import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 

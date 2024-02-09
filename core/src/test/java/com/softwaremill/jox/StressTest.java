@@ -5,8 +5,7 @@ import java.util.concurrent.*;
 
 import static com.softwaremill.jox.Select.selectSafe;
 import static com.softwaremill.jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class StressTest {
     @TestWithCapacities
@@ -53,7 +52,7 @@ public class StressTest {
                             for (int j = 0; j < numberOfIterations; j++) {
                                 stressTestIteration(data, j);
                             }
-                            // if this is the first fork, after all the iterations complete, close the channel
+                            // if this is the first fork, after all the iterations complete, close the channels
                             if (finalI == 0) {
                                 for (var ch : chs) {
                                     ch.done();
@@ -93,6 +92,7 @@ public class StressTest {
                     for (var ch : chs) {
                         List<String> remainingInChannel = drainChannel(ch);
                         allReceived.addAll(remainingInChannel);
+                        assertTrue(ch.isClosedForReceive());
                     }
                     assertEquals(allSent, allReceived, "each sent message should have been received, or drained");
 

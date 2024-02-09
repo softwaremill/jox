@@ -108,7 +108,7 @@ the sink processes the received values.
 use the `sendSafe()` and `receiveSafe()` methods, which return either a `ChannelClosed` value (reason of closure),
 or `null` / the received value.
 
-Channels can also be inspected whether they are closed, using the `isClosed()`, `isDone()` and `isError()` methods.
+Channels can also be inspected whether they are closed, using the `isClosedForReceive()` and `isClosedForSend()`.
 
 ```java
 import com.softwaremill.jox.Channel;
