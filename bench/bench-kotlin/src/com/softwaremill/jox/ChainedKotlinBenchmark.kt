@@ -18,7 +18,7 @@ open class ChainedKotlinBenchmark {
     @Param("0", "100")
     var capacity: Int = 0
 
-    @Param("100", "1000", "10000")
+    @Param("10000")
     var chainLength: Int = 0
 
     @Benchmark
