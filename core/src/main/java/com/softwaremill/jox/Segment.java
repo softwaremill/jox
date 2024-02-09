@@ -14,8 +14,8 @@ final class Segment {
     - in bits 7 & 8, we store the number of incoming pointers to this segment
      */
 
-    static final int SEGMENT_SIZE = 32; // 2^5
-    private static final int POINTERS_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
+    static final int SEGMENT_SIZE = 128; // 2^7
+    private static final int POINTERS_SHIFT = 8; // to store values between 0 and 128 (inclusive) we need 8 bits
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
     /**
