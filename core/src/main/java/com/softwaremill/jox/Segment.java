@@ -2,9 +2,6 @@ package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.AtomicReferenceArray;
 
 final class Segment {
     /*
@@ -28,7 +25,7 @@ final class Segment {
     }
 
     private final long id;
-    private final AtomicReferenceArray<Object> data = new AtomicReferenceArray<>(SEGMENT_SIZE);
+    private final Object[] _data = new Object[SEGMENT_SIZE];
     /**
      * Possible values: {@code Segment} or {@code State.CLOSED} (union type).
      */
@@ -46,6 +43,7 @@ final class Segment {
     private static final VarHandle NEXT;
     private static final VarHandle PREV;
     private static final VarHandle POINTERS_NOT_PROCESSED_AND_INTERRUPTED;
+    private static final VarHandle DATA;
 
     static {
         try {
@@ -53,6 +51,7 @@ final class Segment {
             NEXT = l.findVarHandle(Segment.class, "_next", Object.class);
             PREV = l.findVarHandle(Segment.class, "_prev", Segment.class);
             POINTERS_NOT_PROCESSED_AND_INTERRUPTED = l.findVarHandle(Segment.class, "_pointers_notProcessedAndInterrupted", int.class);
+            DATA = MethodHandles.arrayElementVarHandle(Object[].class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -87,15 +86,15 @@ final class Segment {
     }
 
     Object getCell(int index) {
-        return data.get(index);
+        return DATA.get(_data, index);
     }
 
     void setCell(int index, Object value) {
-        data.set(index, value);
+        DATA.set(_data, index, value);
     }
 
     boolean casCell(int index, Object expected, Object newValue) {
-        return data.compareAndSet(index, expected, newValue);
+        return DATA.compareAndSet(_data, index, expected, newValue);
     }
 
     private boolean isTail() {
