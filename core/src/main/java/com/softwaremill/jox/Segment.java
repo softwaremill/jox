@@ -1,5 +1,6 @@
 package com.softwaremill.jox;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -221,13 +222,13 @@ final class Segment {
      *
      * @return The found segment, or {@code null} if the segment chain is closed.
      */
-    static Segment findAndMoveForward(AtomicReference<Segment> ref, Segment start, long id) {
+    static Segment findAndMoveForward(VarHandle segmentVarHandle, Object segmentThis, Segment start, long id) {
         while (true) {
             var segment = findSegment(start, id);
             if (segment == null) {
                 return null;
             }
-            if (moveForward(ref, segment)) {
+            if (moveForward(segmentVarHandle, segmentThis, segment)) {
                 return segment;
             }
         }
@@ -271,9 +272,9 @@ final class Segment {
      * @param to The segment to move the referenced segment to.
      * @return {@code true} if the move was successful, or a newer segment is already set, {@code false} otherwise.
      */
-    private static boolean moveForward(AtomicReference<Segment> ref, Segment to) {
+    private static boolean moveForward(VarHandle segmentVarHandle, Object segmentThis, Segment to) {
         while (true) {
-            var current = ref.get();
+            var current = (Segment) segmentVarHandle.get(segmentThis);
             // the send segment might be already updated
             if (current.getId() >= to.getId()) {
                 return true;
@@ -283,7 +284,7 @@ final class Segment {
                 return false;
             }
             // try to update the ref
-            if (ref.compareAndSet(current, to)) {
+            if (segmentVarHandle.compareAndSet(segmentThis, current, to)) {
                 // decrement pointers incoming to `to`, as it's no longer referenced via ref
                 if (current.decPointers()) {
                     current.remove();
