@@ -746,14 +746,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 // is delegated to the select's state
 
                 return;
-            } else if (state == DONE || state == BROKEN) {
-                // nothing to do - a sender & receiver have already met
-                return;
-            } else if (state == INTERRUPTED_RECEIVE || state == INTERRUPTED_SEND) {
-                // nothing to do - segment counters already decremented
-                return;
-            } else if (state == RESUMING) {
-                Thread.onSpinWait(); // receive() or expandBuffer() are resuming the cell - wait
+            } else if (state instanceof CellState) {
+                if (state == DONE || state == BROKEN) {
+                    // nothing to do - a sender & receiver have already met
+                    return;
+                } else if (state == INTERRUPTED_RECEIVE || state == INTERRUPTED_SEND) {
+                    // nothing to do - segment counters already decremented
+                    return;
+                } else if (state == RESUMING) {
+                    Thread.onSpinWait(); // receive() or expandBuffer() are resuming the cell - wait
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
                 // buffered value: discarding
                 if (segment.casCell(i, state, CLOSED)) {
