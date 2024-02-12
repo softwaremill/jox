@@ -101,7 +101,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private final AtomicLong bufferEnd;
 
     /**
-     * Segments holding cell states. State can be {@link CellState}, {@link Continuation} or a user-provided buffered value.
+     * Segments holding cell states. State can be {@link CellState}, {@link Continuation}, {@link SelectInstance}, or a user-provided buffered value.
      */
     private final AtomicReference<Segment> sendSegment;
     private final AtomicReference<Segment> receiveSegment;
@@ -480,14 +480,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (state == INTERRUPTED_SEND) {
-                // cell interrupted -> trying with a new one
-                return ReceiveResult.FAILED;
-            } else if (state == RESUMING) {
-                // expandBuffer() is resuming the sender -> repeat
-                Thread.onSpinWait();
-            } else if (state == CLOSED) {
-                return ReceiveResult.CLOSED;
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND) {
+                    // cell interrupted -> trying with a new one
+                    return ReceiveResult.FAILED;
+                } else if (state == RESUMING) {
+                    // expandBuffer() is resuming the sender -> repeat
+                    Thread.onSpinWait();
+                } else if (state == CLOSED) {
+                    return ReceiveResult.CLOSED;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else { // buffered value
                 segment.setCell(i, DONE);
                 expandBuffer();
@@ -592,21 +596,25 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (state instanceof StoredSelectClause) {
                 // must be a receiver clause of the select - another buffer expansion already happened
                 return ExpandBufferResult.DONE;
-            } else if (state == INTERRUPTED_SEND) {
-                // a sender was interrupted - restart
-                return ExpandBufferResult.FAILED;
-            } else if (state == INTERRUPTED_RECEIVE) {
-                // a receiver continuation must have been here before - another buffer expansion already happened
-                return ExpandBufferResult.DONE;
-            } else if (state == BROKEN) {
-                // the cell is broken, receive() started another buffer expansion
-                return ExpandBufferResult.DONE;
-            } else if (state == RESUMING) {
-                Thread.onSpinWait(); // receive() is resuming the sender -> repeat
-            } else if (state == CLOSED) {
-                // the channel is closed, all subsequent cells must have already been closed (as we're closing from
-                // the end)
-                return ExpandBufferResult.CLOSED;
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND) {
+                    // a sender was interrupted - restart
+                    return ExpandBufferResult.FAILED;
+                } else if (state == INTERRUPTED_RECEIVE) {
+                    // a receiver continuation must have been here before - another buffer expansion already happened
+                    return ExpandBufferResult.DONE;
+                } else if (state == BROKEN) {
+                    // the cell is broken, receive() started another buffer expansion
+                    return ExpandBufferResult.DONE;
+                } else if (state == RESUMING) {
+                    Thread.onSpinWait(); // receive() is resuming the sender -> repeat
+                } else if (state == CLOSED) {
+                    // the channel is closed, all subsequent cells must have already been closed (as we're closing from
+                    // the end)
+                    return ExpandBufferResult.CLOSED;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
                 // buffered value: if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
                 return ExpandBufferResult.DONE;
@@ -834,17 +842,21 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 return c.isSender();
             } else if (state instanceof StoredSelectClause ss) {
                 return ss.isSender(); // as above
-            } else if (state == INTERRUPTED_SEND || state == INTERRUPTED_RECEIVE) {
-                // cell interrupted -> nothing to receive; in case of an interrupted receiver, the counter is already updated
-                return false;
-            } else if (state == RESUMING) {
-                // receive() or expandBuffer() is resuming the sender -> repeat
-                Thread.onSpinWait();
-            } else if (state == CLOSED) {
-                return false;
-            } else if (state == DONE || state == BROKEN) {
-                // a concurrent receiver already finished / poisoned the cell
-                return false;
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND || state == INTERRUPTED_RECEIVE) {
+                    // cell interrupted -> nothing to receive; in case of an interrupted receiver, the counter is already updated
+                    return false;
+                } else if (state == RESUMING) {
+                    // receive() or expandBuffer() is resuming the sender -> repeat
+                    Thread.onSpinWait();
+                } else if (state == CLOSED) {
+                    return false;
+                } else if (state == DONE || state == BROKEN) {
+                    // a concurrent receiver already finished / poisoned the cell
+                    return false;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
                 // buffered value
                 return true;
