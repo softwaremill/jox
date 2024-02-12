@@ -210,9 +210,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             var segment = _sendSegment;
             // reserving the next cell
             var scf = (long) SENDERS_AND_CLOSE_FLAG.getAndAdd(this, 1);
-            if (isClosed(scf)) {
-                return closedReason.get();
-            }
             var s = getSendersCounter(scf);
 
             // calculating the segment id and the index within the segment
@@ -233,6 +230,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     SENDERS_AND_CLOSE_FLAG.compareAndSet(this, s, segment.getId() * Segment.SEGMENT_SIZE);
                     continue;
                 }
+            }
+
+            // performing the check only now, as even if the channel is closed, we want to move the send segment
+            // reference forward, so that segments which become eligible for removal can be GCed (after the channel
+            // is closed, e.g. when the channel is done and there are some values left to be received)
+            if (isClosed(scf)) {
+                return closedReason.get();
             }
 
             var sendResult = updateCellSend(segment, i, s, value, select, selectClause);
