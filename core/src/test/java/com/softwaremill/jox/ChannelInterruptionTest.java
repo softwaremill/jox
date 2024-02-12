@@ -112,4 +112,51 @@ public class ChannelInterruptionTest {
             await().atMost(1, SECONDS).until(() -> received.equals(Set.of("a", "b")));
         });
     }
+
+    @Test
+    void testManyInterruptedReceivesShouldNotLeakMemory() throws InterruptedException, ExecutionException {
+        var ch = new Channel<String>();
+
+        scoped(scope -> {
+            var forks = new Fork[300];
+            for (int i = 0; i < forks.length; i++) {
+                forks[i] = forkCancelable(scope, () -> {
+                    ch.receive();
+                });
+            }
+
+            Thread.sleep(500); // waiting for all forks to suspend
+            for (var f : forks) {
+                f.cancel();
+            }
+
+            // checking the number of segments
+            var segments = countOccurrences(ch.toString(), "Segment{");
+            assertEquals(2, segments, "More than 2 segments found in channel:\n" + ch);
+        });
+    }
+
+    @Test
+    void testManyInterruptedSendsShouldNotLeakMemory() throws InterruptedException, ExecutionException {
+        var ch = new Channel<String>(1);
+        ch.send("x");
+
+        scoped(scope -> {
+            var forks = new Fork[300];
+            for (int i = 0; i < forks.length; i++) {
+                forks[i] = forkCancelable(scope, () -> {
+                    ch.send("y");
+                });
+            }
+
+            Thread.sleep(500); // waiting for all forks to suspend
+            for (var f : forks) {
+                f.cancel();
+            }
+
+            // checking the number of segments
+            var segments = countOccurrences(ch.toString(), "Segment{");
+            assertEquals(2, segments, "More than 2 segments found in channel:\n" + ch);
+        });
+    }
 }
