@@ -101,7 +101,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private final AtomicLong bufferEnd;
 
     /**
-     * Segments holding cell states. State can be {@link CellState}, {@link Buffered}, or {@link Continuation}.
+     * Segments holding cell states. State can be {@link CellState}, {@link Continuation}, {@link SelectInstance}, or a user-provided buffered value.
      */
     private final AtomicReference<Segment> sendSegment;
     private final AtomicReference<Segment> receiveSegment;
@@ -273,14 +273,14 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 } else {
                     // cell is empty, but a receiver is in progress, or in buffer -> elimination
-                    if (segment.casCell(i, null, new Buffered(value))) {
+                    if (segment.casCell(i, null, value)) {
                         return SendResult.BUFFERED;
                     }
                     // else: CAS unsuccessful, repeat
                 }
             } else if (state == IN_BUFFER) {
                 // cell just became part of the buffer
-                if (segment.casCell(i, IN_BUFFER, new Buffered(value))) {
+                if (segment.casCell(i, IN_BUFFER, value)) {
                     return SendResult.BUFFERED;
                 }
                 // else: CAS unsuccessful, repeat
@@ -480,21 +480,23 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     }
                 }
                 // else: CAS unsuccessful, repeat
-            } else if (state instanceof Buffered b) {
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND) {
+                    // cell interrupted -> trying with a new one
+                    return ReceiveResult.FAILED;
+                } else if (state == RESUMING) {
+                    // expandBuffer() is resuming the sender -> repeat
+                    Thread.onSpinWait();
+                } else if (state == CLOSED) {
+                    return ReceiveResult.CLOSED;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
+            } else { // buffered value
                 segment.setCell(i, DONE);
                 expandBuffer();
                 // an elimination has happened -> finish
-                return b.value();
-            } else if (state == INTERRUPTED_SEND) {
-                // cell interrupted -> trying with a new one
-                return ReceiveResult.FAILED;
-            } else if (state == RESUMING) {
-                // expandBuffer() is resuming the sender -> repeat
-                Thread.onSpinWait();
-            } else if (state == CLOSED) {
-                return ReceiveResult.CLOSED;
-            } else {
-                throw new IllegalStateException("Unexpected state: " + state);
+                return state;
             }
         }
     }
@@ -560,14 +562,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (state == DONE) {
                 // sender & receiver have already paired up, another buffer expansion already happened
                 return ExpandBufferResult.DONE;
-            } else if (state instanceof Buffered) {
-                // a value is already buffered; if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
-                return ExpandBufferResult.DONE;
             } else if (state instanceof Continuation c && c.isSender()) {
                 if (segment.casCell(i, state, RESUMING)) {
                     // a sender is waiting -> trying to resume
                     if (c.tryResume(0)) {
-                        segment.setCell(i, new Buffered(c.getPayload()));
+                        segment.setCell(i, c.getPayload());
                         return ExpandBufferResult.DONE;
                     } else {
                         // when cell interrupted -> trying with a new one
@@ -585,7 +584,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 if (segment.casCell(i, state, RESUMING)) {
                     // a send clause is waiting -> trying to resume
                     if (ss.getSelect().trySelect(ss)) {
-                        segment.setCell(i, new Buffered(ss.getPayload()));
+                        segment.setCell(i, ss.getPayload());
                         return ExpandBufferResult.DONE;
                     } else {
                         // select unsuccessful -> trying with a new one
@@ -597,23 +596,28 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (state instanceof StoredSelectClause) {
                 // must be a receiver clause of the select - another buffer expansion already happened
                 return ExpandBufferResult.DONE;
-            } else if (state == INTERRUPTED_SEND) {
-                // a sender was interrupted - restart
-                return ExpandBufferResult.FAILED;
-            } else if (state == INTERRUPTED_RECEIVE) {
-                // a receiver continuation must have been here before - another buffer expansion already happened
-                return ExpandBufferResult.DONE;
-            } else if (state == BROKEN) {
-                // the cell is broken, receive() started another buffer expansion
-                return ExpandBufferResult.DONE;
-            } else if (state == RESUMING) {
-                Thread.onSpinWait(); // receive() is resuming the sender -> repeat
-            } else if (state == CLOSED) {
-                // the channel is closed, all subsequent cells must have already been closed (as we're closing from
-                // the end)
-                return ExpandBufferResult.CLOSED;
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND) {
+                    // a sender was interrupted - restart
+                    return ExpandBufferResult.FAILED;
+                } else if (state == INTERRUPTED_RECEIVE) {
+                    // a receiver continuation must have been here before - another buffer expansion already happened
+                    return ExpandBufferResult.DONE;
+                } else if (state == BROKEN) {
+                    // the cell is broken, receive() started another buffer expansion
+                    return ExpandBufferResult.DONE;
+                } else if (state == RESUMING) {
+                    Thread.onSpinWait(); // receive() is resuming the sender -> repeat
+                } else if (state == CLOSED) {
+                    // the channel is closed, all subsequent cells must have already been closed (as we're closing from
+                    // the end)
+                    return ExpandBufferResult.CLOSED;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
-                throw new IllegalStateException("Unexpected state: " + state);
+                // buffered value: if the ordering of operations was different, we would put IN_BUFFER in that cell and finish
+                return ExpandBufferResult.DONE;
             }
         }
     }
@@ -717,12 +721,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     segment.cellInterruptedReceiver();
                     return;
                 }
-            } else if (state instanceof Buffered) {
-                // discarding the buffered value
-                if (segment.casCell(i, state, CLOSED)) {
-                    segment.cellInterruptedReceiver();
-                    return;
-                }
             } else if (state instanceof Continuation c) {
                 // potential race with sender/receiver resuming the continuation - resolved by synchronizing on
                 // `Continuation.data`: only one thread will successfully change its value from `null`
@@ -748,16 +746,24 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 // is delegated to the select's state
 
                 return;
-            } else if (state == DONE || state == BROKEN) {
-                // nothing to do - a sender & receiver have already met
-                return;
-            } else if (state == INTERRUPTED_RECEIVE || state == INTERRUPTED_SEND) {
-                // nothing to do - segment counters already decremented
-                return;
-            } else if (state == RESUMING) {
-                Thread.onSpinWait(); // receive() or expandBuffer() are resuming the cell - wait
+            } else if (state instanceof CellState) {
+                if (state == DONE || state == BROKEN) {
+                    // nothing to do - a sender & receiver have already met
+                    return;
+                } else if (state == INTERRUPTED_RECEIVE || state == INTERRUPTED_SEND) {
+                    // nothing to do - segment counters already decremented
+                    return;
+                } else if (state == RESUMING) {
+                    Thread.onSpinWait(); // receive() or expandBuffer() are resuming the cell - wait
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
-                throw new IllegalStateException("Unexpected state: " + state);
+                // buffered value: discarding
+                if (segment.casCell(i, state, CLOSED)) {
+                    segment.cellInterruptedReceiver();
+                    return;
+                }
             }
         }
     }
@@ -840,21 +846,24 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 return c.isSender();
             } else if (state instanceof StoredSelectClause ss) {
                 return ss.isSender(); // as above
-            } else if (state instanceof Buffered) {
-                return true;
-            } else if (state == INTERRUPTED_SEND || state == INTERRUPTED_RECEIVE) {
-                // cell interrupted -> nothing to receive; in case of an interrupted receiver, the counter is already updated
-                return false;
-            } else if (state == RESUMING) {
-                // receive() or expandBuffer() is resuming the sender -> repeat
-                Thread.onSpinWait();
-            } else if (state == CLOSED) {
-                return false;
-            } else if (state == DONE || state == BROKEN) {
-                // a concurrent receiver already finished / poisoned the cell
-                return false;
+            } else if (state instanceof CellState) {
+                if (state == INTERRUPTED_SEND || state == INTERRUPTED_RECEIVE) {
+                    // cell interrupted -> nothing to receive; in case of an interrupted receiver, the counter is already updated
+                    return false;
+                } else if (state == RESUMING) {
+                    // receive() or expandBuffer() is resuming the sender -> repeat
+                    Thread.onSpinWait();
+                } else if (state == CLOSED) {
+                    return false;
+                } else if (state == DONE || state == BROKEN) {
+                    // a concurrent receiver already finished / poisoned the cell
+                    return false;
+                } else {
+                    throw new IllegalStateException("Unexpected state: " + state);
+                }
             } else {
-                throw new IllegalStateException("Unexpected state: " + state);
+                // buffered value
+                return true;
             }
         }
     }
@@ -1002,8 +1011,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     sb.append("R");
                 } else if (state == CLOSED) {
                     sb.append("C");
-                } else if (state instanceof Buffered b) {
-                    sb.append("V(").append(b.value()).append(")");
                 } else if (state instanceof Continuation c && c.isSender()) {
                     sb.append("WS(").append(c.getPayload()).append(")");
                 } else if (state instanceof Continuation) {
@@ -1013,7 +1020,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 } else if (state instanceof StoredSelectClause) {
                     sb.append("SR");
                 } else {
-                    throw new IllegalStateException("Unexpected value: " + state);
+                    // buffered value
+                    sb.append("V(").append(state).append(")");
                 }
                 if (i != Segment.SEGMENT_SIZE - 1) sb.append(",");
             }
@@ -1054,7 +1062,7 @@ enum ExpandBufferResult {
     CLOSED
 }
 
-// possible states of a cell: one of the enum constants below, Buffered, Continuation or SelectInstance
+// possible states of a cell: one of the enum constants below, Continuation, SelectInstance or a buffered value (directly as given by the user)
 
 enum CellState {
     DONE,
@@ -1065,8 +1073,6 @@ enum CellState {
     RESUMING, // expandBuffer is resuming a sender
     CLOSED
 }
-
-record Buffered(Object value) {}
 
 final class Continuation {
     /**

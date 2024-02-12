@@ -47,8 +47,7 @@ public class StressTest {
                         int finalI = i;
                         forks.add(fork(scope, () -> {
                             // in each fork, run the given number of iterations; copying the channels list as it might be mutated by each thread
-                            var data = new StressTestThreadData(scope, new ArrayList<>(chs), new Random(), finalI, direct,
-                                    new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
+                            var data = new StressTestThreadData(scope, new ArrayList<>(chs), new Random(), finalI, direct, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
                             for (int j = 0; j < numberOfIterations; j++) {
                                 stressTestIteration(data, j);
                             }
@@ -101,9 +100,11 @@ public class StressTest {
                         // +1, as the buffer might be entirely in the next segment
                         // and another +1, as the send segment might not be moved forward, if in the next segment there are only IRs
                         var expectedSegments = Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + 2;
-                        assertTrue(segments <= expectedSegments, "there can be at most as much segments as needed to store the buffer + 1");
+                        assertTrue(segments <= expectedSegments, "there can be at most as much segments as needed to store the buffer + 1, but got: " + segments + " instead of " + expectedSegments + ".");
                     }
                 });
+            } catch (Exception e) {
+                System.out.println("\nFailed!");
             } finally {
                 System.out.println("\nChannel state:");
                 for (var ch : chs) {
@@ -117,8 +118,7 @@ public class StressTest {
     //
 
     private record StressTestThreadData(StructuredTaskScope<Object> scope, List<Channel<String>> chs, Random random,
-                                        int threadId, boolean direct,
-                                        List<String> sent, List<String> received,
+                                        int threadId, boolean direct, List<String> sent, List<String> received,
                                         List<String> sendInterrupted, Counter receiveInterrupted) {}
 
     private void stressTestIteration(StressTestThreadData data, int iteration) throws InterruptedException, ExecutionException {
