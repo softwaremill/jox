@@ -97,16 +97,18 @@ public class StressTest {
 
                     for (var ch : chs) {
                         var segments = countOccurrences(ch.toString(), "Segment{");
+
                         // In a worst-case scenario, the first thread might close the channel (using `done()`): this prevents the
                         // `sendSegment` reference from advancing. All other threads might have started a `send()` just before this,
                         // so the number of in-flight elements, waiting to be received (at the moment of calling `done()`) is
                         // `numberOfThreads + bufferSize`. Each element might have a separate segment (as all other cells might be
-                        // interrupted/broken, so this also is a theoretical number of segments.
+                        // interrupted/broken), so this also is a theoretical number of segments. When there are no more `send()`s,
+                        // only `receive()`s, the `sendSegment` won't ever advance.
                         // This needs to be incremented by the number of in-buffer cells. Additionally, they might only start in the
                         // next segment - if there's a buffer.
                         // And another +1, as the tail segment might consist of IRs only.
                         var maxSegments = numberOfThreads + capacity + Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + (capacity > 0 ? 1 : 0) + 1;
-                        assertTrue(segments <= maxSegments, "there can be at most as much segments as needed to store the buffer + 1, but got: " + segments + " instead of " + maxSegments + ".");
+                        assertTrue(segments <= maxSegments, "got: " + segments + " instead of " + maxSegments + ".");
                     }
                 });
             } catch (Exception e) {
