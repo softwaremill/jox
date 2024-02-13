@@ -24,43 +24,52 @@ final class Segment {
         CLOSED
     }
 
+    // immutable state
+
     private final long id;
-    private final Object[] _data = new Object[SEGMENT_SIZE];
+    private final boolean isRendezvousOrUnlimited;
+
+    // mutable state
+
+    private final Object[] data = new Object[SEGMENT_SIZE];
     /**
      * Possible values: {@code Segment} or {@code State.CLOSED} (union type).
      */
-    private volatile Object _next = null;
-    private volatile Segment _prev;
+    private volatile Object next = null;
+    private volatile Segment prev;
     /**
      * A single counter that can be inspected & modified atomically, which includes:
      * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
      * - the number of cells, which haven't been interrupted & processed yet (in the first 6 bits)
      * When this reaches 0, the segment is logically removed.
      */
-    private volatile int _pointers_notProcessedAndInterrupted;
-    private final boolean isRendezvousOrUnlimited;
+    private volatile int pointers_notProcessedAndInterrupted;
 
+    // var handles for mutable state
+
+    private static final VarHandle DATA;
     private static final VarHandle NEXT;
     private static final VarHandle PREV;
     private static final VarHandle POINTERS_NOT_PROCESSED_AND_INTERRUPTED;
-    private static final VarHandle DATA;
 
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.privateLookupIn(Segment.class, MethodHandles.lookup());
-            NEXT = l.findVarHandle(Segment.class, "_next", Object.class);
-            PREV = l.findVarHandle(Segment.class, "_prev", Segment.class);
-            POINTERS_NOT_PROCESSED_AND_INTERRUPTED = l.findVarHandle(Segment.class, "_pointers_notProcessedAndInterrupted", int.class);
             DATA = MethodHandles.arrayElementVarHandle(Object[].class);
+            NEXT = l.findVarHandle(Segment.class, "next", Object.class);
+            PREV = l.findVarHandle(Segment.class, "prev", Segment.class);
+            POINTERS_NOT_PROCESSED_AND_INTERRUPTED = l.findVarHandle(Segment.class, "pointers_notProcessedAndInterrupted", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
+    //
+
     Segment(long id, Segment prev, int pointers, boolean isRendezvousOrUnlimited) {
         this.id = id;
-        this._prev = prev;
-        this._pointers_notProcessedAndInterrupted = SEGMENT_SIZE + (pointers << POINTERS_SHIFT);
+        this.prev = prev;
+        this.pointers_notProcessedAndInterrupted = SEGMENT_SIZE + (pointers << POINTERS_SHIFT);
         this.isRendezvousOrUnlimited = isRendezvousOrUnlimited;
     }
 
@@ -69,16 +78,16 @@ final class Segment {
     }
 
     void cleanPrev() {
-        _prev = null;
+        prev = null;
     }
 
     Segment getNext() {
-        var s = _next;
+        var s = next;
         return s == State.CLOSED ? null : (Segment) s;
     }
 
     Segment getPrev() {
-        return _prev;
+        return prev;
     }
 
     private boolean setNextIfNull(Segment setTo) {
@@ -86,15 +95,15 @@ final class Segment {
     }
 
     Object getCell(int index) {
-        return DATA.get(_data, index);
+        return DATA.getVolatile(data, index);
     }
 
     void setCell(int index, Object value) {
-        DATA.set(_data, index, value);
+        DATA.setVolatile(data, index, value);
     }
 
     boolean casCell(int index, Object expected, Object newValue) {
-        return DATA.compareAndSet(_data, index, expected, newValue);
+        return DATA.compareAndSet(data, index, expected, newValue);
     }
 
     private boolean isTail() {
@@ -106,7 +115,7 @@ final class Segment {
      * have been interrupted & processed.
      */
     boolean isRemoved() {
-        return _pointers_notProcessedAndInterrupted == 0;
+        return pointers_notProcessedAndInterrupted == 0;
     }
 
     /**
@@ -117,7 +126,7 @@ final class Segment {
     boolean tryIncPointers() {
         int p;
         do {
-            p = _pointers_notProcessedAndInterrupted;
+            p = pointers_notProcessedAndInterrupted;
             if (p == 0) {
                 return false;
             }
@@ -134,10 +143,10 @@ final class Segment {
         // pointers_notProcessedAndInterrupted.updateAndGet(p -> p - (1 << POINTERS_SHIFT)) == 0
         var toAdd = -(1 << POINTERS_SHIFT);
         while (true) {
-            var currentP = _pointers_notProcessedAndInterrupted;
+            var currentP = pointers_notProcessedAndInterrupted;
             var updated = POINTERS_NOT_PROCESSED_AND_INTERRUPTED.compareAndSet(this, currentP, currentP + toAdd);
             if (updated) {
-                return currentP == -toAdd; // is the new result 0?
+                return currentP + toAdd == 0; // is the new result 0?
             }
         }
     }
@@ -189,10 +198,10 @@ final class Segment {
             var _next = aliveSegmentRight();
 
             // link next and prev
-            // _next._prev.update(p -> p == null ? null : _prev);
+            // _next.prev.update(p -> p == null ? null : _prev);
             var prevOfNextUpdated = false;
             do {
-                var currentPrevOfNext = _next._prev;
+                var currentPrevOfNext = _next.prev;
                 if (currentPrevOfNext == null) {
                     // leaving null
                     prevOfNextUpdated = true;
@@ -201,7 +210,7 @@ final class Segment {
                 }
 
             } while (!prevOfNextUpdated);
-            if (_prev != null) _prev._next = _next;
+            if (_prev != null) _prev.next = _next;
 
             // double-checking if _prev & _next are still not removed
             if (_next.isRemoved() && !_next.isTail()) continue;
@@ -218,7 +227,7 @@ final class Segment {
     Segment close() {
         var s = this;
         while (true) {
-            var n = s._next;
+            var n = s.next;
             if (n == null) { // this is the tail segment
                 if (NEXT.compareAndSet(s, null, State.CLOSED)) {
                     return s;
@@ -233,9 +242,9 @@ final class Segment {
     }
 
     private Segment aliveSegmentLeft() {
-        var s = _prev;
+        var s = prev;
         while (s != null && s.isRemoved()) {
-            s = s._prev;
+            s = s.prev;
         }
         return s;
     }
@@ -244,9 +253,9 @@ final class Segment {
      * Should only be called, if this is not the tail segment.
      */
     private Segment aliveSegmentRight() {
-        var n = (Segment) _next; // this is not the tail, so there's a next segment
+        var n = (Segment) next; // this is not the tail, so there's a next segment
         while (n.isRemoved() && !n.isTail()) {
-            n = (Segment) n._next; // again, not tail
+            n = (Segment) n.next; // again, not tail
         }
         return n;
     }
@@ -280,7 +289,7 @@ final class Segment {
     private static Segment findSegment(Segment start, long id) {
         var current = start;
         while (current.getId() < id || current.isRemoved()) {
-            var n = current._next;
+            var n = current.next;
             if (n == State.CLOSED) {
                 // segment chain is closed, so we can't create a new segment
                 return null;
@@ -311,7 +320,7 @@ final class Segment {
      */
     private static boolean moveForward(VarHandle segmentVarHandle, Object segmentThis, Segment to) {
         while (true) {
-            var current = (Segment) segmentVarHandle.get(segmentThis);
+            var current = (Segment) segmentVarHandle.getVolatile(segmentThis);
             // the send segment might be already updated
             if (current.getId() >= to.getId()) {
                 return true;
@@ -339,9 +348,9 @@ final class Segment {
 
     @Override
     public String toString() {
-        var n = _next;
-        var p = _prev;
-        var c = _pointers_notProcessedAndInterrupted;
+        var n = next;
+        var p = prev;
+        var c = pointers_notProcessedAndInterrupted;
 
         var notProcessedAndInterrupted = (c & ((1 << POINTERS_SHIFT) - 1));
         var pointers = c >> POINTERS_SHIFT;

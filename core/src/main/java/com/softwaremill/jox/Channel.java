@@ -87,7 +87,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
       operations won't use them, so the relinking won't be useful.
      */
 
+    // immutable state
+
     private final int capacity;
+    private final boolean isRendezvous;
+    private final boolean isUnlimited;
+
+    // mutable state
 
     /**
      * The total number of `send` operations ever invoked, and a flag indicating if the channel is closed.
@@ -95,32 +101,22 @@ public final class Channel<T> implements Source<T>, Sink<T> {
      * <p>
      * Each {@link Channel#send} invocation gets a unique cell to process.
      */
-    private volatile long _sendersAndClosedFlag = 0L;
-    private volatile long _receivers = 0L;
-    private volatile long _bufferEnd;
-
-    private static final VarHandle SENDERS_AND_CLOSE_FLAG;
-    private static final VarHandle RECEIVERS;
-    private static final VarHandle BUFFER_END;
-
-    static {
-        try {
-            MethodHandles.Lookup l = MethodHandles.privateLookupIn(Channel.class, MethodHandles.lookup());
-            SENDERS_AND_CLOSE_FLAG = l.findVarHandle(Channel.class, "_sendersAndClosedFlag", long.class);
-            RECEIVERS = l.findVarHandle(Channel.class, "_receivers", long.class);
-            BUFFER_END = l.findVarHandle(Channel.class, "_bufferEnd", long.class);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
+    private volatile long sendersAndClosedFlag = 0L;
+    private volatile long receivers = 0L;
+    private volatile long bufferEnd;
 
     /**
      * Segments holding cell states. State can be {@link CellState}, {@link Continuation}, {@link SelectInstance}, or a user-provided buffered value.
      */
-    private volatile Segment _sendSegment;
-    private volatile Segment _receiveSegment;
-    private volatile Segment _bufferEndSegment;
+    private volatile Segment sendSegment;
+    private volatile Segment receiveSegment;
+    private volatile Segment bufferEndSegment;
 
+    // var handles
+
+    private static final VarHandle SENDERS_AND_CLOSE_FLAG;
+    private static final VarHandle RECEIVERS;
+    private static final VarHandle BUFFER_END;
     private static final VarHandle SEND_SEGMENT;
     private static final VarHandle RECEIVE_SEGMENT;
     private static final VarHandle BUFFER_END_SEGMENT;
@@ -128,18 +124,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     static {
         try {
             MethodHandles.Lookup l = MethodHandles.privateLookupIn(Channel.class, MethodHandles.lookup());
-            SEND_SEGMENT = l.findVarHandle(Channel.class, "_sendSegment", Segment.class);
-            RECEIVE_SEGMENT = l.findVarHandle(Channel.class, "_receiveSegment", Segment.class);
-            BUFFER_END_SEGMENT = l.findVarHandle(Channel.class, "_bufferEndSegment", Segment.class);
+            SENDERS_AND_CLOSE_FLAG = l.findVarHandle(Channel.class, "sendersAndClosedFlag", long.class);
+            RECEIVERS = l.findVarHandle(Channel.class, "receivers", long.class);
+            BUFFER_END = l.findVarHandle(Channel.class, "bufferEnd", long.class);
+            SEND_SEGMENT = l.findVarHandle(Channel.class, "sendSegment", Segment.class);
+            RECEIVE_SEGMENT = l.findVarHandle(Channel.class, "receiveSegment", Segment.class);
+            BUFFER_END_SEGMENT = l.findVarHandle(Channel.class, "bufferEndSegment", Segment.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
 
     private final AtomicReference<ChannelClosed> closedReason;
-
-    private final boolean isRendezvous;
-    private final boolean isUnlimited;
 
     /**
      * Creates a rendezvous channel.
@@ -163,13 +159,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
         var firstSegment = new Segment(0, null, isRendezvousOrUnlimited ? 2 : 3, isRendezvousOrUnlimited);
 
-        _sendSegment = firstSegment;
-        _receiveSegment = firstSegment;
+        sendSegment = firstSegment;
+        receiveSegment = firstSegment;
         // If the capacity is 0 or -1, buffer expansion never happens, so the buffer end segment points to a null segment,
         // not the first one. This is also reflected in the pointer counter of firstSegment.
-        _bufferEndSegment = isRendezvousOrUnlimited ? Segment.NULL_SEGMENT : firstSegment;
+        bufferEndSegment = isRendezvousOrUnlimited ? Segment.NULL_SEGMENT : firstSegment;
 
-        _bufferEnd = capacity;
+        bufferEnd = capacity;
 
         closedReason = new AtomicReference<>(null);
     }
@@ -207,9 +203,9 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         }
         while (true) {
             // reading the segment before the counter increment - this is needed to find the required segment later
-            var segment = _sendSegment;
+            var segment = sendSegment;
             // reserving the next cell
-            var scf = (long) SENDERS_AND_CLOSE_FLAG.getAndAdd(this, 1);
+            var scf = (long) SENDERS_AND_CLOSE_FLAG.getAndAdd(this, 1L);
             var s = getSendersCounter(scf);
 
             // calculating the segment id and the index within the segment
@@ -282,7 +278,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
             if (state == null) {
                 // reading the buffer end & receiver's counter if needed
-                if (!isUnlimited && s >= (isRendezvous ? 0 : _bufferEnd) && s >= _receivers) {
+                if (!isUnlimited && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
                     // cell is empty, and no receiver, not in buffer -> suspend
                     if (select != null) {
                         // cell is empty, no receiver, and we are in a select -> store the select instance
@@ -379,7 +375,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private Object doReceive(SelectInstance select, SelectClause<?> selectClause) throws InterruptedException {
         while (true) {
             // reading the segment before the counter increment - this is needed to find the required segment later
-            var segment = _receiveSegment;
+            var segment = receiveSegment;
             // reserving the next cell
             var r = (long) RECEIVERS.getAndAdd(this, 1L);
 
@@ -448,7 +444,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             var state = segment.getCell(i); // reading the current state of the cell; we'll try to update it atomically
 
             if (state == null || state == IN_BUFFER) {
-                if (r >= getSendersCounter(_sendersAndClosedFlag)) { // reading the sender's counter
+                if (r >= getSendersCounter(sendersAndClosedFlag)) { // reading the sender's counter
                     if (select != null) {
                         // cell is empty, no sender, and we are in a select -> store the select instance
                         // and await externally
@@ -542,7 +538,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         if (isRendezvous || isUnlimited) return;
         while (true) {
             // reading the segment before the counter increment - this is needed to find the required segment later
-            var segment = _bufferEndSegment;
+            var segment = bufferEndSegment;
             // reserving the next cell
             var b = (long) BUFFER_END.getAndAdd(this, 1L);
 
@@ -698,7 +694,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         long scf;
         var scfUpdated = false;
         do {
-            var initialScf = _sendersAndClosedFlag;
+            var initialScf = sendersAndClosedFlag;
             scf = setClosedFlag(initialScf);
             scfUpdated = SENDERS_AND_CLOSE_FLAG.compareAndSet(this, initialScf, scf);
         } while (!scfUpdated);
@@ -706,7 +702,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         var lastSender = getSendersCounter(scf);
 
         // closing the segment chain guarantees that no new segment beyond `lastSegment` will be created
-        var lastSegment = _sendSegment.close();
+        var lastSegment = sendSegment.close();
 
         if (channelClosed instanceof ChannelError) {
             // closing all cells, as this is an error
@@ -810,12 +806,12 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public ChannelClosed closedForSend() {
-        return isClosed(_sendersAndClosedFlag) ? closedReason.get() : null;
+        return isClosed(sendersAndClosedFlag) ? closedReason.get() : null;
     }
 
     @Override
     public ChannelClosed closedForReceive() {
-        if (isClosed(_sendersAndClosedFlag)) {
+        if (isClosed(sendersAndClosedFlag)) {
             var cr = closedReason.get(); // cannot be null
             if (cr instanceof ChannelError) {
                 return cr;
@@ -831,10 +827,10 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private boolean hasValuesToReceive() {
         while (true) {
             // reading the segment before the counter - this is needed to find the required segment later
-            var segment = _receiveSegment;
+            var segment = receiveSegment;
             // r is the cell which will be used by the next receive
-            var r = _receivers;
-            var s = getSendersCounter(_sendersAndClosedFlag);
+            var r = receivers;
+            var s = getSendersCounter(sendersAndClosedFlag);
 
             if (s <= r) {
                 // for sure, nothing is buffered / no senders are waiting
@@ -1015,20 +1011,20 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     @Override
     public String toString() {
         //noinspection OptionalGetWithoutIsPresent
-        var smallestSegment = Stream.of(_sendSegment, _receiveSegment, _bufferEndSegment)
+        var smallestSegment = Stream.of(sendSegment, receiveSegment, bufferEndSegment)
                 .filter(s -> s != Segment.NULL_SEGMENT)
                 .min(Comparator.comparingLong(Segment::getId)).get();
 
-        var scf = _sendersAndClosedFlag;
+        var scf = sendersAndClosedFlag;
         var sendersCounter = getSendersCounter(scf);
         var isClosed = isClosed(scf);
 
         var sb = new StringBuilder();
         sb.append("Channel(capacity=").append(capacity)
                 .append(", closed=").append(isClosed)
-                .append(", sendSegment=").append(_sendSegment.getId()).append(", sendCounter=").append(sendersCounter)
-                .append(", receiveSegment=").append(_receiveSegment.getId()).append(", receiveCounter=").append(_receivers)
-                .append(", bufferEndSegment=").append(_bufferEndSegment.getId()).append(", bufferEndCounter=").append(_bufferEnd)
+                .append(", sendSegment=").append(sendSegment.getId()).append(", sendCounter=").append(sendersCounter)
+                .append(", receiveSegment=").append(receiveSegment.getId()).append(", receiveCounter=").append(receivers)
+                .append(", bufferEndSegment=").append(bufferEndSegment.getId()).append(", bufferEndCounter=").append(bufferEnd)
                 .append("): \n");
         var s = smallestSegment;
         while (s != null) {
