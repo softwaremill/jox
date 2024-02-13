@@ -1,7 +1,8 @@
 package com.softwaremill.jox;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
@@ -145,7 +146,18 @@ class SelectInstance {
      * - a {@link List} of clauses to re-register
      * - when selected, {@link SelectClause} (during registration) or {@link StoredSelectClause} (with suspension)
      */
-    private final AtomicReference<Object> state = new AtomicReference<>(SelectState.REGISTERING);
+    private volatile Object state = SelectState.REGISTERING;
+
+    private static final VarHandle STATE;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.privateLookupIn(SelectInstance.class, MethodHandles.lookup());
+            STATE = l.findVarHandle(SelectInstance.class, "state", Object.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     /**
      * The content of the list will be written & read only by the main select thread. Hence, no synchronization is necessary.
@@ -182,7 +194,7 @@ class SelectInstance {
             // when setting the state, we might override another state:
             // - a list of clauses to re-register - there's no point in doing that anyway (since the channel is closed)
             // - another closed state (set concurrently)
-            state.set(cc);
+            state = cc;
             return false;
         } else {
             // else: the clause was selected
@@ -190,7 +202,7 @@ class SelectInstance {
             // when setting the state, we might override another state:
             // - a list of clauses to re-register - there's no point in doing that anyway (since we already selected a clause)
             // - a closed state - the closure must have happened concurrently with registration; we give priority to immediate selects then
-            state.set(clause);
+            state = clause;
             return false;
         }
     }
@@ -203,14 +215,14 @@ class SelectInstance {
      */
     Object checkStateAndWait() throws InterruptedException {
         while (true) {
-            var currentState = state.get();
+            var currentState = state;
             if (currentState == SelectState.REGISTERING) {
                 // registering done, waiting until a clause is selected - setting the thread to wake up as the state
                 // we won't leave this case until the state is changed from Thread
                 var currentThread = Thread.currentThread();
-                if (state.compareAndSet(SelectState.REGISTERING, currentThread)) {
+                if (STATE.compareAndSet(this, SelectState.REGISTERING, currentThread)) {
                     var spinIterations = Continuation.SPINS;
-                    while (state.get() == currentThread) {
+                    while (state == currentThread) {
                         // same logic as in Continuation
                         if (spinIterations > 0) {
                             Thread.onSpinWait();
@@ -219,7 +231,7 @@ class SelectInstance {
                             LockSupport.park();
 
                             if (Thread.interrupted()) {
-                                if (state.compareAndSet(currentThread, SelectState.INTERRUPTED)) {
+                                if (STATE.compareAndSet(this, currentThread, SelectState.INTERRUPTED)) {
                                     // since we changed the state, we know that none of the clauses will become completed
                                     cleanup(null);
                                     throw new InterruptedException();
@@ -236,7 +248,7 @@ class SelectInstance {
                 // else: CAS unsuccessful, retry
             } else if (currentState instanceof List) {
                 // moving the state back to registering
-                if (state.compareAndSet(currentState, SelectState.REGISTERING)) {
+                if (STATE.compareAndSet(this, currentState, SelectState.REGISTERING)) {
                     //noinspection unchecked
                     for (var clause : (List<SelectClause<?>>) currentState) {
                         // cleaning up & removing the stored select for the clause which we'll re-register
@@ -301,9 +313,9 @@ class SelectInstance {
      */
     boolean trySelect(StoredSelectClause storedSelectClause) {
         while (true) {
-            var currentState = state.get();
+            var currentState = state;
             if (currentState == SelectState.REGISTERING) {
-                if (state.compareAndSet(currentState, Collections.singletonList(storedSelectClause.getClause()))) {
+                if (STATE.compareAndSet(this, currentState, Collections.singletonList(storedSelectClause.getClause()))) {
                     return false; // concurrent clause selection is not possible during registration
                 }
                 // else: CAS unsuccessful, retry
@@ -313,7 +325,7 @@ class SelectInstance {
                 //noinspection unchecked
                 newClausesToReRegister.addAll((Collection<? extends SelectClause<?>>) clausesToReRegister);
                 newClausesToReRegister.add(storedSelectClause.getClause());
-                if (state.compareAndSet(currentState, newClausesToReRegister)) {
+                if (STATE.compareAndSet(this, currentState, newClausesToReRegister)) {
                     return false; // concurrent clause selection is not possible during registration
                 }
                 // else: CAS unsuccessful, retry
@@ -324,7 +336,7 @@ class SelectInstance {
                 // already selected, will be cleaned up soon
                 return false;
             } else if (currentState instanceof Thread t) {
-                if (state.compareAndSet(currentState, storedSelectClause)) {
+                if (STATE.compareAndSet(this, currentState, storedSelectClause)) {
                     LockSupport.unpark(t);
                     return true;
                 }
@@ -343,16 +355,16 @@ class SelectInstance {
 
     void channelClosed(StoredSelectClause storedSelectClause, ChannelClosed channelClosed) {
         while (true) {
-            var currentState = state.get();
+            var currentState = state;
             if (currentState == SelectState.REGISTERING) {
                 // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
-                if (state.compareAndSet(currentState, channelClosed)) {
+                if (STATE.compareAndSet(this, currentState, channelClosed)) {
                     return;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState instanceof List) {
                 // same as above
-                if (state.compareAndSet(currentState, channelClosed)) {
+                if (STATE.compareAndSet(this, currentState, channelClosed)) {
                     return;
                 }
                 // else: CAS unsuccessful, retry
@@ -363,7 +375,7 @@ class SelectInstance {
                 // already selected
                 return;
             } else if (currentState instanceof Thread t) {
-                if (state.compareAndSet(currentState, channelClosed)) {
+                if (STATE.compareAndSet(this, currentState, channelClosed)) {
                     LockSupport.unpark(t);
                     return;
                 }

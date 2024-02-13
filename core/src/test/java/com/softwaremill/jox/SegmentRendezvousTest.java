@@ -6,7 +6,6 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
 import static com.softwaremill.jox.SegmentTest.createSegmentChain;
