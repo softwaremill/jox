@@ -3,7 +3,6 @@ package com.softwaremill.jox;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -111,6 +110,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private volatile Segment sendSegment;
     private volatile Segment receiveSegment;
     private volatile Segment bufferEndSegment;
+    private volatile ChannelClosed closedReason;
 
     // var handles
 
@@ -120,6 +120,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private static final VarHandle SEND_SEGMENT;
     private static final VarHandle RECEIVE_SEGMENT;
     private static final VarHandle BUFFER_END_SEGMENT;
+    private static final VarHandle CLOSED_REASON;
 
     static {
         try {
@@ -130,12 +131,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             SEND_SEGMENT = l.findVarHandle(Channel.class, "sendSegment", Segment.class);
             RECEIVE_SEGMENT = l.findVarHandle(Channel.class, "receiveSegment", Segment.class);
             BUFFER_END_SEGMENT = l.findVarHandle(Channel.class, "bufferEndSegment", Segment.class);
+            CLOSED_REASON = l.findVarHandle(Channel.class, "closedReason", ChannelClosed.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
     }
-
-    private final AtomicReference<ChannelClosed> closedReason;
 
     /**
      * Creates a rendezvous channel.
@@ -166,8 +166,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         bufferEndSegment = isRendezvousOrUnlimited ? Segment.NULL_SEGMENT : firstSegment;
 
         bufferEnd = capacity;
-
-        closedReason = new AtomicReference<>(null);
     }
 
     public static <T> Channel<T> newUnlimitedChannel() {
@@ -217,7 +215,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 segment = findAndMoveForward(SEND_SEGMENT, this, segment, id);
                 if (segment == null) {
                     // the channel has been closed, `s` points to a segment which doesn't exist
-                    return closedReason.get();
+                    return closedReason;
                 }
 
                 // if we still have another segment, the segment must have been removed
@@ -232,7 +230,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             // reference forward, so that segments which become eligible for removal can be GCed (after the channel
             // is closed, e.g. when the channel is done and there are some values left to be received)
             if (isClosed(scf)) {
-                return closedReason.get();
+                return closedReason;
             }
 
             var sendResult = updateCellSend(segment, i, s, value, select, selectClause);
@@ -258,7 +256,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 // trying again with a new cell
             } else if (sendResult == SendResult.CLOSED) {
                 // not cleaning the previous segments - the close procedure might still need it
-                return closedReason.get();
+                return closedReason;
             } else {
                 throw new IllegalStateException("Unexpected result: " + sendResult);
             }
@@ -388,7 +386,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 segment = findAndMoveForward(RECEIVE_SEGMENT, this, segment, id);
                 if (segment == null) {
                     // the channel has been closed, r points to a segment which doesn't exist
-                    return closedReason.get();
+                    return closedReason;
                 }
 
                 // if we still have another segment, the segment must have been removed
@@ -402,7 +400,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             var result = updateCellReceive(segment, i, r, select, selectClause);
             if (result == ReceiveResult.CLOSED) {
                 // not cleaning the previous segments - the close procedure might still need it
-                return closedReason.get();
+                return closedReason;
             } else {
               /*
                 After `updateCellReceive` completes and the channel isn't closed, we can be sure that S > r, unless
@@ -685,8 +683,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     private Object closeSafe(ChannelClosed channelClosed) {
-        if (!closedReason.compareAndSet(null, channelClosed)) {
-            return closedReason.get(); // already closed
+        if (!CLOSED_REASON.compareAndSet(this, null, channelClosed)) {
+            return closedReason; // already closed
         }
 
         // after this completes, it's guaranteed than no sender with `s >= lastSender` will proceed with the usual
@@ -773,7 +771,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     return;
                 }
             } else if (state instanceof StoredSelectClause ss) {
-                ss.getSelect().channelClosed(ss, closedReason.get());
+                ss.getSelect().channelClosed(ss, closedReason);
                 // not setting the state & updating counters, as each non-selected stored select cell will be
                 // cleaned up, setting an interrupted state (and informing the segment)
                 // until this happens, other (concurrent) invocations of `channelClosed` or `trySelect` will still
@@ -806,13 +804,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public ChannelClosed closedForSend() {
-        return isClosed(sendersAndClosedFlag) ? closedReason.get() : null;
+        return isClosed(sendersAndClosedFlag) ? closedReason : null;
     }
 
     @Override
     public ChannelClosed closedForReceive() {
         if (isClosed(sendersAndClosedFlag)) {
-            var cr = closedReason.get(); // cannot be null
+            var cr = closedReason; // cannot be null
             if (cr instanceof ChannelError) {
                 return cr;
             } else {
