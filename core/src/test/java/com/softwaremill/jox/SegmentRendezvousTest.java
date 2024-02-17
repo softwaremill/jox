@@ -2,9 +2,10 @@ package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
 import static com.softwaremill.jox.SegmentTest.createSegmentChain;
@@ -15,6 +16,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentRendezvousTest {
     // rendezvous segment = where countProcessed is false
+
+    // a field which we use for testing where VarHandle is required
+    private Segment someSegment;
+    private static VarHandle SOME_SEGMENT;
+
+    static {
+        try {
+            MethodHandles.Lookup l = MethodHandles.privateLookupIn(SegmentRendezvousTest.class, MethodHandles.lookup());
+            SOME_SEGMENT = l.findVarHandle(SegmentRendezvousTest.class, "someSegment", Segment.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
     @Test
     void segmentShouldBecomeRemovedOnceAllCellsInterrupted() {
@@ -184,16 +198,16 @@ public class SegmentRendezvousTest {
     void shouldFindAndMoveSegmentReferenceForward() {
         // given
         var s = createSegmentChain(4, 0, true);
-        var r = new AtomicReference<>(s[0]);
+        someSegment = s[0];
 
         // when
-        var result = Segment.findAndMoveForward(r, s[0], 2);
+        var result = Segment.findAndMoveForward(SOME_SEGMENT, this, s[0], 2);
 
         // then
         assertEquals(s[2], result);
 
         // when
-        result = Segment.findAndMoveForward(r, s[0], 5);
+        result = Segment.findAndMoveForward(SOME_SEGMENT, this, s[0], 5);
         assertEquals(5, result.getId());
         assertEquals(result, s[3].getNext().getNext());
     }
@@ -202,30 +216,30 @@ public class SegmentRendezvousTest {
     void shouldMoveReferenceForwardIfClosedAndFoundSegmentExists() {
         // given
         var s = createSegmentChain(4, 0, true);
-        var r = new AtomicReference<>(s[0]);
+        someSegment = s[0];
 
         // when
         s[0].close();
-        var result = Segment.findAndMoveForward(r, s[0], 3);
+        var result = Segment.findAndMoveForward(SOME_SEGMENT, this, s[0], 3);
 
         // then
         assertEquals(s[3], result);
-        assertEquals(s[3], r.get());
+        assertEquals(s[3], someSegment);
     }
 
     @Test
     void shouldNotMoveReferenceForwardIfClosedAndFoundSegmentDoesNotExist() {
         // given
         var s = createSegmentChain(4, 0, true);
-        var r = new AtomicReference<>(s[0]);
+        someSegment = s[0];
 
         // when
         s[0].close();
-        var result = Segment.findAndMoveForward(r, s[0], 5);
+        var result = Segment.findAndMoveForward(SOME_SEGMENT, this, s[0], 5);
 
         // then
         assertNull(result);
-        assertEquals(s[0], r.get());
+        assertEquals(s[0], someSegment);
     }
 
     @Test
@@ -241,7 +255,8 @@ public class SegmentRendezvousTest {
         assertEquals(ss[0].getNext(), ss[1]); // logically, but not physically removed
 
         // when
-        var s2 = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 2);
+        someSegment = ss[0];
+        var s2 = Segment.findAndMoveForward(SOME_SEGMENT, this, ss[0], 2);
 
         // then
         assertEquals(s2, ss[0].getNext());
@@ -255,7 +270,8 @@ public class SegmentRendezvousTest {
         sendInterruptAllCells(ss[1]);
 
         // when
-        var result = Segment.findAndMoveForward(new AtomicReference<>(ss[0]), ss[0], 1);
+        someSegment = ss[0];
+        var result = Segment.findAndMoveForward(SOME_SEGMENT, this, ss[0], 1);
 
         // then
         assertEquals(ss[2], result);
@@ -265,31 +281,31 @@ public class SegmentRendezvousTest {
     void shouldNotUpdateSegmentReferenceIfAlreadyUpdated() {
         // given
         var ss = createSegmentChain(3, 0, true);
-        var ref = new AtomicReference<>(ss[2]);
+        someSegment = ss[2];
 
         // when
-        var result = Segment.findAndMoveForward(ref, ss[0], 1);
+        var result = Segment.findAndMoveForward(SOME_SEGMENT, this, ss[0], 1);
 
         // then
         assertEquals(ss[1], result);
-        assertEquals(ss[2], ref.get());
+        assertEquals(ss[2], someSegment);
     }
 
     @Test
     void shouldUpdateSegmentPointersWhenReferenceChanges() {
         // given
         var ss = createSegmentChain(3, 0, true);
-        var ref = new AtomicReference<>(ss[0]);
+        someSegment = ss[0];
 
         // when
-        Segment.findAndMoveForward(ref, ss[0], 1);
+        Segment.findAndMoveForward(SOME_SEGMENT, this, ss[0], 1);
 
         // then
         sendInterruptAllCells(ss[1]);
         assertFalse(ss[1].isRemoved()); // shouldn't be removed because there's an incoming pointer
 
         // when
-        Segment.findAndMoveForward(ref, ss[0], 2);
+        Segment.findAndMoveForward(SOME_SEGMENT, this, ss[0], 2);
 
         // then
         assertTrue(ss[1].isRemoved()); // no more pointers -> logically removed
@@ -302,7 +318,7 @@ public class SegmentRendezvousTest {
         // given
         for (int k = 0; k < 1000; k++) {
             var ss = createSegmentChain(1, 0, true);
-            var ref = new AtomicReference<>(ss[0]);
+            someSegment = ss[0];
             var observedSegments = new ConcurrentHashMap<Integer, Segment>();
 
             // when
@@ -312,7 +328,7 @@ public class SegmentRendezvousTest {
                     forkVoid(scope, () -> {
                         var s = ss[0];
                         for (int i = 0; i < 300; i++) {
-                            s = Segment.findAndMoveForward(ref, s, i);
+                            s = Segment.findAndMoveForward(SOME_SEGMENT, this, s, i);
                             var previous = observedSegments.put(i, s);
                             if (previous != s && previous != null) {
                                 fail("Already observed segment: " + previous + " for id: " + i + ", but found: " + s);
