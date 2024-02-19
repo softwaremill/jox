@@ -96,7 +96,8 @@ public class StressTest {
                     assertEquals(allSent, allReceived, "each sent message should have been received, or drained");
 
                     for (var ch : chs) {
-                        var segments = countOccurrences(ch.toString(), "Segment{");
+                        var chDebug = ch.toString();
+                        var segments = countOccurrences(chDebug, "Segment{");
 
                         // In a worst-case scenario, the first thread might close the channel (using `done()`): this prevents the
                         // `sendSegment` reference from advancing. All other threads might have started a `send()` just before this,
@@ -109,6 +110,11 @@ public class StressTest {
                         // And another +1, as the tail segment might consist of IRs only.
                         var maxSegments = numberOfThreads + capacity + Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + (capacity > 0 ? 1 : 0) + 1;
                         assertTrue(segments <= maxSegments, "got: " + segments + " instead of " + maxSegments + ".");
+
+                        // there should be no negative counters
+                        assertFalse(chDebug.contains("pointers=-"));
+                        assertFalse(chDebug.contains("notProcessed=-"));
+                        assertFalse(chDebug.contains("notInterrupted=-"));
                     }
                 });
             } catch (Exception e) {

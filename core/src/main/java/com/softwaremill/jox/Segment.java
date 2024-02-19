@@ -2,19 +2,12 @@ package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.concurrent.atomic.AtomicInteger;
 
 final class Segment {
-    /*
-    - in the first 6 bits, we store the number of cells that haven't been both interrupted & processed.
-      In rendezvous/unlimited channels, cells are processed immediately when they become interrupted.
-      In buffered channels:
-      - interrupted send cells become processed by `expandBuffer`
-      - interrupted receive cells become processed immediately when interrupted
-    - in bits 7 & 8, we store the number of incoming pointers to this segment
-     */
-
     static final int SEGMENT_SIZE = 32; // 2^5
-    private static final int POINTERS_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
+    private static final int PROCESSED_SHIFT = 6; // to store values between 0 and 32 (inclusive) we need 6 bits
+    private static final int POINTERS_SHIFT = 12;
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
     /**
@@ -37,20 +30,27 @@ final class Segment {
      */
     private volatile Object next = null;
     private volatile Segment prev;
+
     /**
      * A single counter that can be inspected & modified atomically, which includes:
-     * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left)
-     * - the number of cells, which haven't been interrupted & processed yet (in the first 6 bits)
+     * - the number of incoming pointers (shifted by {@link Segment#POINTERS_SHIFT} to the left), in bits 13 & 14
+     * - the number of cells, which are not processed (shifted by {@link Segment#PROCESSED_SHIFT} to the left), in bits 7-12
+     * - the number of cells, which haven't been interrupted (in the first 6 bits)
+     * <p>
      * When this reaches 0, the segment is logically removed.
+     * <p>
+     * A cell becomes processed when it's an interrupted sender, or not an interrupted sender, and fully processed
+     * by `expandBuffer()` (in buffered channels).
      */
-    private volatile int pointers_notProcessedAndInterrupted;
+    @SuppressWarnings("FieldMayBeFinal")
+    private volatile int pointers_notProcessed_notInterrupted;
 
     // var handles for mutable state
 
     private static final VarHandle DATA;
     private static final VarHandle NEXT;
     private static final VarHandle PREV;
-    private static final VarHandle POINTERS_NOT_PROCESSED_AND_INTERRUPTED;
+    private static final VarHandle POINTERS_NOT_PROCESSED_NOT_INTERRUPTED;
 
     static {
         try {
@@ -58,7 +58,7 @@ final class Segment {
             DATA = MethodHandles.arrayElementVarHandle(Object[].class);
             NEXT = l.findVarHandle(Segment.class, "next", Object.class);
             PREV = l.findVarHandle(Segment.class, "prev", Segment.class);
-            POINTERS_NOT_PROCESSED_AND_INTERRUPTED = l.findVarHandle(Segment.class, "pointers_notProcessedAndInterrupted", int.class);
+            POINTERS_NOT_PROCESSED_NOT_INTERRUPTED = l.findVarHandle(Segment.class, "pointers_notProcessed_notInterrupted", int.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -69,7 +69,9 @@ final class Segment {
     Segment(long id, Segment prev, int pointers, boolean isRendezvousOrUnlimited) {
         this.id = id;
         this.prev = prev;
-        this.pointers_notProcessedAndInterrupted = SEGMENT_SIZE + (pointers << POINTERS_SHIFT);
+        this.pointers_notProcessed_notInterrupted = SEGMENT_SIZE +
+                (isRendezvousOrUnlimited ? 0 : (SEGMENT_SIZE << PROCESSED_SHIFT)) +
+                (pointers << POINTERS_SHIFT);
         this.isRendezvousOrUnlimited = isRendezvousOrUnlimited;
     }
 
@@ -115,7 +117,7 @@ final class Segment {
      * have been interrupted & processed.
      */
     boolean isRemoved() {
-        return pointers_notProcessedAndInterrupted == 0;
+        return pointers_notProcessed_notInterrupted == 0;
     }
 
     /**
@@ -126,11 +128,11 @@ final class Segment {
     boolean tryIncPointers() {
         int p;
         do {
-            p = pointers_notProcessedAndInterrupted;
+            p = pointers_notProcessed_notInterrupted;
             if (p == 0) {
                 return false;
             }
-        } while (!POINTERS_NOT_PROCESSED_AND_INTERRUPTED.compareAndSet(this, p, p + (1 << POINTERS_SHIFT)));
+        } while (!POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.compareAndSet(this, p, p + (1 << POINTERS_SHIFT)));
         return true;
     }
 
@@ -140,11 +142,11 @@ final class Segment {
      * @return {@code true} if the segment becomes logically removed.
      */
     boolean decPointers() {
-        // pointers_notProcessedAndInterrupted.updateAndGet(p -> p - (1 << POINTERS_SHIFT)) == 0
+        // pointers_notProcessed_notInterrupted.updateAndGet(p -> p - (1 << POINTERS_SHIFT)) == 0
         var toAdd = -(1 << POINTERS_SHIFT);
         while (true) {
-            var currentP = pointers_notProcessedAndInterrupted;
-            var updated = POINTERS_NOT_PROCESSED_AND_INTERRUPTED.compareAndSet(this, currentP, currentP + toAdd);
+            var currentP = pointers_notProcessed_notInterrupted;
+            var updated = POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.compareAndSet(this, currentP, currentP + toAdd);
             if (updated) {
                 return currentP + toAdd == 0; // is the new result 0?
             }
@@ -158,30 +160,45 @@ final class Segment {
      */
     void cellInterruptedReceiver() {
         // decrementAndGet() == 0
-        if ((int) POINTERS_NOT_PROCESSED_AND_INTERRUPTED.getAndAdd(this, -1) == 1) remove();
+        if ((int) POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.getAndAdd(this, -1) == 1) remove();
     }
 
+    private static final int ONE_PROCESSED = 1 << PROCESSED_SHIFT;
+    private static final int ONE_PROCESSED_AND_INTERRUPTED = ONE_PROCESSED + 1;
+
     /**
-     * Notify the segment that a `send` has been interrupted in the cell.
+     * Notify the segment that a `send` has been interrupted in the cell. Also marks the cell as processed.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
     void cellInterruptedSender() {
-        // in rendezvous/unlimited channels, cells are immediately processed when interrupted
         if (isRendezvousOrUnlimited) {
-            // decrementAndGet() == 0
-            if ((int) POINTERS_NOT_PROCESSED_AND_INTERRUPTED.getAndAdd(this, -1) == 1) remove();
+            // we're not counting processed cells
+            if ((int) POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.getAndAdd(this, -1) == 1) remove();
+        } else {
+            // decrementing both counters in a single operation
+            if ((int) POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.getAndAdd(this, -ONE_PROCESSED_AND_INTERRUPTED) == ONE_PROCESSED_AND_INTERRUPTED)
+                remove();
         }
     }
 
     /**
-     * Notify the segment that an interrupted sender cell has been processed by {@code Channel.expandBuffer}.
+     * Notify the segment that a cell has been processed by {@code Channel.expandBuffer}. Should not be called
+     * if the cell is an interrupted sender.
      * <p>
      * Should be called at most once for each cell. Removes the segment, if it becomes logically removed.
      */
-    void cellProcessed() {
-        // decrementAndGet() == 0
-        if ((int) POINTERS_NOT_PROCESSED_AND_INTERRUPTED.getAndAdd(this, -1) == 1) remove();
+    void cellProcessed_notInterruptedSender() {
+        if ((int) POINTERS_NOT_PROCESSED_NOT_INTERRUPTED.getAndAdd(this, -ONE_PROCESSED) == ONE_PROCESSED) remove();
+    }
+
+    /**
+     * Marks `numberOfCells` as processed in this segment. Should only be called when the channel is created, before the
+     * segment is being used by multiple threads. This method is not thread-safe.
+     */
+    void setup_markCellsProcessed(int numberOfCells) {
+        //noinspection NonAtomicOperationOnVolatileField
+        pointers_notProcessed_notInterrupted -= ONE_PROCESSED * numberOfCells;
     }
 
     /**
@@ -350,9 +367,10 @@ final class Segment {
     public String toString() {
         var n = next;
         var p = prev;
-        var c = pointers_notProcessedAndInterrupted;
+        var c = pointers_notProcessed_notInterrupted;
 
-        var notProcessedAndInterrupted = (c & ((1 << POINTERS_SHIFT) - 1));
+        var notInterrupted = c & ((1 << PROCESSED_SHIFT) - 1);
+        var notProcessed = (c & ((1 << POINTERS_SHIFT) - 1)) >> PROCESSED_SHIFT;
         var pointers = c >> POINTERS_SHIFT;
 
         return "Segment{" +
@@ -360,7 +378,8 @@ final class Segment {
                 ", next=" + (n == null ? "null" : (n == State.CLOSED ? "closed" : ((Segment) n).id)) +
                 ", prev=" + (p == null ? "null" : p.id) +
                 ", pointers=" + pointers +
-                ", notProcessedAndInterrupted=" + notProcessedAndInterrupted +
+                ", notProcessed=" + notProcessed +
+                ", notInterrupted=" + notInterrupted +
                 '}';
     }
 

@@ -7,8 +7,7 @@ import java.util.concurrent.ExecutionException;
 
 import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Tests which always use buffered channels.
@@ -111,5 +110,12 @@ public class ChannelBufferedTest {
         // then
         assertInstanceOf(ChannelError.class, r1);
         assertInstanceOf(ChannelError.class, r2);
+    }
+
+    @Test
+    void shouldProcessCellsInitially() {
+        assertTrue(new Channel<String>(1).toString().contains("notProcessed=31"));
+        assertTrue(new Channel<String>(31).toString().contains("notProcessed=1"));
+        assertTrue(new Channel<String>(32).toString().contains("notProcessed=0"));
     }
 }
