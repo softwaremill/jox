@@ -353,39 +353,43 @@ class SelectInstance {
         }
     }
 
-    void channelClosed(StoredSelectClause storedSelectClause, ChannelClosed channelClosed) {
+    /**
+     * @return {@code true} when the given {@code channelClosed} has been set as the new state of the select.
+     * {@code false}, if another clause has already been selected, or if the channel is already closed.
+     */
+    boolean channelClosed(ChannelClosed channelClosed) {
         while (true) {
             var currentState = state;
             if (currentState == SelectState.REGISTERING) {
                 // the channel closed state will be discovered when there's a call to `checkStateAndWait` after registration completes
                 if (STATE.compareAndSet(this, currentState, channelClosed)) {
-                    return;
+                    return true;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState instanceof List) {
                 // same as above
                 if (STATE.compareAndSet(this, currentState, channelClosed)) {
-                    return;
+                    return true;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState instanceof SelectClause) {
                 // already selected
-                return;
+                return false;
             } else if (currentState instanceof StoredSelectClause) {
                 // already selected
-                return;
+                return false;
             } else if (currentState instanceof Thread t) {
                 if (STATE.compareAndSet(this, currentState, channelClosed)) {
                     LockSupport.unpark(t);
-                    return;
+                    return true;
                 }
                 // else: CAS unsuccessful, retry
             } else if (currentState == SelectState.INTERRUPTED) {
                 // already interrupted
-                return;
+                return false;
             } else if (currentState instanceof ChannelClosed) {
                 // already closed
-                return;
+                return false;
             } else {
                 throw new IllegalStateException("Unknown state: " + currentState);
             }

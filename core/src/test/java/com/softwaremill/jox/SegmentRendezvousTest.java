@@ -15,11 +15,9 @@ import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class SegmentRendezvousTest {
-    // rendezvous segment = where countProcessed is false
-
     // a field which we use for testing where VarHandle is required
     private Segment someSegment;
-    private static VarHandle SOME_SEGMENT;
+    private static final VarHandle SOME_SEGMENT;
 
     static {
         try {
@@ -42,20 +40,20 @@ public class SegmentRendezvousTest {
             assertFalse(ss[1].isRemoved());
             assertEquals(ss[1].getPrev(), ss[0]);
             assertEquals(ss[1].getNext(), ss[2]);
-            assertEquals(ss[0].getPrev(), null);
+            assertNull(ss[0].getPrev());
             assertEquals(ss[0].getNext(), ss[1]);
             assertEquals(ss[2].getPrev(), ss[1]);
-            assertEquals(ss[2].getNext(), null);
+            assertNull(ss[2].getNext());
         }
 
         ss[1].cellInterruptedReceiver(); // last cell
         assertTrue(ss[1].isRemoved());
 
         // then
-        assertEquals(ss[0].getPrev(), null);
+        assertNull(ss[0].getPrev());
         assertEquals(ss[0].getNext(), ss[2]);
         assertEquals(ss[2].getPrev(), ss[0]);
-        assertEquals(ss[2].getNext(), null);
+        assertNull(ss[2].getNext());
     }
 
     @Test
@@ -134,8 +132,8 @@ public class SegmentRendezvousTest {
         assertTrue(ss[0].isRemoved());
 
         ss[0].remove();
-        assertEquals(ss[1].getPrev(), null);
-        assertEquals(ss[1].getNext(), null);
+        assertNull(ss[1].getPrev());
+        assertNull(ss[1].getNext());
     }
 
     @Test
@@ -169,10 +167,10 @@ public class SegmentRendezvousTest {
                 assertTrue(ss[i].isRemoved());
             }
 
-            assertEquals(ss[0].getPrev(), null);
+            assertNull(ss[0].getPrev());
             assertEquals(ss[0].getNext(), ss[segmentCount - 1]);
             assertEquals(ss[segmentCount - 1].getPrev(), ss[0]);
-            assertEquals(ss[segmentCount - 1].getNext(), null);
+            assertNull(ss[segmentCount - 1].getNext());
         }
     }
 
