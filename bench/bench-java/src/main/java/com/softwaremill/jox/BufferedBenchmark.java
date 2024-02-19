@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 public class BufferedBenchmark {
-    @Param({"1", "10", "100"})
+    @Param({"16", "100"})
     public int capacity;
 
     // going against jmh's best practises, the benchmarks are "iterative" (not using groups), for two reasons:

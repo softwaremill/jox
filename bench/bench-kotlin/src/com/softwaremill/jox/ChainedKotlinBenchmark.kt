@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 open class ChainedKotlinBenchmark {
-    @Param("0", "100")
+    @Param("0", "16", "100")
     var capacity: Int = 0
 
     @Param("10000")

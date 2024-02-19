@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 open class BufferedKotlinBenchmark {
-    @Param("1", "10", "100")
+    @Param("16", "100")
     var capacity: Int = 0
 
     @Benchmark

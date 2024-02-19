@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 public class ParallelBenchmark {
-    @Param({"0", "100"})
+    @Param({"0", "16", "100"})
     public int capacity;
 
     @Param({"10000"})
