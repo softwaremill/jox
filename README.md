@@ -20,20 +20,20 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>core</artifactId>
-    <version>0.0.7</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:core:0.0.7'
+implementation 'com.softwaremill.jox:core:0.1.0'
 ```
 
 SBT:
 
 ```scala
-libraryDependencies += "com.softwaremill.jox" % "core" % "0.0.7"
+libraryDependencies += "com.softwaremill.jox" % "core" % "0.1.0"
 ```
 
 ## Usage
@@ -215,7 +215,7 @@ class Demo6 {
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java
 synchronisation primitives (queues), as well as the Kotlin channel implementation.
 
-The test results for version 0.0.7, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
+The test results for version 0.1.0, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
 
 ```
 Benchmark                                                      (capacity)  (chainLength)  Mode  Cnt     Score     Error  Units
