@@ -2,10 +2,7 @@ package com.softwaremill.jox;
 
 import org.openjdk.jmh.annotations.*;
 
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Send-receive test for {@link Channel} and {@link BlockingQueue} - a number of (send, receive) thread pairs,
@@ -30,20 +27,15 @@ public class ParallelBenchmark {
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void parallelChannels() throws InterruptedException {
         // we want to measure the amount of time a send-receive pair takes
-        int elements = OPERATIONS_PER_INVOCATION / parallelism;
-        Channel<Integer>[] channels = new Channel[parallelism];
-        for (int i = 0; i < parallelism; i++) {
-            channels[i] = new Channel<>(capacity);
-        }
+        int elementsPerChannel = OPERATIONS_PER_INVOCATION / parallelism;
 
-        Thread[] threads = new Thread[parallelism * 2];
+        var latch = new CountDownLatch(parallelism);
 
-        // senders
         for (int t = 0; t < parallelism; t++) {
-            int finalT = t;
-            threads[t] = Thread.startVirtualThread(() -> {
-                var ch = channels[finalT];
-                for (int i = 0; i < elements; i++) {
+            var ch = new Channel<Integer>(capacity);
+            // sender
+            Thread.startVirtualThread(() -> {
+                for (int i = 0; i < elementsPerChannel; i++) {
                     try {
                         ch.send(91);
                     } catch (InterruptedException e) {
@@ -51,52 +43,42 @@ public class ParallelBenchmark {
                     }
                 }
             });
-        }
 
-        // receivers
-        for (int t = 0; t < parallelism; t++) {
-            int finalT = t;
-            threads[t + parallelism] = Thread.startVirtualThread(() -> {
-                var ch = channels[finalT];
-                for (int i = 0; i < elements; i++) {
+            // receiver
+            Thread.startVirtualThread(() -> {
+                for (int i = 0; i < elementsPerChannel; i++) {
                     try {
                         ch.receive();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
                 }
+                latch.countDown();
             });
         }
 
-        for (Thread thread : threads) {
-            thread.join();
-        }
+        latch.await();
     }
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void parallelQueues() throws InterruptedException {
         // we want to measure the amount of time a send-receive pair takes
-        int elements = OPERATIONS_PER_INVOCATION / parallelism;
-        BlockingQueue<Integer>[] queues = new BlockingQueue[parallelism];
-        if (capacity == 0) {
-            for (int i = 0; i < parallelism; i++) {
-                queues[i] = new SynchronousQueue<>();
-            }
-        } else {
-            for (int i = 0; i < parallelism; i++) {
-                queues[i] = new ArrayBlockingQueue<>(capacity);
-            }
-        }
+        int elementsPerChannel = OPERATIONS_PER_INVOCATION / parallelism;
 
-        Thread[] threads = new Thread[parallelism * 2];
+        var latch = new CountDownLatch(parallelism);
 
-        // senders
         for (int t = 0; t < parallelism; t++) {
-            int finalT = t;
-            threads[t] = Thread.startVirtualThread(() -> {
-                var q = queues[finalT];
-                for (int i = 0; i < elements; i++) {
+            BlockingQueue<Integer> q;
+            if (capacity == 0) {
+                q = new SynchronousQueue<>();
+            } else {
+                q = new ArrayBlockingQueue<>(capacity);
+            }
+
+            // sender
+            Thread.startVirtualThread(() -> {
+                for (int i = 0; i < elementsPerChannel; i++) {
                     try {
                         q.put(91);
                     } catch (InterruptedException e) {
@@ -104,25 +86,20 @@ public class ParallelBenchmark {
                     }
                 }
             });
-        }
 
-        // receivers
-        for (int t = 0; t < parallelism; t++) {
-            int finalT = t;
-            threads[t + parallelism] = Thread.startVirtualThread(() -> {
-                var q = queues[finalT];
-                for (int i = 0; i < elements; i++) {
+            // receiver
+            Thread.startVirtualThread(() -> {
+                for (int i = 0; i < elementsPerChannel; i++) {
                     try {
                         q.take();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
                 }
+                latch.countDown();
             });
         }
 
-        for (Thread thread : threads) {
-            thread.join();
-        }
+        latch.await();
     }
 }

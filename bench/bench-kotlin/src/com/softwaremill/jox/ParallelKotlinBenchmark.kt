@@ -26,23 +26,18 @@ open class ParallelKotlinBenchmark {
     fun parallelChannels_defaultDispatcher() {
         runBlocking {
             // we want to measure the amount of time a send-receive pair takes
-            var elements = OPERATIONS_PER_INVOCATION_PARALLEL / parallelism
+            val elements = OPERATIONS_PER_INVOCATION_PARALLEL / parallelism
 
-            // create an array of channelCount channels
-            val channels = Array(parallelism) { Channel<Long>(capacity) }
-
-            // senders
             for (t in 0 until parallelism) {
+                val ch = Channel<Int>(capacity)
+
+                // sender
                 launch(Dispatchers.Default) {
-                    val ch = channels[t]
                     for (x in 1..elements) ch.send(91)
                 }
-            }
 
-            // receivers
-            for (t in 0 until parallelism) {
+                // receiver
                 launch(Dispatchers.Default) {
-                    val ch = channels[t]
                     for (x in 1..elements) ch.receive()
                 }
             }
