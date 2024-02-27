@@ -289,10 +289,10 @@ RendezvousBenchmark.synchronousQueue                                   N/A      
 // multi queue/channel tests with a larger number of elements
 
 Benchmark                                                   (capacity)  (parallelism)  Mode  Cnt  Score    Error  Units
-ParallelBenchmark.parallelChannels                                  16          10000  avgt   20  21.789 ± 0.698  ns/op
+ParallelBenchmark.parallelChannels                                  16          10000  avgt   10  14.155 ± 0.874  ns/op
 ParallelBenchmark.parallelQueues                                    16          10000  avgt   20  16.053 ± 1.368  ns/op
 
-ChainedBenchmark.channelChain                                       16          10000  avgt   20  18.393 ± 0.183  ns/op
+ChainedBenchmark.channelChain                                       16          10000  avgt   10  13.972 ± 0.429  ns/op
 ChainedBenchmark.queueChain                                         16          10000  avgt   20   9.556 ± 0.233  ns/op
 
 ParallelKotlinBenchmark.parallelChannels_defaultDispatcher          16          10000  avgt   20   9.847 ± 1.012  ns/op
