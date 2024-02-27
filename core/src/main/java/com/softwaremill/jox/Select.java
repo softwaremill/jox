@@ -46,7 +46,7 @@ public class Select {
      * If a couple of the clauses can be completed immediately, the select is biased towards the clauses that appear
      * first.
      * <p>
-     * If no clauses are given, or all clauses become filtered out, throws {@link ChannelDoneException}.
+     * If no clauses are given, throws {@link ChannelDoneException}.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return The value returned by the selected clause.
@@ -70,7 +70,7 @@ public class Select {
      * If a couple of the clauses can be completed immediately, the select is biased towards the clauses that appear
      * first.
      * <p>
-     * If no clauses are given, or all clauses become filtered out, returns {@link ChannelDone}.
+     * If no clauses are given, returns {@link ChannelDone}.
      *
      * @param clauses The clauses, from which one will be selected. Not {@code null}.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any of the channels
@@ -80,7 +80,7 @@ public class Select {
     public static <U> Object selectSafe(SelectClause<U>... clauses) throws InterruptedException {
         while (true) {
             if (clauses.length == 0) {
-                // no clauses given, or all clauses were filtered out
+                // no clauses given
                 return new ChannelDone();
             }
 
