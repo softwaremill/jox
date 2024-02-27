@@ -90,7 +90,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     // immutable state
 
     private final int capacity;
-    private final boolean isRendezvous;
+    final boolean isRendezvous;
     private final boolean isUnlimited;
 
     // mutable state
@@ -320,7 +320,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         // storing the value to send as the continuation's payload, so that the receiver can use it
                         var c = new Continuation(value);
                         if (segment.casCell(i, null, c)) {
-                            if (c.await(segment, i) == ChannelClosedMarker.CLOSED) {
+                            if (c.await(segment, i, isRendezvous) == ChannelClosedMarker.CLOSED) {
                                 return SendResult.CLOSED;
                             } else {
                                 return SendResult.AWAITED;
@@ -488,7 +488,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         var c = new Continuation(null);
                         if (segment.casCell(i, state, c)) {
                             expandBuffer();
-                            var result = c.await(segment, i);
+                            var result = c.await(segment, i, isRendezvous);
                             if (result == ChannelClosedMarker.CLOSED) {
                                 return ReceiveResult.CLOSED;
                             } else {
@@ -1141,16 +1141,20 @@ enum CellState {
 
 final class Continuation {
     /**
-     * The number of busy-looping iterations before yielding, during {@link Continuation#await(Segment, int)}.
-     * {@code 0}, if there's a single CPU. When there's no more than 4 CPUs, we use {@code 128} iterations: this is
-     * based on the (limited) testing that we've done with various systems. Otherwise, we use 1024 iterations.
+     * For rendezvous channels, the number of busy-looping iterations before yielding, during
+     * {@link Continuation#await(Segment, int, boolean)}. {@code 0}, if there's a single CPU. When there's no more than
+     * 4 CPUs, we use {@code 128} iterations: this is based on the (limited) testing that we've done with various
+     * systems. Otherwise, we use 1024 iterations.
+     * <p>
+     * For buffered channels, busy-looping is not used, as this negatively affects the performance.
+     * <p>
      * This might need revisiting when more testing & more benchmarks are available.
      */
-    static final int SPINS;
+    static final int RENDEZVOUS_SPINS;
 
     static {
         var nproc = Runtime.getRuntime().availableProcessors();
-        SPINS = (nproc == 1) ? 0 : ((nproc <= 4) ? (1 << 7) : (1 << 10));
+        RENDEZVOUS_SPINS = (nproc == 1) ? 0 : ((nproc <= 4) ? (1 << 7) : (1 << 10));
     }
 
     private final Thread creatingThread;
@@ -1190,8 +1194,8 @@ final class Continuation {
      * @param cellIndex The index of the cell for which to change the state to interrupted, if interruption happens.
      * @return The value with which the continuation was resumed.
      */
-    Object await(Segment segment, int cellIndex) throws InterruptedException {
-        var spinIterations = SPINS;
+    Object await(Segment segment, int cellIndex, boolean isRendezvous) throws InterruptedException {
+        var spinIterations = isRendezvous ? RENDEZVOUS_SPINS : 0;
         while (data == null) {
             if (spinIterations > 0) {
                 Thread.onSpinWait();

@@ -101,7 +101,7 @@ public class Select {
     @SafeVarargs
     private static <U> Object doSelectSafe(SelectClause<U>... clauses) throws InterruptedException {
         // check that the clause doesn't refer to a channel that is already used in a different clause
-        verifyChannelsUnique(clauses);
+        var allRendezvous = verifyChannelsUnique_getAreAllRendezvous(clauses);
 
         var si = new SelectInstance(clauses.length);
         for (int i = 0; i < clauses.length; i++) {
@@ -114,18 +114,22 @@ public class Select {
             }
         }
 
-        return si.checkStateAndWait();
+        return si.checkStateAndWait(allRendezvous);
     }
 
-    private static void verifyChannelsUnique(SelectClause<?>[] clauses) {
+    private static boolean verifyChannelsUnique_getAreAllRendezvous(SelectClause<?>[] clauses) {
+        var allRendezvous = true;
         // we expect the number of clauses to be small, so that this n^2 double-loop is faster than allocating a set
         for (int i = 0; i < clauses.length; i++) {
+            var chi = clauses[i].getChannel();
             for (int j = i + 1; j < clauses.length; j++) {
-                if (clauses[i].getChannel() == clauses[j].getChannel()) {
-                    throw new IllegalArgumentException("Channel " + clauses[i].getChannel() + " is used in multiple clauses");
+                if (chi == clauses[j].getChannel()) {
+                    throw new IllegalArgumentException("Channel " + chi + " is used in multiple clauses");
                 }
             }
+            allRendezvous = allRendezvous && (chi == null || chi.isRendezvous);
         }
+        return allRendezvous;
     }
 
     public static <T> SelectClause<T> defaultClause(T value) {
@@ -210,10 +214,12 @@ class SelectInstance {
     // main loop
 
     /**
+     * @param allRendezvous If channels for all clauses are rendezvous channels. In such a case, busy-looping is
+     *                      initially used, instead of blocking.
      * @return Either the value returned by the selected clause (which can include {@link RestartSelectMarker#RESTART}),
      * or {@link ChannelClosed}, when any of the channels is closed.
      */
-    Object checkStateAndWait() throws InterruptedException {
+    Object checkStateAndWait(boolean allRendezvous) throws InterruptedException {
         while (true) {
             var currentState = state;
             if (currentState == SelectState.REGISTERING) {
@@ -221,7 +227,7 @@ class SelectInstance {
                 // we won't leave this case until the state is changed from Thread
                 var currentThread = Thread.currentThread();
                 if (STATE.compareAndSet(this, SelectState.REGISTERING, currentThread)) {
-                    var spinIterations = Continuation.SPINS;
+                    var spinIterations = allRendezvous ? Continuation.RENDEZVOUS_SPINS : 0;
                     while (state == currentThread) {
                         // same logic as in Continuation
                         if (spinIterations > 0) {
