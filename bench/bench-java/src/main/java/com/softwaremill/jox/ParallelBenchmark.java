@@ -21,7 +21,7 @@ public class ParallelBenchmark {
     @Param({"10000"})
     public int parallelism;
 
-    private final static int OPERATIONS_PER_INVOCATION = 1_000_000_000;
+    private final static int OPERATIONS_PER_INVOCATION = 100_000_000;
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)

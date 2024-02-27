@@ -23,7 +23,7 @@ public class ChainedBenchmark {
     @Param({"10000"})
     public int chainLength;
 
-    private final static int OPERATIONS_PER_INVOCATION = 1_000_000_000;
+    private final static int OPERATIONS_PER_INVOCATION = 10_000_000;
 
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
