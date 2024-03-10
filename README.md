@@ -1,5 +1,10 @@
 # jox
 
+[![Ideas, suggestions, problems, questions](https://img.shields.io/badge/Discourse-ask%20question-blue)](https://softwaremill.community/c/open-source/11)
+[![CI](https://github.com/softwaremill/jox/workflows/CI/badge.svg)](https://github.com/softwaremill/jox/actions?query=workflow%3A%22CI%22)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/core/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/core)
+[![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/core/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/core)
+
 Fast and Scalable Channels in Java. Designed to be used with Java 21+ and virtual threads,
 see [Project Loom](https://openjdk.org/projects/loom/) (although the `core` module can be used with Java 17+).
 
