@@ -123,7 +123,7 @@ public class TestUtil {
     public static List<String> drainChannel(Channel<String> ch) throws InterruptedException {
         var result = new ArrayList<String>();
         while (true) {
-            var e = ch.receiveSafe();
+            var e = ch.receiveOrClosed();
             if (e instanceof ChannelDone) {
                 return result;
             } else {

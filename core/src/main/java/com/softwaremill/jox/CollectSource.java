@@ -34,9 +34,9 @@ public class CollectSource<V, T> implements Source<T> {
     }
 
     @Override
-    public Object receiveSafe() throws InterruptedException {
+    public Object receiveOrClosed() throws InterruptedException {
         while (true) {
-            var r = original.receiveSafe();
+            var r = original.receiveOrClosed();
             if (r instanceof ChannelClosed c) {
                 return c;
             } else {

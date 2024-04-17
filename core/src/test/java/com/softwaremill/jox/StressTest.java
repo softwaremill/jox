@@ -144,7 +144,7 @@ public class StressTest {
 
                 Fork<Object> f;
                 if (data.direct) {
-                    f = forkCancelable(data.scope, () -> data.chs.get(0).sendSafe(msg));
+                    f = forkCancelable(data.scope, () -> data.chs.get(0).sendOrClosed(msg));
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
@@ -178,7 +178,7 @@ public class StressTest {
 
                 Fork<Object> f;
                 if (data.direct) {
-                    f = forkCancelable(data.scope, data.chs.get(0)::receiveSafe);
+                    f = forkCancelable(data.scope, data.chs.get(0)::receiveOrClosed);
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
