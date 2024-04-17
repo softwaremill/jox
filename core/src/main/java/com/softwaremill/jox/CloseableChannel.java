@@ -8,12 +8,12 @@ import java.util.function.Predicate;
  * <p>
  * A channel can be closed in two ways:
  * <ul>
- *     <li>using {@link #done()} or {@link #doneSafe()}, indicating that no more elements will be sent</li>
- *     <li>using {@link #error(Throwable)} or {@link #errorSafe(Throwable)}, indicating an error</li>
+ *     <li>using {@link #done()} or {@link #doneOrClosed()}, indicating that no more elements will be sent</li>
+ *     <li>using {@link #error(Throwable)} or {@link #errorOrClosed(Throwable)}, indicating an error</li>
  * </ul>
  * <p>
  * A channel can be closed only once. Subsequent calls to {@link #done()} or {@link #error(Throwable)} will throw
- * {@link ChannelClosedException}, or return the original closing reason (when using {@link #doneSafe()} or {@link #errorSafe(Throwable)}).
+ * {@link ChannelClosedException}, or return the original closing reason (when using {@link #doneOrClosed()} or {@link #errorOrClosed(Throwable)}).
  * <p>
  * Closing the channel is thread-safe.
  */
@@ -41,7 +41,7 @@ public interface CloseableChannel {
      *
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
-    Object doneSafe();
+    Object doneOrClosed();
 
     //
 
@@ -68,13 +68,13 @@ public interface CloseableChannel {
      *
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is already closed.
      */
-    Object errorSafe(Throwable reason);
+    Object errorOrClosed(Throwable reason);
 
     //
 
     /**
      * @return {@code true} if no more values can be sent to this channel; {@link Sink#send(Object)} will throw
-     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant).
+     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the or-closed variant).
      * <p>
      * When closed for send, receiving using {@link Source#receive()} might still be possible, if the channel is done,
      * and not in an error. This can be verified using {@link #isClosedForReceive()}.
@@ -85,7 +85,7 @@ public interface CloseableChannel {
 
     /**
      * @return {@code true} if no more values can be received from this channel; {@link Source#receive()} will throw
-     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant).
+     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the or-closed variant).
      * <p>
      * When closed for receive, sending values is also not possible, {@link #isClosedForSend()} will return {@code true}.
      * <p>
@@ -100,7 +100,7 @@ public interface CloseableChannel {
 
     /**
      * @return Non-{@code null} if no more values can be sent to this channel; {@link Sink#send(Object)} will throw
-     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant).
+     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the or-closed variant).
      * <p>
      * {@code null} if the channel is not closed, and values can be sent.
      * <p>
@@ -111,7 +111,7 @@ public interface CloseableChannel {
 
     /**
      * @return Non-{@code null} if no more values can be received from this channel; {@link Source#receive()} will throw
-     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the safe variant).
+     * {@link ChannelClosedException} or return {@link ChannelClosed} (in the or-closed variant).
      * <p>
      * {@code null} if the channel is not closed, and values can be received.
      * <p>

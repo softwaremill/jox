@@ -3,7 +3,7 @@ package com.softwaremill.jox;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static com.softwaremill.jox.Select.selectSafe;
+import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -148,7 +148,7 @@ public class StressTest {
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
-                    f = forkCancelable(data.scope, () -> selectSafe(channels.stream().map(ch -> ch.sendClause(msg)).toArray(SelectClause[]::new)));
+                    f = forkCancelable(data.scope, () -> selectOrClosed(channels.stream().map(ch -> ch.sendClause(msg)).toArray(SelectClause[]::new)));
                 }
 
                 Object result;
@@ -182,7 +182,7 @@ public class StressTest {
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
-                    f = forkCancelable(data.scope, () -> selectSafe(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+                    f = forkCancelable(data.scope, () -> selectOrClosed(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
                 }
 
                 Object result;

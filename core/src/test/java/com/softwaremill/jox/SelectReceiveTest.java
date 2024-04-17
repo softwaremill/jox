@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 
 import static com.softwaremill.jox.Select.select;
-import static com.softwaremill.jox.Select.selectSafe;
+import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -83,7 +83,7 @@ public class SelectReceiveTest {
         ch2.done();
 
         // when
-        Object received = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+        Object received = selectOrClosed(ch1.receiveClause(), ch2.receiveClause());
 
         // then
         assertEquals("x", received);
@@ -136,7 +136,7 @@ public class SelectReceiveTest {
         ch2.send("x");
 
         // when
-        Object received = selectSafe(ch1.receiveClause(), ch2.receiveClause());
+        Object received = selectOrClosed(ch1.receiveClause(), ch2.receiveClause());
 
         // then
         assertEquals(new ChannelDone(), received);
@@ -220,6 +220,6 @@ public class SelectReceiveTest {
 
     @Test
     void testSelectFromNone() throws InterruptedException {
-        assertEquals(new ChannelDone(), selectSafe());
+        assertEquals(new ChannelDone(), selectOrClosed());
     }
 }

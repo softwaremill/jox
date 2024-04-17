@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
 import static com.softwaremill.jox.Select.select;
-import static com.softwaremill.jox.Select.selectSafe;
+import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -104,7 +104,7 @@ public class SelectSendTest {
         ch2.done();
 
         // when
-        Object received = selectSafe(ch1.sendClause("v1"), ch2.sendClause("v2"));
+        Object received = selectOrClosed(ch1.sendClause("v1"), ch2.sendClause("v2"));
 
         // then
         assertEquals(new ChannelDone(), received);

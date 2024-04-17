@@ -684,15 +684,15 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public void done() {
-        var r = doneSafe();
+        var r = doneOrClosed();
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         }
     }
 
     @Override
-    public Object doneSafe() {
-        return closeSafe(new ChannelDone());
+    public Object doneOrClosed() {
+        return closeOrClosed(new ChannelDone());
     }
 
     @Override
@@ -700,18 +700,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         if (reason == null) {
             throw new NullPointerException("Error reason cannot be null");
         }
-        var r = errorSafe(reason);
+        var r = errorOrClosed(reason);
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         }
     }
 
     @Override
-    public Object errorSafe(Throwable reason) {
-        return closeSafe(new ChannelError(reason));
+    public Object errorOrClosed(Throwable reason) {
+        return closeOrClosed(new ChannelError(reason));
     }
 
-    private Object closeSafe(ChannelClosed channelClosed) {
+    private Object closeOrClosed(ChannelClosed channelClosed) {
         if (!CLOSED_REASON.compareAndSet(this, null, channelClosed)) {
             return closedReason; // already closed
         }
