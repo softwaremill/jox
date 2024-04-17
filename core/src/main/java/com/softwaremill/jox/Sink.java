@@ -20,7 +20,7 @@ public interface Sink<T> extends CloseableChannel {
      * @param value The value to send. Not {@code null}.
      * @return Either {@code null}, or {@link ChannelClosed}, when the channel is closed.
      */
-    Object sendSafe(T value) throws InterruptedException;
+    Object sendOrClosed(T value) throws InterruptedException;
 
     //
 

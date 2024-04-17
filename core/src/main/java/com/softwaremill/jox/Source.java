@@ -19,7 +19,7 @@ public interface Source<T> extends CloseableChannel {
      *
      * @return Either a value of type {@code T}, or {@link ChannelClosed}, when the channel is closed.
      */
-    Object receiveSafe() throws InterruptedException;
+    Object receiveOrClosed() throws InterruptedException;
 
     /**
      * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will receive a value from

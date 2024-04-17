@@ -54,7 +54,7 @@ public class Select {
      */
     @SafeVarargs
     public static <U> U select(SelectClause<U>... clauses) throws InterruptedException {
-        var r = selectSafe(clauses);
+        var r = selectOrClosed(clauses);
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         } else {
@@ -77,18 +77,18 @@ public class Select {
      * is closed (done or in error).
      */
     @SafeVarargs
-    public static <U> Object selectSafe(SelectClause<U>... clauses) throws InterruptedException {
+    public static <U> Object selectOrClosed(SelectClause<U>... clauses) throws InterruptedException {
         while (true) {
             if (clauses.length == 0) {
                 // no clauses given
                 return new ChannelDone();
             }
 
-            var r = doSelectSafe(clauses);
+            var r = doSelectOrClosed(clauses);
             //noinspection StatementWithEmptyBody
             if (r == RestartSelectMarker.RESTART) {
                 // in case a `CollectSource` function filters out the element (the transformation function returns `null`,
-                // which is represented as a marker because `null` is a valid result of `doSelectSafe`, e.g. for send clauses),
+                // which is represented as a marker because `null` is a valid result of `doSelectorClosed`, e.g. for send clauses),
                 // we need to restart the selection process
 
                 // next loop
@@ -99,7 +99,7 @@ public class Select {
     }
 
     @SafeVarargs
-    private static <U> Object doSelectSafe(SelectClause<U>... clauses) throws InterruptedException {
+    private static <U> Object doSelectOrClosed(SelectClause<U>... clauses) throws InterruptedException {
         // check that the clause doesn't refer to a channel that is already used in a different clause
         var allRendezvous = verifyChannelsUnique_getAreAllRendezvous(clauses);
 

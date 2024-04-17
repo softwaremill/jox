@@ -43,7 +43,7 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  * the reason for the closure.
  * <p>
  * In case the channel is closed, one of the {@link ChannelClosedException}s is thrown. Alternatively, you can call
- * the less type-safe, but more exception-safe {@link Channel#sendSafe(Object)} and {@link Channel#receiveSafe()}
+ * the less type-safe, but more exception-safe {@link Channel#sendOrClosed(Object)} and {@link Channel#receiveOrClosed()}
  * methods, which do not throw in case the channel is closed, but return one of the {@link ChannelClosed} values.
  *
  * @param <T> The type of the values processed by the channel.
@@ -210,14 +210,14 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public void send(T value) throws InterruptedException {
-        var r = sendSafe(value);
+        var r = sendOrClosed(value);
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         }
     }
 
     @Override
-    public Object sendSafe(T value) throws InterruptedException {
+    public Object sendOrClosed(T value) throws InterruptedException {
         return doSend(value, null, null);
     }
 
@@ -382,7 +382,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public T receive() throws InterruptedException {
-        var r = receiveSafe();
+        var r = receiveOrClosed();
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         } else {
@@ -392,7 +392,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     @Override
-    public Object receiveSafe() throws InterruptedException {
+    public Object receiveOrClosed() throws InterruptedException {
         return doReceive(null, null);
     }
 
@@ -684,15 +684,15 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public void done() {
-        var r = doneSafe();
+        var r = doneOrClosed();
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         }
     }
 
     @Override
-    public Object doneSafe() {
-        return closeSafe(new ChannelDone());
+    public Object doneOrClosed() {
+        return closeOrClosed(new ChannelDone());
     }
 
     @Override
@@ -700,18 +700,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         if (reason == null) {
             throw new NullPointerException("Error reason cannot be null");
         }
-        var r = errorSafe(reason);
+        var r = errorOrClosed(reason);
         if (r instanceof ChannelClosed c) {
             throw c.toException();
         }
     }
 
     @Override
-    public Object errorSafe(Throwable reason) {
-        return closeSafe(new ChannelError(reason));
+    public Object errorOrClosed(Throwable reason) {
+        return closeOrClosed(new ChannelError(reason));
     }
 
-    private Object closeSafe(ChannelClosed channelClosed) {
+    private Object closeOrClosed(ChannelClosed channelClosed) {
         if (!CLOSED_REASON.compareAndSet(this, null, channelClosed)) {
             return closedReason; // already closed
         }

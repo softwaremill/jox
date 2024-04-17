@@ -38,10 +38,10 @@ public class ChannelUnlimitedTest {
         c.done();
 
         // when
-        var r1 = c.receiveSafe();
-        var r2 = c.receiveSafe();
-        var r3 = c.receiveSafe();
-        var r4 = c.receiveSafe();
+        var r1 = c.receiveOrClosed();
+        var r2 = c.receiveOrClosed();
+        var r3 = c.receiveOrClosed();
+        var r4 = c.receiveOrClosed();
 
         // then
         assertEquals(1, r1);
@@ -60,8 +60,8 @@ public class ChannelUnlimitedTest {
         c.error(new RuntimeException());
 
         // when
-        var r1 = c.receiveSafe();
-        var r2 = c.receiveSafe();
+        var r1 = c.receiveOrClosed();
+        var r2 = c.receiveOrClosed();
 
         // then
         assertInstanceOf(ChannelError.class, r1);

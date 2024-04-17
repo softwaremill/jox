@@ -11,7 +11,8 @@ see [Project Loom](https://openjdk.org/projects/loom/) (although the `core` modu
 Inspired by the "Fast and Scalable Channels in Kotlin Coroutines" [paper](https://arxiv.org/abs/2211.04986), and
 the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
 
-JavaDocs can be browsed at [https://javadoc.io](https://www.javadoc.io/doc/com.softwaremill.jox/core/latest/com.softwaremill.jox/com/softwaremill/jox/package-summary.html).
+JavaDocs can be browsed
+at [https://javadoc.io](https://www.javadoc.io/doc/com.softwaremill.jox/core/latest/com.softwaremill.jox/com/softwaremill/jox/package-summary.html).
 
 Articles:
 
@@ -113,8 +114,8 @@ Channels can be closed, either because the source is `done` with sending values,
 the sink processes the received values.
 
 `send()` and `receive()` will throw a `ChannelClosedException` when the channel is closed. Alternatively, you can
-use the `sendSafe()` and `receiveSafe()` methods, which return either a `ChannelClosed` value (reason of closure),
-or `null` / the received value.
+use the `sendOrClosed()` and `receiveOrClosed()` methods, which return either a `ChannelClosed` value (reason of
+closure), or `null` / the received value.
 
 Channels can also be inspected whether they are closed, using the `isClosedForReceive()` and `isClosedForSend()`.
 
@@ -131,9 +132,9 @@ class Demo3 {
         ch.done();
 
         // prints: Received: 1
-        System.out.println("Received: " + ch.receiveSafe());
+        System.out.println("Received: " + ch.receiveOrClosed());
         // prints: Received: ChannelDone[]
-        System.out.println("Received: " + ch.receiveSafe());
+        System.out.println("Received: " + ch.receiveOrClosed());
     }
 }
 ```

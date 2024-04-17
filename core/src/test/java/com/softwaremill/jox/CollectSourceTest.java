@@ -2,7 +2,7 @@ package com.softwaremill.jox;
 
 import org.junit.jupiter.api.Test;
 
-import static com.softwaremill.jox.Select.selectSafe;
+import static com.softwaremill.jox.Select.selectOrClosed;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
@@ -16,8 +16,8 @@ public class CollectSourceTest {
         // when
         c.send(8);
         c.done();
-        var r1 = s.receiveSafe();
-        var r2 = s.receiveSafe();
+        var r1 = s.receiveOrClosed();
+        var r2 = s.receiveOrClosed();
 
         // then
         assertEquals(16, r1);
@@ -35,9 +35,9 @@ public class CollectSourceTest {
         c.send(9);
         c.send(10);
         c.done();
-        var r1 = s.receiveSafe();
-        var r2 = s.receiveSafe();
-        var r3 = s.receiveSafe();
+        var r1 = s.receiveOrClosed();
+        var r2 = s.receiveOrClosed();
+        var r3 = s.receiveOrClosed();
 
         // then
         assertEquals(8, r1);
@@ -54,8 +54,8 @@ public class CollectSourceTest {
         // when
         c.send(8);
         c.done();
-        var r1 = selectSafe(s.receiveClause());
-        var r2 = selectSafe(s.receiveClause());
+        var r1 = selectOrClosed(s.receiveClause());
+        var r2 = selectOrClosed(s.receiveClause());
 
         // then
         assertEquals(16, r1);
@@ -73,9 +73,9 @@ public class CollectSourceTest {
         c.send(9);
         c.send(10);
         c.done();
-        var r1 = selectSafe(s.receiveClause());
-        var r2 = selectSafe(s.receiveClause());
-        var r3 = selectSafe(s.receiveClause());
+        var r1 = selectOrClosed(s.receiveClause());
+        var r2 = selectOrClosed(s.receiveClause());
+        var r3 = selectOrClosed(s.receiveClause());
 
         // then
         assertEquals(8, r1);

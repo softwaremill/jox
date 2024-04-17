@@ -114,7 +114,7 @@ public class ChannelRendezvousTest {
         // given
         Channel<Integer> c = new Channel<>();
         scoped(scope -> {
-            var f = fork(scope, c::receiveSafe);
+            var f = fork(scope, c::receiveOrClosed);
 
             // when
             Thread.sleep(100L);
@@ -124,7 +124,7 @@ public class ChannelRendezvousTest {
             assertEquals(new ChannelDone(), f.get());
 
             // should be rejected immediately
-            assertEquals(new ChannelDone(), c.receiveSafe());
+            assertEquals(new ChannelDone(), c.receiveOrClosed());
         });
     }
 
@@ -133,7 +133,7 @@ public class ChannelRendezvousTest {
         // given
         Channel<Integer> c = new Channel<>();
         scoped(scope -> {
-            var f = fork(scope, () -> c.sendSafe(1));
+            var f = fork(scope, () -> c.sendOrClosed(1));
 
             // when
             Thread.sleep(100L);
@@ -143,7 +143,7 @@ public class ChannelRendezvousTest {
             assertInstanceOf(ChannelError.class, f.get());
 
             // should be rejected immediately
-            assertInstanceOf(ChannelError.class, c.sendSafe(2));
+            assertInstanceOf(ChannelError.class, c.sendOrClosed(2));
         });
     }
 
