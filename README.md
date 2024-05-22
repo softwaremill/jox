@@ -20,6 +20,10 @@ Articles:
 * [Go-like selects using jox channels in Java](https://softwaremill.com/go-like-selects-using-jox-channels-in-java/)
 * [Jox 0.1: virtual-thread friendly channels for Java](https://softwaremill.com/jox-0-1-virtual-thread-friendly-channels-for-java/)
 
+Videos:
+
+* [A 10-minute introduction to Jox](https://www.youtube.com/watch?v=Ss9b1HpPDt0)
+
 ## Dependencies
 
 Maven:
