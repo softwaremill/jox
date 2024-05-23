@@ -49,4 +49,18 @@ public class SelectTest {
             // then ok
         }
     }
+
+    @Test
+    public void testSelectObject() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<Integer> ch2 = new Channel<>(1);
+        ch1.send("x");
+
+        // when
+        Object received = select(ch1.receiveClause(), ch2.receiveClause());
+
+        // then
+        assertEquals("x", received);
+    }
 }

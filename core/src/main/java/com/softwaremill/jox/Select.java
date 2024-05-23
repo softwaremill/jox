@@ -53,7 +53,7 @@ public class Select {
      * @throws ChannelClosedException When any of the channels is closed (done or in error).
      */
     @SafeVarargs
-    public static <U> U select(SelectClause<U>... clauses) throws InterruptedException {
+    public static <U> U select(SelectClause<? extends U>... clauses) throws InterruptedException {
         var r = selectOrClosed(clauses);
         if (r instanceof ChannelClosed c) {
             throw c.toException();
@@ -77,7 +77,7 @@ public class Select {
      * is closed (done or in error).
      */
     @SafeVarargs
-    public static <U> Object selectOrClosed(SelectClause<U>... clauses) throws InterruptedException {
+    public static <U> Object selectOrClosed(SelectClause<? extends U>... clauses) throws InterruptedException {
         while (true) {
             if (clauses.length == 0) {
                 // no clauses given
@@ -99,14 +99,14 @@ public class Select {
     }
 
     @SafeVarargs
-    private static <U> Object doSelectOrClosed(SelectClause<U>... clauses) throws InterruptedException {
+    private static <U> Object doSelectOrClosed(SelectClause<? extends U>... clauses) throws InterruptedException {
         // check that the clause doesn't refer to a channel that is already used in a different clause
         var allRendezvous = verifyChannelsUnique_getAreAllRendezvous(clauses);
 
         var si = new SelectInstance(clauses.length);
         for (int i = 0; i < clauses.length; i++) {
-            SelectClause<U> clause = clauses[i];
-            if (clause instanceof DefaultClause<U> && i != clauses.length - 1) {
+            SelectClause<?> clause = clauses[i];
+            if (clause instanceof DefaultClause<?> && i != clauses.length - 1) {
                 throw new IllegalArgumentException("The default clause can only be the last one.");
             }
             if (!si.register(clause)) {
