@@ -23,6 +23,7 @@ Articles:
 Videos:
 
 * [A 10-minute introduction to Jox](https://www.youtube.com/watch?v=Ss9b1HpPDt0)
+* [Passing control information through channels](https://www.youtube.com/watch?v=VjiCzaiRro8)
 
 ## Dependencies
 
