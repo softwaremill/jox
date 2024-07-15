@@ -39,7 +39,7 @@
         </dependency>
         <dependency>
             <groupId>com.softwaremill.jox</groupId>
-            <artifactId>core</artifactId>
+            <artifactId>channels</artifactId>
             <version>0.2.1</version>
         </dependency>
     </dependencies>

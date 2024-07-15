@@ -17,7 +17,7 @@
     </properties>
 
     <modules>
-        <module>core</module>
+        <module>channels</module>
         <module>bench</module>
     </modules>
 
