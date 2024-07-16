@@ -10,8 +10,8 @@ import static com.softwaremill.jox.structured.Util.uninterruptible;
 public class Scopes {
     /**
      * Starts a new concurrency scope, which allows starting forks in the given code block <code>f</code>. Forks can be
-     * started using {@link Scope#forkUnsupervised} and {@link Scope#forkCancellable}. All forks are guaranteed to
-     * complete before this scope completes.
+     * started using {@link UnsupervisedScope#forkUnsupervised} and {@link UnsupervisedScope#forkCancellable}. All forks
+     * are guaranteed to complete before this scope completes.
      * <p>
      * It is advisable to use {@link #supervised(Scoped)} scopes if possible, as they minimise the chances of an error
      * to go unnoticed.
@@ -37,8 +37,8 @@ public class Scopes {
 
     /**
      * Starts a new concurrency scope, which allows starting forks in the given code block <code>f</code>. Forks can be
-     * started using {@link Scope#fork}, {@link Scope#forkUser}, {@link Scope#forkCancellable} or
-     * {@link Scope#forkUnsupervised}. All forks are guaranteed to complete before this scope completes.
+     * started using {@link Scope#fork}, {@link Scope#forkUser}, {@link UnsupervisedScope#forkCancellable} or
+     * {@link UnsupervisedScope#forkUnsupervised}. All forks are guaranteed to complete before this scope completes.
      * <p>
      * The scope is ran in supervised mode, that is:
      *
@@ -123,7 +123,7 @@ public class Scopes {
         }
     }
 
-    private static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws Exception {
+    static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws Exception {
         var scope = capability.getScope();
         var finalizers = capability.getFinalizers();
 

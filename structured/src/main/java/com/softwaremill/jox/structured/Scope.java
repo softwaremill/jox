@@ -11,8 +11,8 @@ import java.util.concurrent.StructuredTaskScope;
  * concurrency scope.
  * <p>
  * Represents a capability to fork supervised or unsupervised, asynchronously running computations in a concurrency
- * scope. Such forks can be created using {@link Scope#fork}, {@link Scope#forkUser}, {@link Scope#forkCancellable} or
- * {@link Scope#forkUnsupervised}.
+ * scope. Such forks can be created using {@link Scope#fork}, {@link Scope#forkUser},
+ * {@link UnsupervisedScope#forkCancellable} or {@link UnsupervisedScope#forkUnsupervised}.
  *
  * @see ScopedUnsupervised
  */
@@ -59,8 +59,8 @@ public class Scope extends UnsupervisedScope {
      * An exception thrown while evaluating <code>f</code> will cause the fork to fail and the enclosing scope to end
      * (cancelling all other running forks).
      * <p>
-     * For alternate behaviors regarding ending the scope, see {@link #forkUser}, {@link #forkCancellable} and
-     * {@link #forkUnsupervised}.
+     * For alternate behaviors regarding ending the scope, see {@link #forkUser},
+     * {@link UnsupervisedScope#forkCancellable} and {@link UnsupervisedScope#forkUnsupervised}.
      */
     public <T> Fork<T> fork(Callable<T> f) {
         var result = new CompletableFuture<T>();
@@ -92,8 +92,8 @@ public class Scope extends UnsupervisedScope {
      * An exception thrown while evaluating <code>f</code> will cause the enclosing scope to end (cancelling all other
      * running forks).
      * <p>
-     * For alternate behaviors regarding ending the scope, see {@link #fork}, {@link #forkCancellable} and
-     * {@link #forkUnsupervised}.
+     * For alternate behaviors regarding ending the scope, see {@link #fork}, {@link UnsupervisedScope#forkCancellable}
+     * and {@link UnsupervisedScope#forkUnsupervised}.
      */
     public <T> Fork<T> forkUser(Callable<T> f) {
         var result = new CompletableFuture<T>();
