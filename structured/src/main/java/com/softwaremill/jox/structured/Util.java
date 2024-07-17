@@ -5,8 +5,8 @@ import java.util.concurrent.ExecutionException;
 
 public class Util {
     /**
-     * Prevent <code>f</code> from being interrupted. Any interrupted exceptions that occur while evaluating
-     * <code>f</code> will be re-thrown once it completes.
+     * Prevent {@code f} from being interrupted. Any interrupted exceptions that occur while evaluating
+     * {@code f} will be re-thrown once it completes.
      */
     public static <T> T uninterruptible(Callable<T> f) throws Exception {
         return Scopes.unsupervised(c -> {

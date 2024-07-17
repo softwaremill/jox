@@ -10,10 +10,10 @@ import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 public class Race {
     /**
-     * The result of computation <code>f</code>, if it took less than <code>millis</code> ms, and a
-     * {@link TimeoutException} otherwise.
+     * The result of computation {@code f}, if it took less than {@code millis} ms, and a {@link TimeoutException}
+     * otherwise.
      *
-     * @throws TimeoutException If <code>f</code> took more than <code>millis</code>.
+     * @throws TimeoutException If {@code f} took more than {@code millis}.
      */
     public static <T> T timeout(long millis, Callable<T> f) throws Exception {
         return raceResult(f, () -> {

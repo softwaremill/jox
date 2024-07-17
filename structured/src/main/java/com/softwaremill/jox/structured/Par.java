@@ -24,7 +24,7 @@ public class Par {
     }
 
     /**
-     * Runs the given computations in parallel, with at most <code>parallelism</code> running in parallel at the same
+     * Runs the given computations in parallel, with at most {@code parallelism} running in parallel at the same
      * time. If any computation fails because of an exception, or if any returns an application error, other
      * computations are interrupted. Then, the exception is re-thrown, or the error value returned.
      */

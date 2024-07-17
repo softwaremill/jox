@@ -9,7 +9,7 @@ import static com.softwaremill.jox.structured.Util.uninterruptible;
 
 public class Scopes {
     /**
-     * Starts a new concurrency scope, which allows starting forks in the given code block <code>f</code>. Forks can be
+     * Starts a new concurrency scope, which allows starting forks in the given code block {@code f}. Forks can be
      * started using {@link UnsupervisedScope#forkUnsupervised} and {@link UnsupervisedScope#forkCancellable}. All forks
      * are guaranteed to complete before this scope completes.
      * <p>
@@ -19,15 +19,15 @@ public class Scopes {
      * The scope is ran in unsupervised mode, that is:
      *
      * <ul>
-     * <li>the scope ends once the <code>f</code> body completes; this causes any running forks started within
-     * <code>f</code> to be cancelled
-     * <li>the scope completes (that is, this method returns) only once all forks started by <code>f</code> have
+     * <li>the scope ends once the {@code f} body completes; this causes any running forks started within
+     * {@code f} to be cancelled
+     * <li>the scope completes (that is, this method returns) only once all forks started by {@code f} have
      * completed (either successfully, or with an exception)
      * <li>fork failures aren't handled in any special way, but can be inspected using {@link Fork#join()}
      * </ul>
      * <p>
-     * Upon successful completion, returns the result of evaluating <code>f</code>. Upon failure, that is an exception
-     * thrown by <code>f</code>, it is re-thrown.
+     * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, that is an exception
+     * thrown by {@code f}, it is re-thrown.
      *
      * @see #supervised(Scoped) Starts a scope in supervised mode
      */
@@ -36,7 +36,7 @@ public class Scopes {
     }
 
     /**
-     * Starts a new concurrency scope, which allows starting forks in the given code block <code>f</code>. Forks can be
+     * Starts a new concurrency scope, which allows starting forks in the given code block {@code f}. Forks can be
      * started using {@link Scope#fork}, {@link Scope#forkUser}, {@link UnsupervisedScope#forkCancellable} or
      * {@link UnsupervisedScope#forkUnsupervised}. All forks are guaranteed to complete before this scope completes.
      * <p>
@@ -44,16 +44,16 @@ public class Scopes {
      *
      * <ul>
      * <li>the scope ends once all user, supervised forks (started using {@link Scope#forkUser}), including the
-     * <code>f</code> body, succeed. Forks started using {@link Scope#fork}  (daemon) don't have to complete
+     * {@code f} body, succeed. Forks started using {@link Scope#fork}  (daemon) don't have to complete
      * successfully for the scope to end.
-     * <li>the scope also ends once the first supervised fork (including the <code>f</code> main body) fails with an
+     * <li>the scope also ends once the first supervised fork (including the {@code f} main body) fails with an
      * exception
      * <li>when the scope <strong>ends</strong>, all running forks are cancelled
      * <li>the scope <strong>completes</strong> (that is, this method returns) only once all forks started by
-     * <code>f</code> have completed (either successfully, or with an exception)
+     * {@code f} have completed (either successfully, or with an exception)
      * </ul>
      * <p>
-     * Upon successful completion, returns the result of evaluating <code>f</code>. Upon failure, the exception that
+     * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, the exception that
      * caused the scope to end is re-thrown (regardless if the exception was thrown from the main body, or from a fork).
      * Any other exceptions that occur when completing the scope are added as suppressed.
      *

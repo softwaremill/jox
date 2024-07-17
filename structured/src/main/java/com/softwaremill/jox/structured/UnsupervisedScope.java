@@ -31,7 +31,7 @@ public abstract class UnsupervisedScope {
      * Starts a fork (logical thread of execution), which is guaranteed to complete before the enclosing
      * {@link Scopes#supervised(Scoped)}, or {@link Scopes#unsupervised(ScopedUnsupervised)} block completes.
      * <p>
-     * In case an exception is thrown while evaluating <code>f</code>, it will be thrown when calling the returned
+     * In case an exception is thrown while evaluating {@code f}, it will be thrown when calling the returned
      * {@link UnsupervisedFork}'s <code>.join()</code> method.
      * <p>
      * Success or failure isn't signalled to the enclosing scope, and doesn't influence the scope's lifecycle.
@@ -56,8 +56,8 @@ public abstract class UnsupervisedScope {
      * {@link Scopes#supervised(Scoped)}, or {@link Scopes#unsupervised(ScopedUnsupervised)} block completes, and which
      * can be cancelled on-demand.
      * <p>
-     * In case an exception is thrown while evaluating <code>f</code>, it will be thrown when calling the returned
-     * {@link CancellableFork}'s `.join()` method.
+     * In case an exception is thrown while evaluating {@code f}, it will be thrown when calling the returned
+     * {@link CancellableFork}'s {@code .join()} method.
      * <p>
      * The fork is unsupervised (similarly to {@link #forkUnsupervised(Callable)}), hence success or failure isn't
      * signalled to the enclosing scope and doesn't influence the scope's lifecycle.

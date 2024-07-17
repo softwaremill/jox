@@ -56,7 +56,7 @@ public class Scope extends UnsupervisedScope {
      * running forks (including this one, if it's still running). That is, successful completion of this fork isn't
      * required to end the scope.
      * <p>
-     * An exception thrown while evaluating <code>f</code> will cause the fork to fail and the enclosing scope to end
+     * An exception thrown while evaluating {@code f} will cause the fork to fail and the enclosing scope to end
      * (cancelling all other running forks).
      * <p>
      * For alternate behaviors regarding ending the scope, see {@link #forkUser},
@@ -89,7 +89,7 @@ public class Scope extends UnsupervisedScope {
      * user forks (including this one) complete successfully. That is, successful completion of this fork is required to
      * end the scope.
      * <p>
-     * An exception thrown while evaluating <code>f</code> will cause the enclosing scope to end (cancelling all other
+     * An exception thrown while evaluating {@code f} will cause the enclosing scope to end (cancelling all other
      * running forks).
      * <p>
      * For alternate behaviors regarding ending the scope, see {@link #fork}, {@link UnsupervisedScope#forkCancellable}
