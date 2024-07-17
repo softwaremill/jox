@@ -1,4 +1,4 @@
-# jox
+# Jox
 
 [![Ideas, suggestions, problems, questions](https://img.shields.io/badge/Discourse-ask%20question-blue)](https://softwaremill.community/c/open-source/11)
 [![CI](https://github.com/softwaremill/jox/workflows/CI/badge.svg)](https://github.com/softwaremill/jox/actions?query=workflow%3A%22CI%22)
@@ -8,8 +8,8 @@
 Modern concurrency for Java 21+ (backed by virtual threads, see [Project Loom](https://openjdk.org/projects/loom/)).
 Includes:
 
-* Fast and Scalable Channels in Java. Inspired by the "Fast and Scalable Channels in Kotlin
-  Coroutines" [paper](https://arxiv.org/abs/2211.04986), and
+* Fast and Scalable Channels in Java. Inspired by the "Fast and Scalable Channels in Kotlin Coroutines"
+  [paper](https://arxiv.org/abs/2211.04986), and
   the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
 * Programmer-friendly structured concurrency
 * Blocking, synchronous, functional streaming operators
