@@ -1,9 +1,7 @@
 package com.softwaremill.jox.structured;
 
-import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.StructuredTaskScope;
 
 /**
@@ -18,12 +16,10 @@ import java.util.concurrent.StructuredTaskScope;
  */
 public class Scope extends UnsupervisedScope {
     private final StructuredTaskScope<Object> scope;
-    private final ConcurrentLinkedQueue<Runnable> finalizers;
     private final Supervisor supervisor;
 
     Scope(Supervisor supervisor) {
         this.scope = new DoNothingScope();
-        this.finalizers = new ConcurrentLinkedQueue<>();
         this.supervisor = supervisor;
     }
 
@@ -33,18 +29,8 @@ public class Scope extends UnsupervisedScope {
     }
 
     @Override
-    Queue<Runnable> getFinalizers() {
-        return finalizers;
-    }
-
-    @Override
     Supervisor getSupervisor() {
         return supervisor;
-    }
-
-    @Override
-    void addFinalizer(Runnable f) {
-        finalizers.add(f);
     }
 
     /**

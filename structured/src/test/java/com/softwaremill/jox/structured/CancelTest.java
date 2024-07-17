@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -30,7 +31,7 @@ public class CancelTest {
             Thread.sleep(100); // making sure the fork starts
             try {
                 f.cancel();
-            } catch (InterruptedException e) {
+            } catch (ExecutionException e) {
                 // ignore
             }
             trail.add("cancel done");
@@ -63,7 +64,7 @@ public class CancelTest {
                     Thread.sleep(1); // interleave immediate cancels and after the fork starts (probably)
                 try {
                     f.cancel();
-                } catch (InterruptedException e) {
+                } catch (ExecutionException e) {
                     // ignore
                 }
                 s.release(1); // the acquire should be interrupted
@@ -105,7 +106,7 @@ public class CancelTest {
 
     @Test
     void testCancelNowFollowedByJoinEitherCatchesInterruptedExceptionWithWhichForkEnds() throws Exception {
-        assertThrows(InterruptedException.class, () -> Scopes.supervised(scope -> {
+        assertThrows(ExecutionException.class, () -> Scopes.supervised(scope -> {
             var f = scope.forkCancellable(() -> {
                 Thread.sleep(200);
                 return null;

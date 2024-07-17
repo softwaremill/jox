@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -62,7 +63,7 @@ public class SupervisedTest {
     void testSupervisedInterruptsOnceAnyForkEndsWithException() {
         Trail trail = new Trail();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+        var exception = assertThrows(ExecutionException.class, () -> {
             Scopes.supervised(scope -> {
                 scope.forkUser(() -> {
                     Thread.sleep(300);
@@ -85,7 +86,7 @@ public class SupervisedTest {
             });
         });
 
-        assertEquals("x", exception.getMessage());
+        assertEquals("x", exception.getCause().getMessage());
         trail.add("done");
         assertIterableEquals(Arrays.asList("b", "done"), trail.get());
     }
@@ -94,7 +95,7 @@ public class SupervisedTest {
     void testSupervisedInterruptsMainBodyOnceForkEndsWithException() {
         Trail trail = new Trail();
 
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> {
+        var exception = assertThrows(ExecutionException.class, () -> {
             Scopes.supervised(scope -> {
                 scope.forkUser(() -> {
                     Thread.sleep(200);
@@ -107,7 +108,7 @@ public class SupervisedTest {
             });
         });
 
-        assertEquals("x", exception.getMessage());
+        assertEquals("x", exception.getCause().getMessage());
         trail.add("done");
         assertIterableEquals(List.of("done"), trail.get());
     }

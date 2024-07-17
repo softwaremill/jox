@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -34,7 +35,7 @@ public class ParTest {
     }
 
     @Test
-    void testParInterruptsOtherComputationsIfOneFails() throws Exception {
+    void testParInterruptsOtherComputationsIfOneFails() throws InterruptedException {
         Trail trail = new Trail();
         try {
             par(List.of(() -> {
@@ -46,8 +47,8 @@ public class ParTest {
                 trail.add("exception");
                 throw new Exception("boom");
             }));
-        } catch (Exception e) {
-            if (e.getMessage().equals("boom")) {
+        } catch (ExecutionException e) {
+            if (e.getCause().getMessage().equals("boom")) {
                 trail.add("catch");
             }
         }
@@ -76,7 +77,7 @@ public class ParTest {
     }
 
     @Test
-    void testParLimitInterruptsOtherComputationsIfOneFails() throws Exception {
+    void testParLimitInterruptsOtherComputationsIfOneFails() throws InterruptedException {
         AtomicInteger counter = new AtomicInteger(0);
         Trail trail = new Trail();
         try {
@@ -91,8 +92,8 @@ public class ParTest {
                     return null;
                 }
             }).toList());
-        } catch (Exception e) {
-            if (e.getMessage().equals("boom")) {
+        } catch (ExecutionException e) {
+            if (e.getCause().getMessage().equals("boom")) {
                 trail.add("catch");
             }
         }

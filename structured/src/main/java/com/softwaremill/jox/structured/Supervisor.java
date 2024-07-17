@@ -6,8 +6,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static com.softwaremill.jox.structured.Util.throwUnwrappedExecutionException;
-
 sealed interface Supervisor permits NoOpSupervisor, DefaultSupervisor {
     void forkStarts();
 
@@ -53,20 +51,15 @@ final class DefaultSupervisor implements Supervisor {
         return true;
     }
 
-    public void join() throws Exception {
-        try {
-            result.get();
-        } catch (ExecutionException ee) {
-            throwUnwrappedExecutionException(ee);
-        }
+    public void join() throws ExecutionException, InterruptedException {
+        result.get();
     }
 
-    public Throwable addSuppressedErrors(Throwable e) {
+    public void addSuppressedErrors(Throwable e) {
         for (Throwable e2 : otherExceptions) {
-            if (e != e2) {
+            if (!e.equals(e2)) {
                 e.addSuppressed(e2);
             }
         }
-        return e;
     }
 }

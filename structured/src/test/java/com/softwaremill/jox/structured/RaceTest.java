@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
@@ -119,7 +120,7 @@ public class RaceTest {
 
     @Test
     void testRaceShouldAddOtherExceptionsAsSuppressed() {
-        Exception exception = assertThrows(Exception.class, () -> {
+        var exception = assertThrows(ExecutionException.class, () -> {
             race(() -> {
                 throw new RuntimeException("boom1!");
             }, () -> {
@@ -131,7 +132,7 @@ public class RaceTest {
             });
         });
 
-        assertEquals("boom1!", exception.getMessage());
+        assertEquals("boom1!", exception.getCause().getMessage());
         assertEquals(Set.of("boom2!", "boom3!"), Arrays.stream(exception.getSuppressed()).map(Throwable::getMessage).collect(Collectors.toSet()));
     }
 }

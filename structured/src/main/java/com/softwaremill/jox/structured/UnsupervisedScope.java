@@ -1,6 +1,5 @@
 package com.softwaremill.jox.structured;
 
-import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
@@ -21,24 +20,20 @@ import static com.softwaremill.jox.structured.Scopes.scopedWithCapability;
 public abstract class UnsupervisedScope {
     abstract StructuredTaskScope<Object> getScope();
 
-    abstract Queue<Runnable> getFinalizers();
-
     abstract Supervisor getSupervisor();
-
-    abstract void addFinalizer(Runnable f);
 
     /**
      * Starts a fork (logical thread of execution), which is guaranteed to complete before the enclosing
      * {@link Scopes#supervised(Scoped)}, or {@link Scopes#unsupervised(ScopedUnsupervised)} block completes.
      * <p>
      * In case an exception is thrown while evaluating {@code f}, it will be thrown when calling the returned
-     * {@link UnsupervisedFork}'s <code>.join()</code> method.
+     * {@link Fork}'s <code>.join()</code> method.
      * <p>
      * Success or failure isn't signalled to the enclosing scope, and doesn't influence the scope's lifecycle.
      * <p>
      * For alternate behaviors, see {@link Scope#fork}, {@link Scope#forkUser}, {@link #forkCancellable}.
      */
-    public <T> UnsupervisedFork<T> forkUnsupervised(Callable<T> f) {
+    public <T> Fork<T> forkUnsupervised(Callable<T> f) {
         var result = new CompletableFuture<T>();
         getScope().fork(() -> {
             try {
@@ -48,7 +43,7 @@ public abstract class UnsupervisedScope {
             }
             return null;
         });
-        return new UnsupervisedForkUsingResult<>(result);
+        return new ForkUsingResult<>(result);
     }
 
     /**

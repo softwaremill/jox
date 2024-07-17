@@ -3,6 +3,7 @@ package com.softwaremill.jox.structured;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
@@ -20,7 +21,7 @@ public class ExceptionTest {
     }
 
     @Test
-    void testUnsupervisedThrowsExceptionThrownByJoinedFork() {
+    void testUnsupervisedThrowsExceptionThrownByJoinedFork() throws InterruptedException {
         Trail trail = new Trail();
         try {
             Scopes.unsupervised(scope -> {
@@ -29,29 +30,30 @@ public class ExceptionTest {
                 }).join();
                 return null;
             });
-        } catch (Exception e) {
-            trail.add(e.getClass().getSimpleName());
+        } catch (ExecutionException e) {
+            // the first EE, wraps CE, and is thrown by the join(); the second - wraps the first and is thrown by unsupervised
+            trail.add(e.getCause().getCause().getClass().getSimpleName());
         }
 
         assertIterableEquals(List.of("CustomException"), trail.get());
     }
 
     @Test
-    void testSupervisedThrowsExceptionThrownInScope() {
+    void testSupervisedThrowsExceptionThrownInScope() throws InterruptedException {
         Trail trail = new Trail();
         try {
             Scopes.supervised(scope -> {
                 throw new CustomException();
             });
-        } catch (Exception e) {
-            trail.add(e.getClass().getSimpleName());
+        } catch (ExecutionException e) {
+            trail.add(e.getCause().getClass().getSimpleName());
         }
 
         assertIterableEquals(List.of("CustomException"), trail.get());
     }
 
     @Test
-    void testSupervisedThrowsExceptionThrownByFailingFork() {
+    void testSupervisedThrowsExceptionThrownByFailingFork() throws InterruptedException {
         Trail trail = new Trail();
         try {
             Scopes.supervised(scope -> {
@@ -60,15 +62,15 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (Exception e) {
-            trail.add(e.getClass().getSimpleName());
+        } catch (ExecutionException e) {
+            trail.add(e.getCause().getClass().getSimpleName());
         }
 
         assertIterableEquals(List.of("CustomException"), trail.get());
     }
 
     @Test
-    void testSupervisedInterruptsOtherForksWhenFailureAddSuppressedInterruptedExceptions() {
+    void testSupervisedInterruptsOtherForksWhenFailureAddSuppressedInterruptedExceptions() throws InterruptedException {
         Trail trail = new Trail();
         Semaphore s = new Semaphore(0);
 
@@ -88,15 +90,16 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
+            trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException(suppressed=InterruptedException,InterruptedException)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=InterruptedException,InterruptedException)"), trail.get());
     }
 
     @Test
-    void testSupervisedInterruptsOtherForksWhenFailureAddSuppressedCustomExceptions() {
+    void testSupervisedInterruptsOtherForksWhenFailureAddSuppressedCustomExceptions() throws InterruptedException {
         Trail trail = new Trail();
         Semaphore s = new Semaphore(0);
 
@@ -115,15 +118,16 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
+            trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException(suppressed=CustomException2)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=CustomException2)"), trail.get());
     }
 
     @Test
-    void testSupervisedDoesNotAddOriginalExceptionAsSuppressed() {
+    void testSupervisedDoesNotAddOriginalExceptionAsSuppressed() throws InterruptedException {
         Trail trail = new Trail();
 
         try {
@@ -134,20 +138,20 @@ public class ExceptionTest {
                 f.join();
                 return null;
             });
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
             addExceptionWithSuppressedTo(trail, e);
         }
 
         // either join() might throw the original exception (shouldn't be suppressed), or it might be interrupted before
         // throwing (should be suppressed then)
-        List<String> expected1 = List.of("CustomException(suppressed=)");
-        List<String> expected2 = List.of("CustomException(suppressed=InterruptedException)");
+        List<String> expected1 = List.of("ExecutionException(suppressed=)");
+        List<String> expected2 = List.of("ExecutionException(suppressed=InterruptedException)");
 
         assertTrue(trail.get().equals(expected1) || trail.get().equals(expected2));
     }
 
     @Test
-    void testSupervisedAddsExceptionAsSuppressedEvenIfWrapsOriginalException() {
+    void testSupervisedAddsExceptionAsSuppressedEvenIfWrapsOriginalException() throws InterruptedException {
         Trail trail = new Trail();
 
         try {
@@ -162,11 +166,12 @@ public class ExceptionTest {
                 }
                 return null;
             });
-        } catch (Exception e) {
+        } catch (ExecutionException e) {
+            trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException(suppressed=CustomException3)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=CustomException3)"), trail.get());
     }
 
     private void addExceptionWithSuppressedTo(Trail trail, Throwable e) {

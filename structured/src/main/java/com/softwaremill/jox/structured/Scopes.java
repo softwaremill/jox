@@ -1,11 +1,6 @@
 package com.softwaremill.jox.structured;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Queue;
-import java.util.Stack;
-
-import static com.softwaremill.jox.structured.Util.uninterruptible;
+import java.util.concurrent.ExecutionException;
 
 public class Scopes {
     /**
@@ -27,11 +22,12 @@ public class Scopes {
      * </ul>
      * <p>
      * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, that is an exception
-     * thrown by {@code f}, it is re-thrown.
+     * thrown by {@code f}, it is re-thrown, wrapped with an {@link ExecutionException}.
      *
+     * @throws ExecutionException When the scope's body throws an exception
      * @see #supervised(Scoped) Starts a scope in supervised mode
      */
-    public static <T> T unsupervised(ScopedUnsupervised<T> f) throws Exception {
+    public static <T> T unsupervised(ScopedUnsupervised<T> f) throws ExecutionException, InterruptedException {
         return scopedWithCapability(new Scope(new NoOpSupervisor()), f::run);
     }
 
@@ -54,22 +50,33 @@ public class Scopes {
      * </ul>
      * <p>
      * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, the exception that
-     * caused the scope to end is re-thrown (regardless if the exception was thrown from the main body, or from a fork).
-     * Any other exceptions that occur when completing the scope are added as suppressed.
+     * caused the scope to end is re-thrown, wrapped in an {@link ExecutionException} (regardless if the exception was
+     * thrown from the main body, or from a fork). Any other exceptions that occur when completing the scope are added
+     * as suppressed.
      *
+     * @throws ExecutionException When the main body, or any of the forks, throw an exception
      * @see #unsupervised(ScopedUnsupervised) Starts a scope in unsupervised mode
      */
-    public static <T> T supervised(Scoped<T> f) throws Exception {
+    public static <T> T supervised(Scoped<T> f) throws ExecutionException, InterruptedException {
         var s = new DefaultSupervisor();
         var capability = new Scope(s);
         try {
-            return scopedWithCapability(capability, cap2 -> {
-                var mainBodyFork = capability.forkUser(() -> f.run(capability));
-                // might throw if any supervised fork threw
-                s.join();
-                // if no exceptions, the main f-fork must be done by now
-                return mainBodyFork.join();
-            });
+            var rawScope = capability.getScope();
+            try {
+                try {
+                    var mainBodyFork = capability.forkUser(() -> f.run(capability));
+                    // might throw if any supervised fork threw
+                    s.join();
+                    // if no exceptions, the main f-fork must be done by now
+                    return mainBodyFork.join();
+                } finally {
+                    rawScope.shutdown();
+                    rawScope.join();
+                }
+                // join might have been interrupted
+            } finally {
+                rawScope.close();
+            }
         } catch (Throwable e) {
             // all forks are guaranteed to have finished: some might have ended up throwing exceptions (InterruptedException or
             // others), but only the first one is propagated below. That's why we add all the other exceptions as suppressed.
@@ -78,74 +85,21 @@ public class Scopes {
         }
     }
 
-    private static void throwWithSuppressed(List<Exception> es) throws Exception {
-        Exception e = es.get(0);
-        for (int i = 1; i < es.size(); i++) {
-            e.addSuppressed(es.get(i));
-        }
-        throw e;
-    }
-
-    private static <T> T runFinalizers(T result, Exception caught, Queue<Runnable> fs) throws Exception {
-        if (fs.isEmpty()) {
-            if (caught == null) {
-                return result;
-            } else {
-                throw caught;
-            }
-        } else {
-            List<Exception> errors = new ArrayList<>();
-            if (caught != null) {
-                errors.add(caught);
-            }
-
-            // running the finalizers in reverse order
-            Stack<Runnable> fs2 = new Stack<>();
-            while (!fs.isEmpty()) {
-                fs2.push(fs.poll());
-            }
-
-            List<Exception> es = uninterruptible(() -> {
-                for (Runnable f : fs2) {
-                    try {
-                        f.run();
-                    } catch (Exception e) {
-                        errors.add(e);
-                    }
-                }
-                return errors;
-            });
-
-            if (!es.isEmpty()) {
-                throwWithSuppressed(es);
-            }
-            return result;
-        }
-    }
-
-    static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws Exception {
+    static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws ExecutionException, InterruptedException {
         var scope = capability.getScope();
-        var finalizers = capability.getFinalizers();
 
         try {
-            T t;
             try {
-                try {
-                    t = f.run(capability);
-                } finally {
-                    scope.shutdown();
-                    scope.join();
-                }
-                // join might have been interrupted
+                return f.run(capability);
+            } catch (Exception e) {
+                throw new ExecutionException(e);
             } finally {
-                scope.close();
+                scope.shutdown();
+                scope.join();
             }
-
-            // running the finalizers only once we are sure that all child threads have been terminated, so that no new
-            // finalizers are added, and none are lost
-            return runFinalizers(t, null, finalizers);
-        } catch (Exception e) {
-            return runFinalizers(null, e, finalizers);
+            // join might have been interrupted
+        } finally {
+            scope.close();
         }
     }
 }

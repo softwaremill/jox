@@ -1,17 +1,17 @@
 package com.softwaremill.jox.structured;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public interface CancellableFork<T> extends UnsupervisedFork<T> {
+public interface CancellableFork<T> extends Fork<T> {
     /**
      * Interrupts the fork, and blocks until it completes with a result.
      *
-     * @throws Exception When the cancelled fork threw an exception. This includes {@link InterruptedException}, which
-     *                   might be thrown when cancelling the fork.
+     * @throws ExecutionException When the cancelled fork threw an exception.
      */
-    T cancel() throws Exception;
+    T cancel() throws InterruptedException, ExecutionException;
 
     /**
      * Interrupts the fork, and returns immediately, without waiting for the fork to complete. Note that the enclosing scope will only
@@ -31,7 +31,7 @@ class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements Cancel
     }
 
     @Override
-    public T cancel() throws Exception {
+    public T cancel() throws InterruptedException, ExecutionException {
         cancelNow();
         return join();
     }

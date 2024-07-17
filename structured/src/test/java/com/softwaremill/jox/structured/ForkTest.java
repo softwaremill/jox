@@ -35,8 +35,8 @@ public class ForkTest {
     void testNestedForks() throws Exception {
         Trail trail = new Trail();
         Scopes.unsupervised(scope -> {
-            Fork<Integer> f1 = scope.forkUnsupervised(() -> {
-                Fork<Integer> f2 = scope.forkUnsupervised(() -> {
+            var f1 = scope.forkUnsupervised(() -> {
+                var f2 = scope.forkUnsupervised(() -> {
                     try {
                         return 6;
                     } finally {
@@ -62,7 +62,7 @@ public class ForkTest {
     void testInterruptChildForksWhenParentsComplete() throws Exception {
         Trail trail = new Trail();
         Scopes.unsupervised(scope -> {
-            Fork<Integer> f1 = scope.forkUnsupervised(() -> {
+            var f1 = scope.forkUnsupervised(() -> {
                 scope.forkUnsupervised(() -> {
                     try {
                         Thread.sleep(1000);
