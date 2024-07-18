@@ -1,5 +1,8 @@
 package com.softwaremill.jox;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -58,5 +61,35 @@ public interface Source<T> extends CloseableChannel {
      */
     default Source<T> filterAsView(Predicate<T> p) {
         return new CollectSource<>(this, t -> p.test(t) ? t : null);
+    }
+
+    // draining operations
+
+
+    /**
+     * Invokes the given function for each received element. Blocks until the channel is done.
+     *
+     * @throws ChannelErrorException When there is an upstream error.
+     */
+    default void forEach(Consumer<T> c) throws InterruptedException {
+        var repeat = true;
+        while (repeat) {
+            switch (receiveOrClosed()) {
+                case ChannelDone cd -> repeat = false;
+                case ChannelError ce -> throw ce.toException();
+                case Object t -> c.accept((T) t);
+            }
+        }
+    }
+
+    /**
+     * Accumulates all elements received from the channel into a list. Blocks until the channel is done.
+     *
+     * @throws ChannelErrorException When there is an upstream error.
+     */
+    default List<T> toList() throws InterruptedException {
+        var l = new ArrayList<T>();
+        forEach(l::add);
+        return l;
     }
 }

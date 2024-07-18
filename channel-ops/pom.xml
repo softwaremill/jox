@@ -9,7 +9,7 @@
         <version>0.2.1</version>
     </parent>
 
-    <artifactId>channels</artifactId>
+    <artifactId>channel-ops</artifactId>
     <version>0.2.1</version>
     <packaging>jar</packaging>
 
@@ -23,6 +23,16 @@
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.softwaremill.jox</groupId>
+            <artifactId>channels</artifactId>
+            <version>0.2.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.softwaremill.jox</groupId>
+            <artifactId>structured</artifactId>
+            <version>0.2.1</version>
         </dependency>
     </dependencies>
 </project>
