@@ -2,8 +2,8 @@
 
 [![Ideas, suggestions, problems, questions](https://img.shields.io/badge/Discourse-ask%20question-blue)](https://softwaremill.community/c/open-source/11)
 [![CI](https://github.com/softwaremill/jox/workflows/CI/badge.svg)](https://github.com/softwaremill/jox/actions?query=workflow%3A%22CI%22)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/core/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/core)
-[![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/core/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/core)
+[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels)
+[![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/channels/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/channels)
 
 Modern concurrency for Java 21+ (backed by virtual threads, see [Project Loom](https://openjdk.org/projects/loom/)).
 Includes:
