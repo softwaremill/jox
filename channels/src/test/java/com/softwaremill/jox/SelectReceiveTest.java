@@ -222,4 +222,21 @@ public class SelectReceiveTest {
     void testSelectFromNone() throws InterruptedException {
         assertEquals(new ChannelDone(), selectOrClosed());
     }
+
+    @Test
+    public void testSelect_immediate_withError() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(2);
+        ch1.send("x");
+
+        var e = new RuntimeException("boom!");
+        Channel<String> ch2 = new Channel<>(2);
+        ch2.error(e);
+
+        // when
+        var result = selectOrClosed(ch1.receiveClause(), ch2.receiveClause());
+
+        // then
+        assertEquals(new ChannelError(e), result);
+    }
 }

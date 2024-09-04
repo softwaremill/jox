@@ -100,6 +100,13 @@ public class Select {
 
     @SafeVarargs
     private static <U> Object doSelectOrClosed(SelectClause<? extends U>... clauses) throws InterruptedException {
+        // short-circuiting if any of the channels is in error; otherwise, we might have selected a clause, for which
+        // a value was available immediately - even though a channel for a clause appearing later was in error
+        var anyError = getAnyChannelInError(clauses);
+        if (anyError != null) {
+            return anyError;
+        }
+
         // check that the clause doesn't refer to a channel that is already used in a different clause
         var allRendezvous = verifyChannelsUnique_getAreAllRendezvous(clauses);
 
@@ -130,6 +137,20 @@ public class Select {
             allRendezvous = allRendezvous && (chi == null || chi.isRendezvous);
         }
         return allRendezvous;
+    }
+
+    private static ChannelError getAnyChannelInError(SelectClause<?>[] clauses) {
+        for (var clause : clauses) {
+            var ch = clause.getChannel();
+            if (ch != null) {
+                // if a channel is in error, closedForSend() will return that information
+                var closedForSend = clause.getChannel().closedForSend();
+                if (closedForSend instanceof ChannelError ce) {
+                    return ce;
+                }
+            }
+        }
+        return null;
     }
 
     public static <T> SelectClause<T> defaultClause(T value) {
