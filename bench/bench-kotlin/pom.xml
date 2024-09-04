@@ -6,11 +6,11 @@
     <parent>
         <groupId>com.softwaremill.jox</groupId>
         <artifactId>bench</artifactId>
-        <version>0.3.0</version>
+        <version>0.3.1</version>
     </parent>
 
     <artifactId>bench-kotlin</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
     <packaging>jar</packaging>
 
     <properties>

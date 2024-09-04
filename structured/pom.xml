@@ -6,11 +6,11 @@
     <parent>
         <groupId>com.softwaremill.jox</groupId>
         <artifactId>parent</artifactId>
-        <version>0.3.0</version>
+        <version>0.3.1</version>
     </parent>
 
     <artifactId>structured</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
     <packaging>jar</packaging>
 
     <dependencies>
