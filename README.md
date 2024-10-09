@@ -5,7 +5,8 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels)
 [![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/channels/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/channels)
 
-Modern concurrency for Java 21+ (backed by virtual threads, see [Project Loom](https://openjdk.org/projects/loom/)).
+Modern concurrency for Java 21 (backed by virtual threads, see [Project Loom](https://openjdk.org/projects/loom/)).
+Requires JDK 21.
 Includes:
 
 * Fast and Scalable Channels in Java. Inspired by the "Fast and Scalable Channels in Kotlin Coroutines"
