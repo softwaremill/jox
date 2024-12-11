@@ -6,7 +6,10 @@ import com.softwaremill.jox.structured.UnsupervisedScope;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -36,17 +39,17 @@ public class Flow<T> {
     // region Run operations
 
     /** Invokes the given function for each emitted element. Blocks until the flow completes. */
-    public void runForeach(Consumer<T> sink) throws Throwable {
+    public void runForeach(Consumer<T> sink) throws Exception {
         last.run(sink::accept);
     }
 
     /** Invokes the provided {@link FlowEmit} for each emitted element. Blocks until the flow completes. */
-    public void runToEmit(FlowEmit<T> emit) throws Throwable {
+    public void runToEmit(FlowEmit<T> emit) throws Exception {
         last.run(emit);
     }
 
     /** Accumulates all elements emitted by this flow into a list. Blocks until the flow completes. */
-    public List<T> runToList() throws Throwable {
+    public List<T> runToList() throws Exception {
         List<T> result = new ArrayList<>();
         runForeach(result::add);
         return result;
@@ -59,14 +62,40 @@ public class Flow<T> {
      * <p>
      * Blocks until the flow completes.
      */
-    public Source<T> runToChannel() throws Throwable {
+    public Source<T> runToChannel(UnsupervisedScope scope) {
         if (last instanceof SourceBackedFlowStage<T>(Source<T> source)) {
             return source;
         } else {
-            Channel<T> channel = Channel.newUnlimitedChannel();
-            runLastToChannelAsync(channel);
+            Channel<T> channel = new Channel<>();
+            runLastToChannelAsync(scope, channel);
             return channel;
         }
+    }
+
+    /**
+     * Uses `zero` as the current value and applies function `f` on it and a value emitted by this flow. The returned value is used as the
+     * next current value and `f` is applied again with the next value emitted by the flow. The operation is repeated until the flow emits
+     * all elements.
+     *
+     * @param zero
+     *   An initial value to be used as the first argument to function `f` call.
+     * @param f
+     *   A {@link BiFunction} that is applied to the current value and value emitted by the flow.
+     * @return
+     *   Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
+     *   used as an input value to the next.
+     */
+    public <U> U runFold(U zero, BiFunction<U, T, U> f) throws Exception {
+        AtomicReference<U> current = new AtomicReference<>(zero);
+        last.run(t -> current.set(f.apply(current.get(), t)));
+        return current.get();
+    }
+
+    /**
+     * Ignores all elements emitted by the flow. Blocks until the flow completes.
+     */
+    public void runDrain() throws Exception {
+        runForeach(t -> {});
     }
 
     // endregion
@@ -83,11 +112,15 @@ public class Flow<T> {
     public Flow<T> buffer(int bufferCapacity) {
         return usingEmit(emit -> {
             Channel<T> ch = new Channel<>(bufferCapacity);
-            unsupervised(scope -> {
-                runLastToChannelAsync(scope, ch);
-                FlowEmit.channelToEmit(ch, emit);
-                return null;
-            });
+            try {
+                unsupervised(scope -> {
+                    runLastToChannelAsync(scope, ch);
+                    FlowEmit.channelToEmit(ch, emit);
+                    return null;
+                });
+            } catch (ExecutionException e) {
+                throw (Exception) e.getCause();
+            }
         });
     }
 
@@ -96,37 +129,35 @@ public class Flow<T> {
      */
     public <U> Flow<U> map(Function<T, U> mappingFunction) {
         return usingEmit(emit -> {
-            last.run(((ThrowingConsumer<T>) t -> emit.apply(mappingFunction.apply(t)))::accept);
+            last.run(t -> emit.apply(mappingFunction.apply(t)));
         });
     }
 
-    /** 
+    /**
      * Emits only those elements emitted by this flow, for which `filteringPredicate` returns `true`.
      */
     public Flow<T> filter(Predicate<T> filteringPredicate) {
         return usingEmit(emit -> {
-            last.run(((ThrowingConsumer<T>) t -> {
+            last.run(t -> {
                 if (filteringPredicate.test(t)) {
                     emit.apply(t);
                 }
-            })::accept);
+            });
         });
     }
 
-    /** 
-     * Applies the given `mappingFunction` to each element emitted by this flow, in sequence. 
+    /**
+     * Applies the given `mappingFunction` to each element emitted by this flow, in sequence.
      * The given {@link Consumer<FlowEmit>} can be used to emit an arbitrary number of elements.
      * <p>
      * The {@link FlowEmit} instance provided to the `mappingFunction` callback should only be used on the calling thread.
      * That is, {@link FlowEmit} is thread-unsafe. Moreover, the instance should not be stored or captured in closures, which outlive the invocation of `mappingFunction`.
      */
     public <U> Flow<U> mapUsingEmit(Function<T, Consumer<FlowEmit<U>>> mappingFunction) {
-        return usingEmit(emit -> {
-            last.run(t -> mappingFunction.apply(t).accept(emit));
-        });
+        return usingEmit(emit -> last.run(t -> mappingFunction.apply(t).accept(emit)));
     }
 
-    /** 
+    /**
      * Applies the given effectful function `f` to each element emitted by this flow. The returned flow emits the elements unchanged.
      * If `f` throws an exceptions, the flow fails and propagates the exception.
      */
@@ -137,16 +168,43 @@ public class Flow<T> {
         });
     }
 
-    /** 
+    /**
      * Applies the given `mappingFunction` to each element emitted by this flow, obtaining a nested flow to run.
      * The elements emitted by the nested flow are then emitted by the returned flow.
      * <p>
      * The nested flows are run in sequence, that is, the next nested flow is started only after the previous one completes.
      */
     public <U> Flow<U> flatMap(Function<T, Flow<U>> mappingFunction) {
-        return usingEmit(emit -> {
-            last.run(((ThrowingConsumer<T>) t -> mappingFunction.apply(t).runToEmit(emit))::accept);
+        return usingEmit(emit -> last.run(t -> mappingFunction.apply(t).runToEmit(emit)));
+    }
+
+    /**
+     * Takes the first `n` elements from this flow and emits them. If the flow completes before emitting `n` elements, the returned flow
+     * completes as well.
+     */
+    public Flow<T> take(int n) {
+        return Flows.usingEmit(emit -> {
+            AtomicInteger taken = new AtomicInteger(0);
+            try {
+                last.run(t -> {
+                    if (taken.getAndIncrement() < n) {
+                        emit.apply(t);
+                    } else {
+                        throw new BreakException();
+                    }
+                });
+            } catch (ExecutionException e) {
+                if (!(e.getCause() instanceof BreakException)) {
+                    throw e;
+                }
+                // ignore
+            } catch (BreakException e) {
+                // ignore
+            }
         });
+    }
+
+    private static class BreakException extends RuntimeException {
     }
 
     /**
@@ -178,13 +236,59 @@ public class Flow<T> {
                 accumulatedCost.addAndGet(costFn.apply(t));
 
                 if (accumulatedCost.get() >= minWeight) {
-                    emit.apply(buffer);
+                    emit.apply(new ArrayList<>(buffer));
                     buffer.clear();
                     accumulatedCost.set(0);
                 }
             });
             if (!buffer.isEmpty()) {
                 emit.apply(buffer);
+            }
+        });
+    }
+
+    /**
+     * Discard all elements emitted by this flow. The returned flow completes only when this flow completes (successfully or with an error).
+     */
+    public Flow<Void> drain() {
+        return Flows.usingEmit(emit -> {
+            last.run(t -> {});
+        });
+    }
+
+    /**
+     * Always runs `f` after the flow completes, whether it's because all elements are emitted, or when there's an error.
+     */
+    public Flow<T> onComplete(Runnable f) {
+        return Flows.usingEmit(emit -> {
+            try {
+                last.run(emit);
+            } finally {
+                f.run();
+            }
+        });
+    }
+
+    /**
+     * Runs `f` after the flow completes successfully, that is when all elements are emitted.
+     */
+    public Flow<T> onDone(Runnable f) {
+        return Flows.usingEmit(emit -> {
+            last.run(emit);
+            f.run();
+        });
+    }
+
+    /**
+     * Runs `f` after the flow completes with an error. The error can't be recovered.
+     */
+    public Flow<T> onError(Consumer<Throwable> f) {
+        return Flows.usingEmit(emit -> {
+            try {
+                last.run(emit);
+            } catch (Throwable e) {
+                f.accept(e);
+                throw e;
             }
         });
     }
@@ -201,12 +305,10 @@ public class Flow<T> {
     private void runLastToChannelAsync(UnsupervisedScope scope, Channel<T> channel) {
         scope.forkUnsupervised(() -> {
             try {
-                last.run(((ThrowingConsumer<T>) channel::send)::accept);
+                last.run(channel::send);
+                channel.done();
             } catch (Throwable e) {
                 channel.error(e);
-                throw new RuntimeException(e);
-            } finally {
-                channel.done();
             }
             return null;
         });

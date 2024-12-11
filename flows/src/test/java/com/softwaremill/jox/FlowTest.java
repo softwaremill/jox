@@ -1,5 +1,6 @@
 package com.softwaremill.jox;
 
+import com.softwaremill.jox.structured.UnsupervisedScope;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -35,12 +36,13 @@ class FlowTest {
     }
 
     @Test
-    void shouldRunToChannel() throws Throwable {
+    @WithUnsupervisedScope
+    void shouldRunToChannel(UnsupervisedScope scope) throws Throwable {
         // given
         Flow<Integer> flow = Flows.fromValues(1, 2, 3);
 
         // when
-        Source<Integer> source = flow.runToChannel();
+        Source<Integer> source = flow.runToChannel(scope);
 
         // then
         assertEquals(1, source.receive());
@@ -49,16 +51,66 @@ class FlowTest {
     }
 
     @Test
-    void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
+    @WithUnsupervisedScope
+    void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow(UnsupervisedScope scope) throws Throwable {
         // given
         Channel<Integer> channel = Channel.newUnlimitedChannel();
         Flow<Integer> flow = Flows.fromSource(channel);
 
         // when
-        Source<Integer> receivedChannel = flow.runToChannel();
+        Source<Integer> receivedChannel = flow.runToChannel(scope);
 
         // then
         assertEquals(channel, receivedChannel);
+    }
+
+    @Test
+    void shouldThrowExceptionForFailedFlow() {
+        assertThrows(IllegalStateException.class, () -> {
+            Flows.failed(new IllegalStateException())
+                    .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
+        });
+    }
+
+    @Test
+    void shouldThrowExceptionThrownInFunctionF() {
+        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
+            Flows.fromValues(1)
+                    .runFold(0, (acc, n) -> { throw new RuntimeException("Function `f` is broken"); });
+        });
+        assertEquals("Function `f` is broken", thrown.getMessage());
+    }
+
+    @Test
+    void shouldReturnZeroValueFromFoldOnEmptySource() throws Exception {
+        assertEquals(0, Flows.empty().runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n)));
+    }
+
+    @Test
+    void shouldReturnFoldOnNonEmptyFold() throws Exception {
+        assertEquals(3, Flows.fromValues(1, 2).runFold(0, Integer::sum));
+    }
+
+    @Test
+    void shouldTakeFromSimpleFlow() throws Exception {
+        Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        List<Integer> result = f.take(5).runToList();
+        assertEquals(List.of(1, 2, 3, 4, 5), result);
+    }
+
+    @Test
+    void shouldTakeFromAsyncFlow() throws Exception {
+        Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+                .buffer(16);
+        List<Integer> result = f.take(5).runToList();
+        assertEquals(List.of(1, 2, 3, 4, 5), result);
+    }
+
+    @Test
+    void shouldTakeAllIfFlowEndsSooner() throws Exception {
+        Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        List<Integer> result = f.take(50).runToList();
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), result);
     }
 
     @Test
@@ -89,6 +141,17 @@ class FlowTest {
 
         // then
         assertEquals(List.of(3, 5, 7, 9, 11), integers);
+    }
+
+    @Test
+    void shouldPropagateErrorsWhenUsingBuffer() {
+        Exception exception = assertThrows(ChannelClosedException.class, () -> {
+            Flows.fromValues(1, 2, 3)
+                    .map(value -> { throw new IllegalStateException(); })
+                    .buffer(5)
+                    .runToList();
+        });
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
     }
 
     @Test

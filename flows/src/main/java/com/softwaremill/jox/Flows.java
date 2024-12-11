@@ -5,14 +5,16 @@ import com.softwaremill.jox.structured.Fork;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-interface Flows {
+public final class Flows {
+
+    private Flows() {}
 
     /**
      * Creates a flow, which when run, provides a {@link FlowEmit} instance to the given `withEmit` function. Elements can be emitted to be
@@ -21,7 +23,7 @@ interface Flows {
      * The {@link FlowEmit} instance provided to the {@param withEmit} callback should only be used on the calling thread.
      * That is, {@link FlowEmit} is thread-unsafe. Moreover, the instance should not be stored or captured in closures, which outlive the invocation of {@param withEmit}.
      */
-    static <T> Flow<T> usingEmit(ThrowingConsumer<FlowEmit<T>> withEmit) {
+    public static <T> Flow<T> usingEmit(ThrowingConsumer<FlowEmit<T>> withEmit) {
         return new Flow<>(withEmit::accept);
     }
 
@@ -29,28 +31,29 @@ interface Flows {
      * Creates a flow using the given {@param source}. An element is emitted for each value received from the source.
      * If the source is completed with an error, is it propagated by throwing.
      */
-    static <T> Flow<T> fromSource(Source<T> source) {
+    public static <T> Flow<T> fromSource(Source<T> source) {
         return new Flow<>(new SourceBackedFlowStage<>(source));
     }
 
     /**
      * Creates a flow from the given `iterable`. Each element of the iterable is emitted in order.
      */
-    static <T> Flow<T> fromIterable(Iterable<T> iterable) {
+    public static <T> Flow<T> fromIterable(Iterable<T> iterable) {
         return fromIterator(iterable.iterator());
     }
 
     /**
      * Creates a flow from the given values. Each value is emitted in order.
      */
-    static <T> Flow<T> fromValues(T... ts) {
+    @SafeVarargs
+    public static <T> Flow<T> fromValues(T... ts) {
         return fromIterator(Arrays.asList(ts).iterator());
     }
 
     /**
      * Creates a flow from the given (lazily evaluated) `iterator`. Each element of the iterator is emitted in order.
      */
-    static <T> Flow<T> fromIterator(Iterator<T> it) {
+    public static <T> Flow<T> fromIterator(Iterator<T> it) {
         return usingEmit(emit -> {
             while (it.hasNext()) {
                 emit.apply(it.next());
@@ -61,14 +64,14 @@ interface Flows {
     /**
      * Creates a flow from the given fork. The flow will emit up to one element, or complete by throwing an exception if the fork fails.
      */
-    static <T> Flow<T> fromFork(Fork<T> f) {
+    public static <T> Flow<T> fromFork(Fork<T> f) {
         return usingEmit(emit -> emit.apply(f.join()));
     }
 
     /**
      * Creates a flow which emits elements starting with `zero`, and then applying `mappingFunction` to the previous element to get the next one.
      */
-    static <T> Flow<T> iterate(T zero, Function<T, T> mappingFunction) {
+    public static <T> Flow<T> iterate(T zero, Function<T, T> mappingFunction) {
         return usingEmit(emit -> {
             T t = zero;
             while (true) {
@@ -81,7 +84,7 @@ interface Flows {
     /**
      * Creates a flow which emits a range of numbers, from `from`, to `to` (inclusive), stepped by `step`.
      */
-    static Flow<Integer> range(int from, int to, int step) {
+    public static Flow<Integer> range(int from, int to, int step) {
         // do nothing
         return usingEmit(emit -> {
             for (int i = from; i <= to; i += step) {
@@ -104,7 +107,7 @@ interface Flows {
      * @param value
      *   The element to emitted on every tick.
      */
-    static <T> Flow<T> tick(Duration interval, T value) {
+    public static <T> Flow<T> tick(Duration interval, T value) {
         return usingEmit(emit -> {
             while (true) {
                 long start = System.nanoTime();
@@ -119,7 +122,7 @@ interface Flows {
     }
 
     /** Creates a flow, which emits the given `element` repeatedly. */
-    static <T> Flow<T> repeat(T element) {
+    public static <T> Flow<T> repeat(T element) {
         return repeatEval(() -> element);
     }
 
@@ -129,7 +132,7 @@ interface Flows {
      * @param supplierFunction
      *   The code block, computing the element to emit.
      */
-    static <T> Flow<T> repeatEval(Supplier<T> supplierFunction) {
+    public static <T> Flow<T> repeatEval(Supplier<T> supplierFunction) {
         return usingEmit(emit -> {
             while (true) {
                 emit.apply(supplierFunction.get());
@@ -145,7 +148,7 @@ interface Flows {
      * @param supplierFunction
      *   The code block, computing the optional element to emit.
      */
-    static <T> Flow<T> repeatEvalWhileDefined(Supplier<Optional<T>> supplierFunction) {
+    public static <T> Flow<T> repeatEvalWhileDefined(Supplier<Optional<T>> supplierFunction) {
         // do nothing
         return usingEmit(emit -> {
             boolean shouldRun = true;
@@ -161,7 +164,7 @@ interface Flows {
     }
 
     /** Create a flow which sleeps for the given `timeout` and then completes as done. */
-    static <T> Flow<T> timeout(Duration timeout) {
+    public static <T> Flow<T> timeout(Duration timeout) {
         return usingEmit(emit -> Thread.sleep(timeout.toMillis()));
     }
 
@@ -169,22 +172,29 @@ interface Flows {
      * Creates a flow which concatenates the given `flows` in order. First elements from the first flow are emitted, then from the second etc.
      * If any of the flows completes with an error, it is propagated.
      */
-    static <T> Flow<T> concat(List<Flow<T>> flows) {
-        return new Flow<>(((ThrowingConsumer<FlowEmit<T>>) emit -> {
+    @SafeVarargs
+    public static <T> Flow<T> concat(Flow<T>... flows) {
+        return usingEmit(emit -> {
             for (Flow<T> currentFlow : flows) {
-                currentFlow.runToEmit(((ThrowingConsumer<T>) emit::apply)::accept);
+                currentFlow.runToEmit(emit);
             }
-        })::accept);
+        });
     }
 
     /** Creates an empty flow, which emits no elements and completes immediately. */
-    static <T> Flow<T> empty() {
+    public static <T> Flow<T> empty() {
         return usingEmit(emit -> {});
     }
 
     /** Creates a flow that emits a single element when `from` completes, or throws an exception when `from` fails. */
-    static <T> Flow<T> fromCompletableFuture(CompletableFuture<T> from) {
-        return usingEmit(emit -> emit.apply(from.get()));
+    public static <T> Flow<T> fromCompletableFuture(CompletableFuture<T> from) {
+        return usingEmit(emit -> {
+            try {
+                emit.apply(from.get());
+            } catch (ExecutionException e) {
+                throw (Exception) e.getCause();
+            }
+        });
     }
 
     /**
@@ -192,17 +202,17 @@ interface Flows {
      *
      * @param from the future source to emit elements from
      */
-    static <T> Flow<T> fromFutureSource(CompletableFuture<Source<T>> from) {
+    public static <T> Flow<T> fromFutureSource(CompletableFuture<Source<T>> from) {
         return fromSource(from.join());
     }
 
     /**
-     * Creates a flow that fails immediately with the given {@link java.lang.Throwable}
+     * Creates a flow that fails immediately with the given {@link java.lang.Exception}
      *
      * @param t
-     *   The {@link java.lang.Throwable} to fail with
+     *   The {@link java.lang.Exception} to fail with
      */
-    static <T> Flow<T> failed(Throwable t) {
+    public static <T> Flow<T> failed(Exception t) {
         return new Flow<>(emit -> {
             throw t;
         });
