@@ -74,6 +74,7 @@ public final class Flows {
     public static <T> Flow<T> iterate(T zero, Function<T, T> mappingFunction) {
         return usingEmit(emit -> {
             T t = zero;
+            //noinspection InfiniteLoopStatement
             while (true) {
                 emit.apply(t);
                 t = mappingFunction.apply(t);
@@ -109,12 +110,14 @@ public final class Flows {
      */
     public static <T> Flow<T> tick(Duration interval, T value) {
         return usingEmit(emit -> {
+            //noinspection InfiniteLoopStatement
             while (true) {
                 long start = System.nanoTime();
                 emit.apply(value);
                 long end = System.nanoTime();
                 long sleep = interval.toNanos() - (end - start);
                 if (sleep > 0) {
+                    //noinspection BusyWait
                     Thread.sleep(TimeUnit.NANOSECONDS.toMillis(sleep), (int) (sleep % 1_000_000));
                 }
             }
@@ -134,6 +137,7 @@ public final class Flows {
      */
     public static <T> Flow<T> repeatEval(Supplier<T> supplierFunction) {
         return usingEmit(emit -> {
+            //noinspection InfiniteLoopStatement
             while (true) {
                 emit.apply(supplierFunction.get());
             }
@@ -213,7 +217,7 @@ public final class Flows {
      *   The {@link java.lang.Exception} to fail with
      */
     public static <T> Flow<T> failed(Exception t) {
-        return new Flow<>(emit -> {
+        return usingEmit(emit -> {
             throw t;
         });
     }

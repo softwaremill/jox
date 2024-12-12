@@ -2,9 +2,19 @@ package com.softwaremill.jox;
 
 import java.util.concurrent.ExecutionException;
 
+/**
+ * Instances of this interface should be considered thread-unsafe, and only used within the scope in which they have been obtained, e.g. as
+ * part of {@link Flows#usingEmit} or {@link Flow#mapUsingEmit}.
+ */
 public interface FlowEmit<T> {
+
+    /** Emit a value to be processed downstream. Blocks until the value is fully processed, or throws an exception if an error occurred. */
     void apply(T t) throws Exception;
 
+    /**
+     * Propagates all elements to the given emit. Completes once the channel completes as done. Throws an exception if the channel transits
+     * to an error state.
+     */
     static <T> void channelToEmit(Source<T> source, FlowEmit<T> emit) throws Exception {
         boolean shouldRun = true;
         while (shouldRun) {
@@ -13,12 +23,8 @@ public interface FlowEmit<T> {
                 case ChannelDone done -> false;
                 case ChannelError error -> throw error.toException();
                 default -> {
-                    try {
-                        //noinspection unchecked
-                        emit.apply((T) t);
-                    } catch (Throwable e) {
-                        throw new ExecutionException(e);
-                    }
+                    //noinspection unchecked
+                    emit.apply((T) t);
                     yield true;
                 }
             };
