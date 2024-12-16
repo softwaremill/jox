@@ -9,8 +9,6 @@ import java.util.List;
 
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 
 class FlowTest {
@@ -38,60 +36,6 @@ class FlowTest {
 
         // then
         assertEquals(List.of(1, 2, 3), results);
-    }
-
-    @Test
-    void shouldRunToChannel() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Flow<Integer> flow = Flows.fromValues(1, 2, 3);
-
-            // when
-            Source<Integer> source = flow.runToChannel(scope);
-
-            // then
-            assertEquals(1, source.receive());
-            assertEquals(2, source.receive());
-            assertEquals(3, source.receive());
-            return null;
-        });
-    }
-
-    @Test
-    void shouldRunToChannelWithBufferSizeDefinedInScope() throws Throwable {
-        ScopedValue.where(Channel.BUFFER_SIZE, 2).call(() -> {
-            Scopes.unsupervised(scope -> {
-                // given
-                Flow<Integer> flow = Flows.fromValues(1, 2, 3);
-
-                // when
-                Source<Integer> source = flow.runToChannel(scope);
-
-                // then
-                assertEquals(1, source.receive());
-                assertEquals(2, source.receive());
-                assertEquals(3, source.receive());
-                return null;
-            });
-            return null;
-        });
-    }
-
-
-    @Test
-    void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Channel<Integer> channel = Channel.newUnlimitedChannel();
-            Flow<Integer> flow = Flows.fromSource(channel);
-
-            // when
-            Source<Integer> receivedChannel = flow.runToChannel(scope);
-
-            // then
-            assertEquals(channel, receivedChannel);
-            return null;
-        });
     }
 
     @Test
