@@ -3,7 +3,7 @@ package com.softwaremill.jox.flows;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -26,11 +27,13 @@ class FlowsTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldCreateFlowFromFork(UnsupervisedScope scope) throws Exception {
-        Fork<Integer> f = scope.forkUnsupervised(() -> 1);
-        Flow<Integer> c = Flows.fromFork(f);
-        assertEquals(List.of(1), c.runToList());
+    void shouldCreateFlowFromFork() throws Exception {
+        Scopes.unsupervised(scope -> {
+            Fork<Integer> f = scope.forkUnsupervised(() -> 1);
+            Flow<Integer> c = Flows.fromFork(f);
+            assertEquals(List.of(1), c.runToList());
+            return null;
+        });
     }
 
     @Test
@@ -50,15 +53,17 @@ class FlowsTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    public void shouldFailOnReceive(UnsupervisedScope scope) throws Exception {
-        // when
-        Flow<String> s = Flows.failed(new RuntimeException("boom"));
+    public void shouldFailOnReceive() throws Exception {
+        Scopes.unsupervised(scope -> {
+            // when
+            Flow<String> s = Flows.failed(new RuntimeException("boom"));
 
-        // then
-        Object received = s.runToChannel(scope).receiveOrClosed();
-        assertInstanceOf(ChannelError.class, received);
-        assertEquals("boom", ((ChannelError) received).cause().getMessage());
+            // then
+            Object received = s.runToChannel(scope).receiveOrClosed();
+            assertInstanceOf(ChannelError.class, received);
+            assertEquals("boom", ((ChannelError) received).cause().getMessage());
+            return null;
+        });
     }
 
     @Test
@@ -85,17 +90,19 @@ class FlowsTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldReturnFuturesSourceValues(UnsupervisedScope scope) throws Exception {
-        // given
-        CompletableFuture<Source<Integer>> completableFuture = CompletableFuture
-                .completedFuture(Flows.fromValues(1, 2).runToChannel(scope));
+    void shouldReturnFuturesSourceValues() throws Exception {
+        Scopes.unsupervised(scope -> {
+            // given
+            CompletableFuture<Source<Integer>> completableFuture = CompletableFuture
+                    .completedFuture(Flows.fromValues(1, 2).runToChannel(scope));
 
-        // when
-        List<Integer> result = Flows.fromFutureSource(completableFuture).runToList();
+            // when
+            List<Integer> result = Flows.fromFutureSource(completableFuture).runToList();
 
-        // then
-        assertEquals(List.of(1, 2), result);
+            // then
+            assertEquals(List.of(1, 2), result);
+            return null;
+        });
     }
 
     @Test
@@ -155,41 +162,45 @@ class FlowsTest {
 
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
-    @WithUnsupervisedScope
-    void shouldTickRegularly(UnsupervisedScope scope) throws InterruptedException {
-        var c = Flows.tick(Duration.ofMillis(100), 1L)
-                .runToChannel(scope);
-        var start = System.currentTimeMillis();
+    void shouldTickRegularly() throws InterruptedException, ExecutionException {
+        Scopes.unsupervised(scope -> {
+            var c = Flows.tick(Duration.ofMillis(100), 1L)
+                    .runToChannel(scope);
+            var start = System.currentTimeMillis();
 
-        c.receive();
-        assertTrue(System.currentTimeMillis() - start >= 0);
-        assertTrue(System.currentTimeMillis() - start <= 50);
+            c.receive();
+            assertTrue(System.currentTimeMillis() - start >= 0);
+            assertTrue(System.currentTimeMillis() - start <= 50);
 
-        c.receive();
-        assertTrue(System.currentTimeMillis() - start >= 100);
-        assertTrue(System.currentTimeMillis() - start <= 150);
+            c.receive();
+            assertTrue(System.currentTimeMillis() - start >= 100);
+            assertTrue(System.currentTimeMillis() - start <= 150);
 
-        c.receive();
-        assertTrue(System.currentTimeMillis() - start >= 200);
-        assertTrue(System.currentTimeMillis() - start <= 250);
+            c.receive();
+            assertTrue(System.currentTimeMillis() - start >= 200);
+            assertTrue(System.currentTimeMillis() - start <= 250);
+            return null;
+        });
     }
 
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
-    @WithUnsupervisedScope
-    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal(UnsupervisedScope scope) throws InterruptedException {
-        var c = Flows.tick(Duration.ofMillis(100), 1L)
-                .runToChannel(scope);
-        var start = System.currentTimeMillis();
+    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal() throws InterruptedException, ExecutionException {
+        Scopes.unsupervised(scope -> {
+            var c = Flows.tick(Duration.ofMillis(100), 1L)
+                    .runToChannel(scope);
+            var start = System.currentTimeMillis();
 
-        Thread.sleep(200);
-        c.receive();
-        assertTrue(System.currentTimeMillis() - start >= 200);
-        assertTrue(System.currentTimeMillis() - start <= 250);
+            Thread.sleep(200);
+            c.receive();
+            assertTrue(System.currentTimeMillis() - start >= 200);
+            assertTrue(System.currentTimeMillis() - start <= 250);
 
-        c.receive();
-        assertTrue(System.currentTimeMillis() - start >= 200);
-        assertTrue(System.currentTimeMillis() - start <= 250);
+            c.receive();
+            assertTrue(System.currentTimeMillis() - start >= 200);
+            assertTrue(System.currentTimeMillis() - start <= 250);
+            return null;
+        });
     }
 
     @Test

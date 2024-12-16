@@ -2,10 +2,11 @@ package com.softwaremill.jox.flows;
 
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -34,20 +35,22 @@ public class FlowGroupedTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldReturnFailedFlowWhenTheOriginalFlowIsFailed(UnsupervisedScope scope) throws InterruptedException {
-        // given
-        RuntimeException failure = new RuntimeException();
+    void shouldReturnFailedFlowWhenTheOriginalFlowIsFailed() throws InterruptedException, ExecutionException {
+        Scopes.unsupervised(scope -> {
+            // given
+            RuntimeException failure = new RuntimeException();
 
-        // when
-        Object result = Flows.failed(failure)
-                .grouped(3)
-                .runToChannel(scope)
-                .receiveOrClosed();
+            // when
+            Object result = Flows.failed(failure)
+                    .grouped(3)
+                    .runToChannel(scope)
+                    .receiveOrClosed();
 
-        // then
-        assertInstanceOf(ChannelError.class, result);
-        assertEquals(failure, ((ChannelError) result).cause());
+            // then
+            assertInstanceOf(ChannelError.class, result);
+            assertEquals(failure, ((ChannelError) result).cause());
+            return null;
+        });
     }
 
     @Test
@@ -62,34 +65,38 @@ public class FlowGroupedTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldReturnFailedFlowWhenCostFunctionThrowsException(UnsupervisedScope scope) {
-        // when
-        ChannelClosedException exception = assertThrows(ChannelClosedException.class, () ->
-                Flows.fromValues(1, 2, 3, 0, 4, 5, 6, 7)
-                        .groupedWeighted(150, n -> (long) (100 / n))
-                        .runToChannel(scope)
-                        .forEach(i -> {
-                        }));
+    void shouldReturnFailedFlowWhenCostFunctionThrowsException() throws ExecutionException, InterruptedException {
+        Scopes.unsupervised(scope -> {
+            // when
+            ChannelClosedException exception = assertThrows(ChannelClosedException.class, () ->
+                    Flows.fromValues(1, 2, 3, 0, 4, 5, 6, 7)
+                            .groupedWeighted(150, n -> (long) (100 / n))
+                            .runToChannel(scope)
+                            .forEach(i -> {
+                            }));
 
-        // then
-        assertInstanceOf(ArithmeticException.class, exception.getCause());
+            // then
+            assertInstanceOf(ArithmeticException.class, exception.getCause());
+            return null;
+        });
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldReturnFailedSourceWhenTheOriginalSourceIsFailed(UnsupervisedScope scope) throws InterruptedException {
-        // given
-        RuntimeException failure = new RuntimeException();
+    void shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws InterruptedException, ExecutionException {
+        Scopes.unsupervised(scope -> {
+            // given
+            RuntimeException failure = new RuntimeException();
 
-        // when
-        Object result = Flows.failed(failure)
-                .groupedWeighted(10, n -> Long.parseLong(n.toString()) * 2)
-                .runToChannel(scope)
-                .receiveOrClosed();
+            // when
+            Object result = Flows.failed(failure)
+                    .groupedWeighted(10, n -> Long.parseLong(n.toString()) * 2)
+                    .runToChannel(scope)
+                    .receiveOrClosed();
 
-        // then
-        assertInstanceOf(ChannelError.class, result);
-        assertEquals(failure, ((ChannelError) result).cause());
+            // then
+            assertInstanceOf(ChannelError.class, result);
+            assertEquals(failure, ((ChannelError) result).cause());
+            return null;
+        });
     }
 }

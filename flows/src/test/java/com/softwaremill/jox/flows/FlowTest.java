@@ -3,7 +3,7 @@ package com.softwaremill.jox.flows;
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -39,32 +39,36 @@ class FlowTest {
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldRunToChannel(UnsupervisedScope scope) throws Throwable {
-        // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3);
+    void shouldRunToChannel() throws Throwable {
+        Scopes.unsupervised(scope -> {
+            // given
+            Flow<Integer> flow = Flows.fromValues(1, 2, 3);
 
-        // when
-        Source<Integer> source = flow.runToChannel(scope);
+            // when
+            Source<Integer> source = flow.runToChannel(scope);
 
-        // then
-        assertEquals(1, source.receive());
-        assertEquals(2, source.receive());
-        assertEquals(3, source.receive());
+            // then
+            assertEquals(1, source.receive());
+            assertEquals(2, source.receive());
+            assertEquals(3, source.receive());
+            return null;
+        });
     }
 
     @Test
-    @WithUnsupervisedScope
-    void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow(UnsupervisedScope scope) throws Throwable {
-        // given
-        Channel<Integer> channel = Channel.newUnlimitedChannel();
-        Flow<Integer> flow = Flows.fromSource(channel);
+    void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
+        Scopes.unsupervised(scope -> {
+            // given
+            Channel<Integer> channel = Channel.newUnlimitedChannel();
+            Flow<Integer> flow = Flows.fromSource(channel);
 
-        // when
-        Source<Integer> receivedChannel = flow.runToChannel(scope);
+            // when
+            Source<Integer> receivedChannel = flow.runToChannel(scope);
 
-        // then
-        assertEquals(channel, receivedChannel);
+            // then
+            assertEquals(channel, receivedChannel);
+            return null;
+        });
     }
 
     @Test
