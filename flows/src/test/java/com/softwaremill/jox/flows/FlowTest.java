@@ -1,5 +1,8 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.ChannelClosedException;
+import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 import org.junit.jupiter.api.Test;
 

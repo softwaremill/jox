@@ -1,4 +1,4 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
 import org.junit.jupiter.api.Test;
 

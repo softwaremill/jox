@@ -1,5 +1,6 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
+import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
 
 import java.time.Duration;

@@ -1,6 +1,8 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
 
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 import java.util.ArrayList;
@@ -14,7 +16,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static com.softwaremill.jox.Flows.usingEmit;
+import static com.softwaremill.jox.flows.Flows.usingEmit;
 import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 /**

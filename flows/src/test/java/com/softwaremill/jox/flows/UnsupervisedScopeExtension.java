@@ -1,4 +1,4 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
 import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.UnsupervisedScope;

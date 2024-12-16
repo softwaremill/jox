@@ -1,6 +1,8 @@
-package com.softwaremill.jox;
+package com.softwaremill.jox.flows;
 
-import java.util.concurrent.ExecutionException;
+import com.softwaremill.jox.ChannelDone;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
 
 /**
  * Instances of this interface should be considered thread-unsafe, and only used within the scope in which they have been obtained, e.g. as
