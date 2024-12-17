@@ -1,9 +1,12 @@
 package com.softwaremill.jox.flows;
 
 
+import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.flows.Flows.usingEmit;
 import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static java.lang.Thread.sleep;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedList;
@@ -11,6 +14,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,6 +26,8 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.ChannelDone;
+import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.UnsupervisedScope;
@@ -330,9 +336,6 @@ public class Flow<T> {
         });
     }
 
-    private static class BreakException extends RuntimeException {
-    }
-
     /**
      * Chunks up the elements into groups of the specified size. The last group may be smaller due to the flow being complete.
      *
@@ -419,14 +422,205 @@ public class Flow<T> {
         });
     }
 
-    // endregion
+    /** Intersperses elements emitted by this flow with `inject` elements. The `inject` element is emitted between each pair of elements. */
+    public Flow<T> intersperse(T inject) {
+        return intersperse(Optional.empty(), inject, Optional.empty());
+    }
 
-    private void runLastToChannelAsync(Channel<T> channel) throws ExecutionException, InterruptedException {
-        unsupervised(scope -> {
-            runLastToChannelAsync(scope, channel);
-            return null;
+    /** Intersperses elements emitted by this flow with `inject` elements. The `start` element is emitted at the beginning; `end` is emitted
+     * after the current flow emits the last element.
+     *
+     * @param start
+     *   An element to be emitted at the beginning.
+     * @param inject
+     *   An element to be injected between the flow elements.
+     * @param end
+     *   An element to be emitted at the end.
+     */
+    public Flow<T> intersperse(T start, T inject, T end) {
+        return intersperse(Optional.of(start), inject, Optional.of(end));
+    }
+
+    private Flow<T> intersperse(Optional<T> start, T inject, Optional<T> end) {
+        return Flows.usingEmit(emit -> {
+            if (start.isPresent()) {
+                emit.apply(start.get());
+            }
+            AtomicBoolean firstEmitted = new AtomicBoolean(false);
+            last.run(t -> {
+                if (firstEmitted.get()) emit.apply(inject);
+                emit.apply(t);
+                firstEmitted.set(true);
+            });
+            if (end.isPresent()) {
+                emit.apply(end.get());
+            }
         });
     }
+
+    /**
+     * Emits elements limiting the throughput to a specific number of elements (evenly spaced) per time unit. Note that the element's
+     * emission-time is included in the resulting throughput. For instance, having `throttle(1, Duration.ofSeconds(1))` and emission of the next
+     * element taking `Xms` means that the resulting flow will emit elements every `1s + Xms` time. Throttling is not applied to the empty
+     * source.
+     *
+     * @param elements
+     *   Number of elements to be emitted. Must be greater than 0.
+     * @param per
+     *   Per time unit. Must be greater or equal to 1 ms.
+     * @return
+     *   A flow that emits at most `elements` `per` time unit.
+     */
+    public Flow<T> throttle(int elements, Duration per) {
+        if (elements <= 0) {
+            throw new IllegalArgumentException("requirement failed: elements must be > 0");
+        }
+        if (per.toMillis() <= 0) {
+            throw new IllegalArgumentException("requirement failed: per time must be >= 1 ms");
+        }
+        long emitEveryMillis = per.toMillis() / elements;
+        return tap(t -> {
+            try {
+                sleep(Duration.ofMillis(emitEveryMillis));
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * Transform the flow so that it emits elements as long as predicate `f` is satisfied (returns `true`). If `includeFirstFailing` is
+     * `true`, the flow will additionally emit the first element that failed the predicate. After that, the flow will complete as done.
+     *
+     * @param f
+     *   A predicate function called on incoming elements.
+     * @param includeFirstFailing
+     *   Whether the flow should also emit the first element that failed the predicate (`false` by default).
+     */
+    public Flow<T> takeWhile(Predicate<T> f, boolean includeFirstFailing) {
+        return Flows.usingEmit(emit -> {
+            try {
+                last.run(t -> {
+                    if (f.test(t)) {
+                        emit.apply(t);
+                    } else {
+                        if (includeFirstFailing) {
+                            emit.apply(t);
+                        }
+                        throw new BreakException();
+                    }
+                });
+            } catch (BreakException e) {
+                // done
+            }
+        });
+    }
+
+    /**
+     * Concatenates this flow with the `other` flow. The resulting flow will emit elements from this flow first, and then from the `other`
+     * flow.
+     *
+     * @param other
+     *   The flow to be appended to this flow.
+     */
+    public Flow<T> concat(Flow<T> other) {
+        //noinspection unchecked
+        return Flows.concat(this, other);
+    }
+
+    /**
+     * Drops `n` elements from this flow and emits subsequent elements.
+     *
+     * @param n
+     *   Number of elements to be dropped.
+     */
+    public Flow<T> drop(int n) {
+        return Flows.usingEmit(emit -> {
+            AtomicInteger dropped = new AtomicInteger(0);
+            last.run(t -> {
+                if (dropped.get() < n) {
+                    dropped.getAndIncrement();
+                } else {
+                    emit.apply(t);
+                }
+            });
+        });
+    }
+
+    /**
+     * Merges two flows into a single flow. The resulting flow emits elements from both flows in the order they are emitted. If one of the
+     * flows completes before the other, the remaining elements from the other flow are emitted by the returned flow. This can be changed
+     * with the `propagateDoneLeft` and `propagateDoneRight` flags.
+     * <p>
+     * Both flows are run concurrently in the background.
+     * The size of the buffers is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     *
+     * @param other
+     *   The flow to be merged with this flow.
+     * @param propagateDoneLeft
+     *   Should the resulting flow complete when the left flow (`this`) completes, before the `other` flow.
+     * @param propagateDoneRight
+     *   Should the resulting flow complete when the right flow (`outer`) completes, before `this` flow.
+     */
+    public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
+        return Flows.usingEmit(emit -> {
+            try {
+                unsupervised(scope -> {
+                    Source<T> c1 = this.runToChannel(scope);
+                    Source<T> c2 = other.runToChannel(scope);
+
+                    boolean continueLoop = true;
+                    while (continueLoop) {
+                        switch (selectOrClosed(c1.receiveClause(), c2.receiveClause())) {
+                            case ChannelDone done -> {
+                                if (c1.isClosedForReceive()) {
+                                    if (!propagateDoneLeft) FlowEmit.channelToEmit(c2, emit);
+                                } else if (!propagateDoneRight) FlowEmit.channelToEmit(c1, emit);
+                                continueLoop = false;
+                            }
+                            case ChannelError error -> throw error.toException();
+                            case Object r -> //noinspection unchecked
+                                    emit.apply((T) r);
+                        }
+                    }
+                    return null;
+                });
+            } catch (ExecutionException e) {
+                throw (Exception) e.getCause();
+            }
+        });
+    }
+
+    /** Prepends `other` flow to this source. The resulting flow will emit elements from `other` flow first, and then from this flow.
+     *
+     * @param other
+     *   The flow to be prepended to this flow.
+     */
+    public Flow<T> prepend(Flow<T> other) {
+        return other.concat(this);
+    }
+
+    /**
+     * If this flow has no elements then elements from an `alternative` flow are emitted by the returned flow. If this flow is failed then
+     * the returned flow is failed as well.
+     *
+     * @param alternative
+     *   An alternative flow to be used when this flow is empty.
+     */
+    public Flow<T> orElse(Flow<T> alternative) {
+        return Flows.usingEmit(emit -> {
+            AtomicBoolean receivedAtLeastOneElement = new AtomicBoolean(false);
+            last.run(t -> {
+                emit.apply(t);
+                receivedAtLeastOneElement.set(true);
+            });
+            if (!receivedAtLeastOneElement.get()) {
+                alternative.runToEmit(emit);
+            }
+        });
+    }
+
+    // endregion
 
     private void runLastToChannelAsync(UnsupervisedScope scope, Channel<T> channel) {
         scope.forkUnsupervised(() -> {
@@ -439,8 +633,7 @@ public class Flow<T> {
             return null;
         });
     }
+
+    private static class BreakException extends RuntimeException {
+    }
 }
-
-
-
-
