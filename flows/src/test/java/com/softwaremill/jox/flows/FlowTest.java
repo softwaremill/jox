@@ -1,15 +1,17 @@
 package com.softwaremill.jox.flows;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class FlowTest {
 
@@ -54,6 +56,27 @@ class FlowTest {
             return null;
         });
     }
+
+    @Test
+    void shouldRunToChannelWithBufferSizeDefinedInScope() throws Throwable {
+        ScopedValue.where(Channel.BUFFER_SIZE, 2).call(() -> {
+            Scopes.unsupervised(scope -> {
+                // given
+                Flow<Integer> flow = Flows.fromValues(1, 2, 3);
+
+                // when
+                Source<Integer> source = flow.runToChannel(scope);
+
+                // then
+                assertEquals(1, source.receive());
+                assertEquals(2, source.receive());
+                assertEquals(3, source.receive());
+                return null;
+            });
+            return null;
+        });
+    }
+
 
     @Test
     void shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {

@@ -1,9 +1,8 @@
 package com.softwaremill.jox.flows;
 
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import static com.softwaremill.jox.flows.Flows.usingEmit;
+import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,8 +15,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-import static com.softwaremill.jox.flows.Flows.usingEmit;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
  * Describes an asynchronous transformation pipeline. When run, emits elements of type `T`.
@@ -60,15 +60,18 @@ public class Flow<T> {
     /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
      * of this method.
      * <p>
-     * By default, buffer capacity is unlimited.
+     * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
-     * Blocks until the flow completes.
+     * Method does not block until the flow completes.
+     *
+     * @param scope
+     *  Required for creating async forks responsible for writing to channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope) {
         if (last instanceof SourceBackedFlowStage<T>(Source<T> source)) {
             return source;
         } else {
-            Channel<T> channel = new Channel<>();
+            Channel<T> channel = Channel.withScopedBufferSize();
             runLastToChannelAsync(scope, channel);
             return channel;
         }
