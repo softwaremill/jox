@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.function.BinaryOperator;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -178,13 +179,12 @@ public class Flow<T> {
      * @throws NoSuchElementException
      *   When this flow is empty.
      */
-    public <U extends T> U runReduce(BiFunction<U, U, U> f) throws Exception {
-        AtomicReference<Optional<U>> current = new AtomicReference<>(Optional.empty());
+    public T runReduce(BinaryOperator<T> f) throws Exception {
+        AtomicReference<Optional<T>> current = new AtomicReference<>(Optional.empty());
         last.run(t -> {
-            // noinspection unchecked
             current.updateAndGet(currentValue -> currentValue
-                    .map(u -> f.apply(u, (U) t))
-                    .or(() -> Optional.of((U) t)));
+                    .map(u -> f.apply(u, t))
+                    .or(() -> Optional.of(t)));
         });
 
         return current.get().orElseThrow(() -> new NoSuchElementException("cannot reduce an empty flow"));

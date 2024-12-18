@@ -230,7 +230,7 @@ public class FlowRunOperationsTest {
     @Test
     void runReduce_shouldThrowNoSuchElementExceptionForReduceOverEmptySource() {
         // given
-        Flow<Object> flow = Flows.empty();
+        Flow<Integer> flow = Flows.empty();
 
         // when & then
         NoSuchElementException exception = assertThrows(NoSuchElementException.class, () -> flow.runReduce(Integer::sum));
