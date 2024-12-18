@@ -87,6 +87,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
       operations won't use them, so the relinking won't be useful.
      */
 
+    /**
+     * Can be used with {@link Channel#withScopedBufferSize()} to pass buffer size value from scope.
+     * e.g. `ScopedValues.where(BUFFER_SIZE, 8).run(() -> Channel.withScopedBufferSize())` will create a channel with buffer size = 8
+     * **/
+    public static final ScopedValue<Integer> BUFFER_SIZE = ScopedValue.newInstance();
+    public static final int DEFAULT_BUFFER_SIZE = 16;
+
     // immutable state
 
     private final int capacity;
@@ -200,6 +207,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     public static <T> Channel<T> newUnlimitedChannel() {
         return new Channel<>(UNLIMITED_CAPACITY);
+    }
+
+    /**
+     * Allows for creating Channel with buffer size specified in scope by {@link ScopedValue} {@link Channel#BUFFER_SIZE}
+     */
+    public static <T> Channel<T> withScopedBufferSize() {
+        return new Channel<>(BUFFER_SIZE.orElse(DEFAULT_BUFFER_SIZE));
     }
 
     private static final int UNLIMITED_CAPACITY = -1;
