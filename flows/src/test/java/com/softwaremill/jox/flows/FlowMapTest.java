@@ -12,9 +12,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -534,5 +536,168 @@ public class FlowMapTest {
 
         // then
         assertEquals(delays.keySet(), new HashSet<>(result));
+    }
+
+    @Test
+    void mapStatefulConcat_shouldDeduplicate() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 2, 3, 2, 4, 3, 1, 5);
+
+        // when
+        Flow<Integer> flow = c.mapStatefulConcat(() -> new HashSet<Integer>(), (s, e) -> {
+            List<Integer> downStream = s.add(e) ? List.of(e) : List.of();
+            return Map.entry(s, downStream);
+        });
+
+        // then
+        assertEquals(List.of(1, 2, 3, 4, 5), flow.runToList());
+    }
+
+    @Test
+    void mapStateful_shouldCountConsecutive() throws Exception {
+        // given
+        Flow<String> flow = Flows.fromValues("apple", "apple", "apple", "banana", "orange", "orange", "apple");
+
+        // when
+        Flow<Map.Entry<String, Integer>> s = flow.mapStatefulConcat(
+                () -> Map.entry(Optional.<String>empty(), 0),
+                (state, e) -> {
+                    Optional<String> previous = state.getKey();
+                    int count = state.getValue();
+                    if (previous.isEmpty()) {
+                        return Map.entry(Map.entry(Optional.of(e), 1), Collections.emptyList());
+                    } else if (previous.get().equals(e)) {
+                        return Map.entry(Map.entry(previous, count + 1), Collections.emptyList());
+                    } else {
+                        return Map.entry(Map.entry(Optional.of(e), 1), List.of(Map.entry(previous.get(), count)));
+                    }
+                },
+                 state1 -> state1.getKey().map(v -> Map.entry(v, state1.getValue())));
+
+        // then
+        assertEquals(List.of(
+                Map.entry("apple", 3),
+                Map.entry("banana", 1),
+                Map.entry("orange", 2),
+                Map.entry("apple", 1)
+        ), s.runToList());
+    }
+
+    @Test
+    void mapStatefulConcat_shouldPropagateErrorsInMappingFunction() throws Exception {
+        // given
+        Flow<String> flow = Flows.fromValues("a", "b", "c");
+
+        // when
+        Flow<String> flow2 = flow.mapStatefulConcat(() -> 0, (index, element) -> {
+            if (index < 2) {
+                return Map.entry(index + 1, List.of(element));
+            } else {
+                throw new RuntimeException("boom");
+            }
+        });
+
+        // then
+        Scopes.supervised(scope -> {
+            Source<String> c = flow2.runToChannel(scope, 0); // buffer capacity = 0 so that the error isn't created too early
+            assertEquals("a", c.receive());
+            assertEquals("b", c.receive());
+            ChannelError channelError = (ChannelError) c.receiveOrClosed();
+            assertEquals("boom", channelError.cause().getMessage());
+            return null;
+        });
+    }
+
+    @Test
+    void mapStatefulConcat_shouldPropagateErrorsInCompletionCallback() throws Exception {
+        // given
+        Flow<String> flow = Flows.fromValues("a", "b", "c");
+
+        // when
+        Flow<String> flow2 = flow.mapStatefulConcat(() -> 0, (index, element) -> Map.entry(index + 1, List.of(element)), _ -> {
+            throw new RuntimeException("boom");
+        });
+
+        // then
+        Scopes.supervised(scope -> {
+            Source<String> c = flow2.runToChannel(scope, 0); // buffer capacity = 0 so that the error isn't created too early
+            assertEquals("a", c.receive());
+            assertEquals("b", c.receive());
+            assertEquals("c", c.receive());
+
+            ChannelError channelError = (ChannelError) c.receiveOrClosed();
+            assertEquals("boom", channelError.cause().getMessage());
+            return null;
+        });
+    }
+
+    @Test
+    void mapStateful_shouldZipWithIndex() throws Exception {
+        // given
+        var flow = Flows.fromValues("a", "b", "c")
+                .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, Map.entry(element, index)));
+
+        // when & then
+        assertEquals(List.of(Map.entry("a", 0), Map.entry("b", 1), Map.entry("c", 2)), flow.runToList());
+    }
+
+    @Test
+    void mapStateful_shouldCalculateRunningTotal() throws Exception {
+        // given
+        var flow = Flows.fromValues(1, 2, 3, 4, 5)
+                .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, sum), Optional::of);
+
+        // when & then
+        assertEquals(List.of(0, 1, 3, 6, 10, 15), flow.runToList());
+    }
+
+    @Test
+    void mapStateful_shouldEmitDifferentValuesThanIncomingOnes() throws Exception {
+        // given
+        var flow = Flows.fromValues(1, 2, 3, 4, 5)
+                .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, Integer.toString(sum)), n -> Optional.of(Integer.toString(n)));
+
+        // when & then
+        assertEquals(List.of("0", "1", "3", "6", "10", "15"), flow.runToList());
+    }
+
+    @Test
+    void mapStateful_shouldPropagateErrorsInMappingFunction() throws Exception {
+        // given
+        var flow = Flows.fromValues("a", "b", "c")
+                .mapStateful(() -> 0, (index, element) -> {
+                    if (index < 2) return Map.entry(index + 1, element);
+                    else throw new RuntimeException("boom");
+                });
+
+        // when & then
+        Scopes.supervised(scope -> {
+            Source<String> s = flow.runToChannel(scope, 0);
+            assertEquals("a", s.receive());
+            assertEquals("b", s.receive());
+            ChannelError closed = (ChannelError) s.receiveOrClosed();
+            assertEquals("boom", closed.cause().getMessage());
+            return null;
+        });
+    }
+
+    @Test
+    void mapStateful_shouldPropagateErrorsInCompletionCallback() throws Exception {
+        // given
+        var flow = Flows.fromValues("a", "b", "c")
+                .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, element), _ -> {
+                    throw new RuntimeException("boom");
+                });
+
+        // when & then
+        Scopes.supervised(scope -> {
+            Source<String> s = flow.runToChannel(scope, 0);
+            assertEquals("a", s.receive());
+            assertEquals("b", s.receive());
+            assertEquals("c", s.receive());
+            ChannelError closed = (ChannelError) s.receiveOrClosed();
+            assertEquals("boom", closed.cause().getMessage());
+            return null;
+        });
     }
 }
