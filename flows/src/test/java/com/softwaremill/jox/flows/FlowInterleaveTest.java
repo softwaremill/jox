@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import com.softwaremill.jox.Channel;
 import org.junit.jupiter.api.Test;
 
 public class FlowInterleaveTest {
@@ -46,6 +47,34 @@ public class FlowInterleaveTest {
         // when
         var result = c1.interleave(c2, 1, false, 10)
                 .runToList();
+
+        // then
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
+    }
+
+    @Test
+    void shouldInterleaveWithDefaultBufferCapacity() throws Exception {
+        // given
+        var c1 = Flows.fromValues(1, 3, 5);
+        var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
+
+        // when
+        var result = c1.interleave(c2, 1, false)
+                .runToList();
+
+        // then
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
+    }
+
+    @Test
+    void shouldInterleaveWithBufferCapacityTakenFromScope() throws Exception {
+        // given
+        var c1 = Flows.fromValues(1, 3, 5);
+        var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
+
+        // when
+        var result = ScopedValue.where(Channel.BUFFER_SIZE, 10)
+                .call(() -> c1.interleave(c2, 1, false).runToList());
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
