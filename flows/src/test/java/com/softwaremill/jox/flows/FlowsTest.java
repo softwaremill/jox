@@ -1,13 +1,12 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -17,7 +16,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class FlowsTest {
 
@@ -72,9 +76,9 @@ class FlowsTest {
         RuntimeException failure = new RuntimeException("future failed");
 
         // when & then
-        assertThrows(RuntimeException.class,
-                () -> Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure)).runToList(),
-                failure.getMessage());
+        ExecutionException exception = assertThrows(ExecutionException.class,
+                () -> Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure)).runToList());
+        assertEquals(failure, exception.getCause());
     }
 
     @Test
@@ -235,5 +239,72 @@ class FlowsTest {
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
+    }
+
+    @Test
+    void shouldInterleaveNoSources() throws Exception {
+        // when
+        List<Integer> actual = Flows.<Integer>interleaveAll(Collections.emptyList(), 1, false, 10)
+                .runToList();
+
+        // then
+        assertEquals(Collections.emptyList(), actual);
+    }
+
+    @Test
+    void shouldInterleaveSingleFlow() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3);
+
+        // when
+        List<Integer> result = Flows.interleaveAll(List.of(c), 1, false, 10)
+                .runToList();
+
+        // then
+        assertEquals(List.of(1, 2, 3), result);
+    }
+
+    @Test
+    void shouldInterleaveMultipleFlows() throws Exception {
+        // given
+        Flow<Integer> c1 = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8);
+        Flow<Integer> c2 = Flows.fromValues(10, 20, 30);
+        Flow<Integer> c3 = Flows.fromValues(100, 200, 300, 400, 500);
+
+        // when
+        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 1, false, 10)
+                .runToList();
+
+        // then
+        assertEquals(List.of(1, 10, 100, 2, 20, 200, 3, 30, 300, 4, 400, 5, 500, 6, 7, 8), result);
+    }
+
+    @Test
+    void shouldInterleaveMultipleFlowsUsingSegmentSizeBiggerThan1() throws Exception {
+        // given
+        Flow<Integer> c1 = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8);
+        Flow<Integer> c2 = Flows.fromValues(10, 20, 30);
+        Flow<Integer> c3 = Flows.fromValues(100, 200, 300, 400, 500);
+
+        // when
+        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 2, false, 10)
+                .runToList();
+
+        // then
+        assertEquals(List.of(1, 2, 10, 20, 100, 200, 3, 4, 30, 300, 400, 5, 6, 500, 7, 8), result);
+    }
+
+    @Test
+    void shouldInterleaveMultipleFlowsUsingSegmentSizeBiggerThan1AndCompleteEagerly() throws Exception {
+        // given
+        Flow<Integer> c1 = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8);
+        Flow<Integer> c2 = Flows.fromValues(10, 20, 30);
+        Flow<Integer> c3 = Flows.fromValues(100, 200, 300, 400, 500);
+
+        // when
+        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 2, true, 10).runToList();
+
+        // then
+        assertEquals(List.of(1, 2, 10, 20, 100, 200, 3, 4, 30), result);
     }
 }

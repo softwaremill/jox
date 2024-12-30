@@ -1,19 +1,24 @@
 package com.softwaremill.jox.flows;
 
 
+import static com.softwaremill.jox.Select.defaultClause;
 import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.flows.Flows.usingEmit;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static com.softwaremill.jox.structured.Scopes.unsupervised;
 import static java.lang.Thread.sleep;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -30,6 +35,8 @@ import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
@@ -81,7 +88,7 @@ public class Flow<T> {
      *  Required for creating async forks responsible for writing to channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope) {
-        return runToChannelInternal(scope, () -> Channel.withScopedBufferSize());
+        return runToChannelInternal(scope, Channel::withScopedBufferSize);
     }
 
     /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
@@ -131,7 +138,7 @@ public class Flow<T> {
      * Ignores all elements emitted by the flow. Blocks until the flow completes.
      */
     public void runDrain() throws Exception {
-        runForeach(t -> {});
+        runForeach(_ -> {});
     }
 
     /**
@@ -244,15 +251,11 @@ public class Flow<T> {
     public Flow<T> buffer(int bufferCapacity) {
         return usingEmit(emit -> {
             Channel<T> ch = new Channel<>(bufferCapacity);
-            try {
-                unsupervised(scope -> {
-                    runLastToChannelAsync(scope, ch);
-                    FlowEmit.channelToEmit(ch, emit);
-                    return null;
-                });
-            } catch (ExecutionException e) {
-                throw (Exception) e.getCause();
-            }
+            unsupervised(scope -> {
+                runLastToChannelAsync(scope, ch);
+                FlowEmit.channelToEmit(ch, emit);
+                return null;
+            });
         });
     }
 
@@ -342,7 +345,7 @@ public class Flow<T> {
      * @param n The number of elements in a group.
      */
     public Flow<List<T>> grouped(int n) {
-        return groupedWeighted(n, t -> 1L);
+        return groupedWeighted(n, _ -> 1L);
     }
 
     /**
@@ -380,9 +383,7 @@ public class Flow<T> {
      * Discard all elements emitted by this flow. The returned flow completes only when this flow completes (successfully or with an error).
      */
     public Flow<Void> drain() {
-        return Flows.usingEmit(emit -> {
-            last.run(t -> {});
-        });
+        return Flows.usingEmit(_ -> last.run(_ -> {}));
     }
 
     /**
@@ -479,7 +480,7 @@ public class Flow<T> {
             throw new IllegalArgumentException("requirement failed: per time must be >= 1 ms");
         }
         long emitEveryMillis = per.toMillis() / elements;
-        return tap(t -> {
+        return tap(_ -> {
             try {
                 sleep(Duration.ofMillis(emitEveryMillis));
             } catch (InterruptedException e) {
@@ -524,7 +525,6 @@ public class Flow<T> {
      *   The flow to be appended to this flow.
      */
     public Flow<T> concat(Flow<T> other) {
-        //noinspection unchecked
         return Flows.concat(this, other);
     }
 
@@ -564,30 +564,26 @@ public class Flow<T> {
      */
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
         return Flows.usingEmit(emit -> {
-            try {
-                unsupervised(scope -> {
-                    Source<T> c1 = this.runToChannel(scope);
-                    Source<T> c2 = other.runToChannel(scope);
+            unsupervised(scope -> {
+                Source<T> c1 = this.runToChannel(scope);
+                Source<T> c2 = other.runToChannel(scope);
 
-                    boolean continueLoop = true;
-                    while (continueLoop) {
-                        switch (selectOrClosed(c1.receiveClause(), c2.receiveClause())) {
-                            case ChannelDone done -> {
-                                if (c1.isClosedForReceive()) {
-                                    if (!propagateDoneLeft) FlowEmit.channelToEmit(c2, emit);
-                                } else if (!propagateDoneRight) FlowEmit.channelToEmit(c1, emit);
-                                continueLoop = false;
-                            }
-                            case ChannelError error -> throw error.toException();
-                            case Object r -> //noinspection unchecked
-                                    emit.apply((T) r);
+                boolean continueLoop = true;
+                while (continueLoop) {
+                    switch (selectOrClosed(c1.receiveClause(), c2.receiveClause())) {
+                        case ChannelDone _ -> {
+                            if (c1.isClosedForReceive()) {
+                                if (!propagateDoneLeft) FlowEmit.channelToEmit(c2, emit);
+                            } else if (!propagateDoneRight) FlowEmit.channelToEmit(c1, emit);
+                            continueLoop = false;
                         }
+                        case ChannelError error -> throw error.toException();
+                        case Object r -> //noinspection unchecked
+                                emit.apply((T) r);
                     }
-                    return null;
-                });
-            } catch (ExecutionException e) {
-                throw (Exception) e.getCause();
-            }
+                }
+                return null;
+            });
         });
     }
 
@@ -620,7 +616,285 @@ public class Flow<T> {
         });
     }
 
+    /**
+     * Emits a given number of elements (determined by `segmentSize`) from this flow to the returned flow, then emits the same number of
+     * elements from the `other` flow and repeats. The order of elements in both flows is preserved.
+     * <p>
+     * If one of the flows is done before the other, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow is
+     * completed immediately, otherwise the remaining elements from the other flow are emitted by the returned flow.
+     * <p>
+     * Both flows are run concurrently and asynchronously.
+     *
+     * @param other
+     *   The flow whose elements will be interleaved with the elements of this flow.
+     * @param segmentSize
+     *   The number of elements sent from each flow before switching to the other one.
+     * @param eagerComplete
+     *   If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
+     *   non-completed flow are sent downstream.
+     */
+    public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete, int bufferCapacity) {
+        //noinspection unchecked
+        return Flows.interleaveAll(Arrays.asList((Flow<U>) this, other), segmentSize, eagerComplete, bufferCapacity);
+    }
+
+    /**
+     * Applies the given mapping function `f`, to each element emitted by this source, transforming it into an `Iterable` of results,
+     * then the returned flow emits the results one by one. Can be used to unfold incoming sequences of elements into single elements.
+     *
+     * @param f
+     *   A function that transforms the element from this flow into an `Iterable` of results which are emitted one by one by the
+     *   returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
+     */
+    public <U> Flow<U> mapConcat(Function<T, Iterable<U>> f) {
+        return Flows.usingEmit(emit -> {
+            last.run(t -> {
+                for (U u : f.apply(t)) {
+                    emit.apply(u);
+                }
+            });
+        });
+    }
+
+    /**
+     * Applies the given mapping function `f` to each element emitted by this flow. At most `parallelism` invocations of `f` are run in
+     * parallel.
+     * <p>
+     * The mapped results are emitted in the same order, in which inputs are received. In other words, ordering is preserved.
+     * <p>
+     * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     *
+     * @param parallelism
+     *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
+     * @param f
+     *   The mapping function.
+     */
+    public <U> Flow<U> mapPar(int parallelism, Function<T, U> f) {
+        return Flows.usingEmit(emit -> {
+            Semaphore semaphore = new Semaphore(parallelism);
+            Channel<Fork<Optional<U>>> inProgress = new Channel<>(parallelism);
+            Channel<U> results = Channel.withScopedBufferSize();
+
+            // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,
+            // that is without closing the main scope; any error management must be done in the forks, as the scope is
+            // unsupervised
+            Scopes.unsupervised(scope -> {
+                // a fork which runs the `last` pipeline, and for each emitted element creates a fork
+                // notifying only the `results` channels, as it will cause the scope to end, and any other forks to be
+                // interrupted, including the inProgress-fork, which might be waiting on a join()
+                forkPropagate(scope, results, () -> {
+                    last.run(value -> {
+                        semaphore.acquire();
+                        inProgress.sendOrClosed(forkMapping(scope, f, semaphore, value, results));
+                    });
+                    inProgress.doneOrClosed();
+                    return null;
+                });
+
+                // a fork in which we wait for the created forks to finish (in sequence), and forward the mapped values to `results`
+                // this extra step is needed so that if there's an error in any of the mapping forks, it's discovered as quickly as
+                // possible in the main body
+                scope.forkUnsupervised((Callable<T>) () -> {
+                    while (true) {
+                        switch (inProgress.receiveOrClosed()) {
+                            // in the fork's result is a `None`, the error is already propagated to the `results` channel
+                            case ChannelDone ignored -> {
+                                results.done();
+                                return null;
+                            }
+                            case ChannelError(Throwable e) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
+                            case Object fork -> {
+                                //noinspection unchecked
+                                Optional<U> result = ((Fork<Optional<U>>) fork).join();
+                                if (result.isPresent()) {
+                                    results.sendOrClosed(result.get());
+                                } else {
+                                    return null;
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // in the main body, we call the `emit` methods using the (sequentially received) results; when an error occurs,
+                // the scope ends, interrupting any forks that are still running
+                FlowEmit.channelToEmit(results, emit);
+                return null;
+            });
+        });
+    }
+
+    /**
+     * Applies the given mapping function `f` to each element emitted by this flow. At most `parallelism` invocations of `f` are run in
+     * parallel.
+     * <p>
+     * The mapped results **might** be emitted out-of-order, depending on the order in which the mapping function completes.
+     * <p>
+     * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     *
+     * @param parallelism
+     *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
+     * @param f
+     *   The mapping function.
+     */
+    public <U> Flow<U> mapParUnordered(int parallelism, Function<T, U> f) {
+        return Flows.usingEmit(emit -> {
+            Channel<U> results = Channel.withScopedBufferSize();
+            Semaphore s = new Semaphore(parallelism);
+            unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
+                forkPropagate(unsupervisedScope, results, () -> {
+                    supervised(scope -> { // the inner scope, in which user forks are created, and which is used to wait for all to complete when done
+                        try {
+                            last.run(t -> {
+                                s.acquire();
+                                scope.forkUser(() -> {
+                                    try {
+                                        results.sendOrClosed(f.apply(t));
+                                        s.release();
+                                    } catch (Throwable cause) {
+                                        results.errorOrClosed(cause);
+                                    }
+                                    return null;
+                                });
+                            });
+                        } catch (Exception e) {
+                            results.errorOrClosed(e);
+                        }
+                        return null;
+                    });
+                    results.doneOrClosed();
+                    return null;
+                });
+                FlowEmit.channelToEmit(results, emit);
+                return null;
+            });
+        });
+    }
+
+    /**
+     * Creates sliding windows of elements from this flow. The window slides by `step` elements. The last window may be smaller due to flow
+     * being completed.
+     *
+     * @param n
+     *   The number of elements in a window.
+     * @param step
+     *   The number of elements the window slides by.
+     */
+    public Flow<List<T>> sliding(int n, int step) {
+        if (n <= 0) throw new IllegalArgumentException("n must be > 0");
+        if (step <= 0) throw new IllegalArgumentException("step must be > 0");
+
+        return Flows.usingEmit(emit -> {
+            final AtomicReference<List<T>> buf = new AtomicReference<>(new ArrayList<>());
+            last.run(t -> {
+                var buffer = buf.get();
+                buffer.add(t);
+                if (buffer.size() < n) {
+                    // do nothing
+                } else if (buffer.size() == n) {
+                    emit.apply(new ArrayList<>(buf.get()));
+                } else if (step <= n) {
+                    // if step is <= n we simply drop `step` elements and continue appending until buffer size is n
+                    buffer = buf.updateAndGet(b -> b.subList(step, b.size()));
+                    // in special case when step == 1, we have to send the buffer immediately
+                    if (buffer.size() == n) emit.apply(new ArrayList<>(buffer));
+                } else {
+                    // step > n - we drop `step` elements and continue appending until buffer size is n
+                    if (buf.get().size() == step) buf.updateAndGet(b -> b.subList(step, buf.get().size()));
+                }
+            });
+            // send the remaining elements, only if these elements were not yet sent
+            List<T> buffer = buf.get();
+            if (!buffer.isEmpty() && buffer.size() < n) emit.apply(new ArrayList<>(buffer));
+        });
+    }
+
+    /**
+     * Attaches the given {@link Sink} to this flow, meaning elements that pass through will also be sent to the sink. If emitting an
+     * element, or sending to the `other` sink blocks, no elements will be processed until both are done. The elements are first emitted by
+     * the flow and then, only if that was successful, to the `other` sink.
+     * <p>
+     * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink is failed or complete, this becomes a
+     * failure of the returned flow (contrary to {@link #alsoToTap} where it's ignored).
+     *
+     * @param other
+     *   The sink to which elements from this flow will be sent.
+     * @see #alsoToTap for a version that drops elements when the `other` sink is not available for receive.
+     */
+    public Flow<T> alsoTo(Sink<T> other) {
+        return Flows.usingEmit(emit -> {
+            try {
+                last.run(t -> {
+                    try {
+                        emit.apply(t);
+                    } catch (Exception e) {
+                        other.errorOrClosed(e);
+                        throw e;
+                    }
+                    other.send(t);
+                });
+                other.done();
+            } catch (Exception e) {
+                other.errorOrClosed(e);
+                throw e;
+            }
+        });
+    }
+
+    /**
+     * Attaches the given {@link Sink} to this flow, meaning elements that pass through will also be sent to the sink. If the `other`
+     * sink is not available for receive, the elements are still emitted by the returned flow, but not sent to the `other` sink.
+     * <p>
+     * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink fails or closes, then failure or closure
+     * is ignored and it doesn't affect the resulting flow (contrary to {@link #alsoTo} where it's propagated).
+     *
+     * @param other
+     *   The sink to which elements from this source will be sent.
+     * @see #alsoTo for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
+     */
+    public Flow<T> alsoToTap(Sink<T> other) {
+        return Flows.usingEmit(emit -> {
+            try {
+                last.run(t -> {
+                    try {
+                        emit.apply(t);
+                    } catch (Exception e) {
+                        other.errorOrClosed(e);
+                    }
+                    selectOrClosed(other.sendClause(t), defaultClause((Object) null));
+                });
+                other.doneOrClosed();
+            } catch (Exception e) {
+                other.errorOrClosed(e);
+            }
+        });
+    }
+
     // endregion
+
+    private void forkPropagate(UnsupervisedScope unsupervisedScope, Sink<?> propagateExceptionsTo, Callable<Void> runnable) {
+        unsupervisedScope.forkUnsupervised(() -> {
+            try {
+                runnable.call();
+            } catch (Exception e) {
+                propagateExceptionsTo.errorOrClosed(e);
+            }
+            return null;
+        });
+    }
+
+    private <U> Fork<Optional<U>> forkMapping(UnsupervisedScope scope, Function<T, U> f, Semaphore s, T value, Sink<U> results) {
+        return scope.forkUnsupervised(() -> {
+            try {
+                U u = f.apply(value);
+                s.release(); // not in finally, as in case of an exception, no point in starting subsequent forks
+                return Optional.of(u);
+            } catch (Throwable throwable) { // same as in `forkPropagate`, catching all exceptions
+                results.errorOrClosed(throwable);
+                return Optional.empty();
+            }
+        });
+    }
 
     private void runLastToChannelAsync(UnsupervisedScope scope, Channel<T> channel) {
         scope.forkUnsupervised(() -> {

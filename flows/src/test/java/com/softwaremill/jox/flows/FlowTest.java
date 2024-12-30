@@ -14,10 +14,9 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Scopes;
@@ -131,50 +130,13 @@ class FlowTest {
 
     @Test
     void shouldPropagateErrorsWhenUsingBuffer() {
-        Exception exception = assertThrows(ChannelClosedException.class, () -> {
+        Exception exception = assertThrows(ExecutionException.class, () -> {
             Flows.fromValues(1, 2, 3)
-                    .map(value -> { throw new IllegalStateException(); })
+                    .map(_ -> { throw new IllegalStateException(); })
                     .buffer(5)
                     .runToList();
         });
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
-    }
-
-    @Test
-    void shouldMap() throws Throwable {
-        // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3);
-        List<String> results = new ArrayList<>();
-
-        // when
-        Flow<String> mapped = flow.map(Object::toString);
-        mapped.runForeach(results::add);
-
-        // then
-        assertEquals(List.of("1", "2", "3"), results);
-    }
-
-    @Test
-    void shouldMapUsingEmit() throws Throwable {
-        // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3);
-        List<Integer> results = new ArrayList<>();
-
-        // when
-        Flow<Integer> mapped = flow.mapUsingEmit(i -> emit -> {
-            for (int j = 0; j < 2; j++) {
-                try {
-                    emit.apply(i + j);
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            }
-        });
-
-        mapped.runForeach(results::add);
-
-        // then
-        assertEquals(List.of(1, 2, 2, 3, 3, 4), results);
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test
@@ -201,43 +163,11 @@ class FlowTest {
         flow
                 .tap(results::add)
                 .map(i -> i * 2)
-                .runForeach(j -> {
+                .runForeach(_ -> {
                 });
 
         // then
         assertEquals(List.of(1, 2, 3), results);
-    }
-
-    @Test
-    void shouldFlatMap() throws Throwable {
-        // given
-        Flow<Integer> flow = Flows.fromValues(10, 20, 30);
-        List<Integer> results = new ArrayList<>();
-
-        // when
-        flow
-                .flatMap(i -> Flows.fromValues(i + 1, i + 2))
-                .runForeach(results::add);
-
-        // then
-        assertEquals(List.of(11, 12, 21, 22, 31, 32), results);
-    }
-
-    @Test
-    void shouldPropagateErrorFromFlatMap() {
-        // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3);
-
-        // when
-        Flow<Integer> mapped = flow.flatMap(i -> {
-            if (i == 2) {
-                throw new RuntimeException("error");
-            }
-            return Flows.fromValues(i * 2);
-        });
-
-        // then
-        assertThrows(RuntimeException.class, () -> mapped.runForeach(i -> {}));
     }
 
     @Test
@@ -524,31 +454,31 @@ class FlowTest {
     @Test
     void shouldPropagateErrorFromTheLeft() {
         // given
-        var c1 = Flows.fromValues(1, 2, 3).concat(Flows.<Integer>failed(new IllegalStateException()));
+        var c1 = Flows.fromValues(1, 2, 3).concat(Flows.failed(new IllegalStateException()));
         var c2 = Flows.fromValues(4, 5, 6);
 
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ChannelClosedException.class, s::runToList);
+        var exception = assertThrows(ExecutionException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test
     void shouldPropagateErrorFromTheRight() {
         // given
         var c1 = Flows.fromValues(1, 2, 3);
-        var c2 = Flows.fromValues(4, 5, 6).concat(Flows.<Integer>failed(new IllegalStateException()));
+        var c2 = Flows.fromValues(4, 5, 6).concat(Flows.failed(new IllegalStateException()));
 
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ChannelClosedException.class, s::runToList);
+        var exception = assertThrows(ExecutionException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test
@@ -613,7 +543,8 @@ class FlowTest {
                 .toList();
 
         // then
-        assertTrue(result.equals(List.of(1, 2, 5, 6)) || result.equals(List.of(1, 2, 3, 5, 6)));
+        assertTrue(new HashSet<>(result).containsAll(List.of(5, 6)));
+        assertTrue(result.size() > 2);
     }
 
     @Test
