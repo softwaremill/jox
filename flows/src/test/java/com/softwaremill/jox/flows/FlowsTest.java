@@ -76,9 +76,9 @@ class FlowsTest {
         RuntimeException failure = new RuntimeException("future failed");
 
         // when & then
-        assertThrows(RuntimeException.class,
-                () -> Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure)).runToList(),
-                failure.getMessage());
+        ExecutionException exception = assertThrows(ExecutionException.class,
+                () -> Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure)).runToList());
+        assertEquals(failure, exception.getCause());
     }
 
     @Test

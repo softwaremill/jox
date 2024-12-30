@@ -9,7 +9,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -178,7 +177,7 @@ public final class Flows {
 
     /** Create a flow which sleeps for the given `timeout` and then completes as done. */
     public static <T> Flow<T> timeout(Duration timeout) {
-        return usingEmit(emit -> Thread.sleep(timeout.toMillis()));
+        return usingEmit(_ -> Thread.sleep(timeout.toMillis()));
     }
 
     /**
@@ -196,17 +195,13 @@ public final class Flows {
 
     /** Creates an empty flow, which emits no elements and completes immediately. */
     public static <T> Flow<T> empty() {
-        return usingEmit(emit -> {});
+        return usingEmit(_ -> {});
     }
 
     /** Creates a flow that emits a single element when `from` completes, or throws an exception when `from` fails. */
     public static <T> Flow<T> fromCompletableFuture(CompletableFuture<T> from) {
         return usingEmit(emit -> {
-            try {
-                emit.apply(from.get());
-            } catch (ExecutionException e) {
-                throw (Exception) e.getCause();
-            }
+            emit.apply(from.get());
         });
     }
 
@@ -226,7 +221,7 @@ public final class Flows {
      *   The {@link java.lang.Exception} to fail with
      */
     public static <T> Flow<T> failed(Exception t) {
-        return usingEmit(emit -> {
+        return usingEmit(_ -> {
             throw t;
         });
     }
@@ -267,7 +262,7 @@ public final class Flows {
 
                         while (true) {
                             var received = availableSources.get(currentSourceIndex).receiveOrClosed();
-                            if (received instanceof ChannelDone done) {
+                            if (received instanceof ChannelDone) {
                                 ///  channel is done, remove it from the list of available sources
                                 availableSources.remove(currentSourceIndex);
                                 currentSourceIndex = currentSourceIndex == 0 ? availableSources.size() - 1 : currentSourceIndex - 1;

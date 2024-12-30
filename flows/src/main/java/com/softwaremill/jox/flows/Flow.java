@@ -88,7 +88,7 @@ public class Flow<T> {
      *  Required for creating async forks responsible for writing to channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope) {
-        return runToChannelInternal(scope, () -> Channel.withScopedBufferSize());
+        return runToChannelInternal(scope, Channel::withScopedBufferSize);
     }
 
     /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
@@ -138,7 +138,7 @@ public class Flow<T> {
      * Ignores all elements emitted by the flow. Blocks until the flow completes.
      */
     public void runDrain() throws Exception {
-        runForeach(t -> {});
+        runForeach(_ -> {});
     }
 
     /**
@@ -251,15 +251,11 @@ public class Flow<T> {
     public Flow<T> buffer(int bufferCapacity) {
         return usingEmit(emit -> {
             Channel<T> ch = new Channel<>(bufferCapacity);
-            try {
-                unsupervised(scope -> {
-                    runLastToChannelAsync(scope, ch);
-                    FlowEmit.channelToEmit(ch, emit);
-                    return null;
-                });
-            } catch (ExecutionException e) {
-                throw (Exception) e.getCause();
-            }
+            unsupervised(scope -> {
+                runLastToChannelAsync(scope, ch);
+                FlowEmit.channelToEmit(ch, emit);
+                return null;
+            });
         });
     }
 
@@ -349,7 +345,7 @@ public class Flow<T> {
      * @param n The number of elements in a group.
      */
     public Flow<List<T>> grouped(int n) {
-        return groupedWeighted(n, t -> 1L);
+        return groupedWeighted(n, _ -> 1L);
     }
 
     /**
@@ -387,9 +383,7 @@ public class Flow<T> {
      * Discard all elements emitted by this flow. The returned flow completes only when this flow completes (successfully or with an error).
      */
     public Flow<Void> drain() {
-        return Flows.usingEmit(emit -> {
-            last.run(t -> {});
-        });
+        return Flows.usingEmit(_ -> last.run(_ -> {}));
     }
 
     /**
@@ -486,7 +480,7 @@ public class Flow<T> {
             throw new IllegalArgumentException("requirement failed: per time must be >= 1 ms");
         }
         long emitEveryMillis = per.toMillis() / elements;
-        return tap(t -> {
+        return tap(_ -> {
             try {
                 sleep(Duration.ofMillis(emitEveryMillis));
             } catch (InterruptedException e) {
@@ -531,7 +525,6 @@ public class Flow<T> {
      *   The flow to be appended to this flow.
      */
     public Flow<T> concat(Flow<T> other) {
-        //noinspection unchecked
         return Flows.concat(this, other);
     }
 
@@ -571,30 +564,26 @@ public class Flow<T> {
      */
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
         return Flows.usingEmit(emit -> {
-            try {
-                unsupervised(scope -> {
-                    Source<T> c1 = this.runToChannel(scope);
-                    Source<T> c2 = other.runToChannel(scope);
+            unsupervised(scope -> {
+                Source<T> c1 = this.runToChannel(scope);
+                Source<T> c2 = other.runToChannel(scope);
 
-                    boolean continueLoop = true;
-                    while (continueLoop) {
-                        switch (selectOrClosed(c1.receiveClause(), c2.receiveClause())) {
-                            case ChannelDone done -> {
-                                if (c1.isClosedForReceive()) {
-                                    if (!propagateDoneLeft) FlowEmit.channelToEmit(c2, emit);
-                                } else if (!propagateDoneRight) FlowEmit.channelToEmit(c1, emit);
-                                continueLoop = false;
-                            }
-                            case ChannelError error -> throw error.toException();
-                            case Object r -> //noinspection unchecked
-                                    emit.apply((T) r);
+                boolean continueLoop = true;
+                while (continueLoop) {
+                    switch (selectOrClosed(c1.receiveClause(), c2.receiveClause())) {
+                        case ChannelDone _ -> {
+                            if (c1.isClosedForReceive()) {
+                                if (!propagateDoneLeft) FlowEmit.channelToEmit(c2, emit);
+                            } else if (!propagateDoneRight) FlowEmit.channelToEmit(c1, emit);
+                            continueLoop = false;
                         }
+                        case ChannelError error -> throw error.toException();
+                        case Object r -> //noinspection unchecked
+                                emit.apply((T) r);
                     }
-                    return null;
-                });
-            } catch (ExecutionException e) {
-                throw (Exception) e.getCause();
-            }
+                }
+                return null;
+            });
         });
     }
 
@@ -689,54 +678,49 @@ public class Flow<T> {
             // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,
             // that is without closing the main scope; any error management must be done in the forks, as the scope is
             // unsupervised
-            try {
-                Scopes.unsupervised(scope -> {
-                    // a fork which runs the `last` pipeline, and for each emitted element creates a fork
-                    // notifying only the `results` channels, as it will cause the scope to end, and any other forks to be
-                    // interrupted, including the inProgress-fork, which might be waiting on a join()
-                    forkPropagate(scope, results, () -> {
-                        last.run(value -> {
-                            semaphore.acquire();
-                            inProgress.sendOrClosed(forkMapping(scope, f, semaphore, value, results));
-                        });
-                        inProgress.doneOrClosed();
-                        return null;
+            Scopes.unsupervised(scope -> {
+                // a fork which runs the `last` pipeline, and for each emitted element creates a fork
+                // notifying only the `results` channels, as it will cause the scope to end, and any other forks to be
+                // interrupted, including the inProgress-fork, which might be waiting on a join()
+                forkPropagate(scope, results, () -> {
+                    last.run(value -> {
+                        semaphore.acquire();
+                        inProgress.sendOrClosed(forkMapping(scope, f, semaphore, value, results));
                     });
+                    inProgress.doneOrClosed();
+                    return null;
+                });
 
-                    // a fork in which we wait for the created forks to finish (in sequence), and forward the mapped values to `results`
-                    // this extra step is needed so that if there's an error in any of the mapping forks, it's discovered as quickly as
-                    // possible in the main body
-                    scope.forkUnsupervised((Callable<T>) () -> {
-                        while (true) {
-                            switch (inProgress.receiveOrClosed()) {
-                                // in the fork's result is a `None`, the error is already propagated to the `results` channel
-                                case ChannelDone ignored -> {
-                                    results.done();
+                // a fork in which we wait for the created forks to finish (in sequence), and forward the mapped values to `results`
+                // this extra step is needed so that if there's an error in any of the mapping forks, it's discovered as quickly as
+                // possible in the main body
+                scope.forkUnsupervised((Callable<T>) () -> {
+                    while (true) {
+                        switch (inProgress.receiveOrClosed()) {
+                            // in the fork's result is a `None`, the error is already propagated to the `results` channel
+                            case ChannelDone ignored -> {
+                                results.done();
+                                return null;
+                            }
+                            case ChannelError(Throwable e) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
+                            case Object fork -> {
+                                //noinspection unchecked
+                                Optional<U> result = ((Fork<Optional<U>>) fork).join();
+                                if (result.isPresent()) {
+                                    results.sendOrClosed(result.get());
+                                } else {
                                     return null;
-                                }
-                                case ChannelError(Throwable e) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
-                                case Object fork -> {
-                                    //noinspection unchecked
-                                    Optional<U> result = ((Fork<Optional<U>>) fork).join();
-                                    if (result.isPresent()) {
-                                        results.sendOrClosed(result.get());
-                                    } else {
-                                        return null;
-                                    }
                                 }
                             }
                         }
-                    });
-
-                    // in the main body, we call the `emit` methods using the (sequentially received) results; when an error occurs,
-                    // the scope ends, interrupting any forks that are still running
-                    FlowEmit.channelToEmit(results, emit);
-                    return null;
+                    }
                 });
-            } catch (ExecutionException e) {
-                // rethrowing original exception
-                throw (Exception) e.getCause();
-            }
+
+                // in the main body, we call the `emit` methods using the (sequentially received) results; when an error occurs,
+                // the scope ends, interrupting any forks that are still running
+                FlowEmit.channelToEmit(results, emit);
+                return null;
+            });
         });
     }
 
@@ -757,38 +741,33 @@ public class Flow<T> {
         return Flows.usingEmit(emit -> {
             Channel<U> results = Channel.withScopedBufferSize();
             Semaphore s = new Semaphore(parallelism);
-            try {
-                unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
-                    forkPropagate(unsupervisedScope, results, () -> {
-                        supervised(scope -> { // the inner scope, in which user forks are created, and which is used to wait for all to complete when done
-                            try {
-                                last.run(t -> {
-                                    s.acquire();
-                                    scope.forkUser(() -> {
-                                        try {
-                                            results.sendOrClosed(f.apply(t));
-                                            s.release();
-                                        } catch (Throwable cause) {
-                                            results.errorOrClosed(cause);
-                                        }
-                                        return null;
-                                    });
+            unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
+                forkPropagate(unsupervisedScope, results, () -> {
+                    supervised(scope -> { // the inner scope, in which user forks are created, and which is used to wait for all to complete when done
+                        try {
+                            last.run(t -> {
+                                s.acquire();
+                                scope.forkUser(() -> {
+                                    try {
+                                        results.sendOrClosed(f.apply(t));
+                                        s.release();
+                                    } catch (Throwable cause) {
+                                        results.errorOrClosed(cause);
+                                    }
+                                    return null;
                                 });
-                            } catch (Exception e) {
-                                results.errorOrClosed(e);
-                            }
-                            return null;
-                        });
-                        results.doneOrClosed();
+                            });
+                        } catch (Exception e) {
+                            results.errorOrClosed(e);
+                        }
                         return null;
                     });
-                    FlowEmit.channelToEmit(results, emit);
+                    results.doneOrClosed();
                     return null;
                 });
-            } catch (ExecutionException e) {
-                // rethrowing original exception
-                throw (Exception) e.getCause();
-            }
+                FlowEmit.channelToEmit(results, emit);
+                return null;
+            });
         });
     }
 
@@ -834,14 +813,13 @@ public class Flow<T> {
      * Attaches the given {@link Sink} to this flow, meaning elements that pass through will also be sent to the sink. If emitting an
      * element, or sending to the `other` sink blocks, no elements will be processed until both are done. The elements are first emitted by
      * the flow and then, only if that was successful, to the `other` sink.
-     *
+     * <p>
      * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink is failed or complete, this becomes a
      * failure of the returned flow (contrary to {@link #alsoToTap} where it's ignored).
      *
      * @param other
      *   The sink to which elements from this flow will be sent.
-     * @see
-     *   {@link #alsoToTap} for a version that drops elements when the `other` sink is not available for receive.
+     * @see #alsoToTap for a version that drops elements when the `other` sink is not available for receive.
      */
     public Flow<T> alsoTo(Sink<T> other) {
         return Flows.usingEmit(emit -> {
@@ -866,14 +844,13 @@ public class Flow<T> {
     /**
      * Attaches the given {@link Sink} to this flow, meaning elements that pass through will also be sent to the sink. If the `other`
      * sink is not available for receive, the elements are still emitted by the returned flow, but not sent to the `other` sink.
-     *
+     * <p>
      * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink fails or closes, then failure or closure
      * is ignored and it doesn't affect the resulting flow (contrary to {@link #alsoTo} where it's propagated).
      *
      * @param other
      *   The sink to which elements from this source will be sent.
-     * @see
-     *   {@link #alsoTo} for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
+     * @see #alsoTo for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
      */
     public Flow<T> alsoToTap(Sink<T> other) {
         return Flows.usingEmit(emit -> {
