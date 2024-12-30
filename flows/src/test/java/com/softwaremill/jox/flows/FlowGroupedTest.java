@@ -175,7 +175,7 @@ public class FlowGroupedTest {
             // when
             var elementsWithEmittedTimeOffset = Flows.fromSource(c)
                     .groupedWithin(3, Duration.ofMillis(100))
-                    .map(s -> new AbstractMap.SimpleEntry<>(s, Duration.ofNanos(System.nanoTime() - start)))
+                    .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
                     .runToList();
 
             // then
