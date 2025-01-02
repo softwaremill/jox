@@ -2,14 +2,27 @@ package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Flow.Publisher;
+import java.util.concurrent.Flow.Subscriber;
+import java.util.concurrent.Flow.Subscription;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -19,6 +32,7 @@ import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
 
 public final class Flows {
 
@@ -227,6 +241,139 @@ public final class Flows {
     }
 
     /**
+     * Creates a flow which emits the first element ({@link Map.Entry#getKey()}) of entries returned by repeated applications of `f`.
+     * The `initial` state is used for the first application, and then the state is updated with the second element of the entry. Emission stops when `f` returns {@link Optional#empty()},
+     * otherwise it continues indefinitely.
+     */
+    public static <S, T>  Flow<T> unfold(S initial, Function<S, Optional<Map.Entry<T, S>>> f) {
+        return usingEmit(emit -> {
+            S s = initial;
+            while (true) {
+                var result = f.apply(s);
+                if (result.isEmpty()) {
+                    break;
+                }
+                Map.Entry<T, S> entry = result.get();
+                emit.apply(entry.getKey());
+                s = entry.getValue();
+            }
+        });
+    }
+
+    /** Creates a Flow from a Publisher, that is, which emits the elements received by subscribing to the publisher. A new
+     * subscription is created every time this flow is run.
+     * <p>
+     * The data is passed from a subscription to the flow using a Channel, with a capacity given by the {@link Channel#BUFFER_SIZE} in
+     * scope or {@link Channel#DEFAULT_BUFFER_SIZE} is used. That's also how many elements will be at most requested from the publisher at a time.
+     * <p>
+     * The publisher parameter should implement the JDK 9+ Flow.Publisher API
+     */
+    public static <T> Flow<T> fromPublisher(Publisher<T> p) {
+        return usingEmit(emit -> {
+            // using an unsafe scope for efficiency
+            Scopes.unsupervised(scope -> {
+                Channel<T> channel = Channel.withScopedBufferSize();
+                int capacity = Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE);
+                int demandThreshold = (int) Math.ceil(capacity / 2.0);
+
+                // used to "extract" the subscription that is set in the subscription running in a fork
+                AtomicReference<Subscription> subscriptionRef = new AtomicReference<>();
+                Subscription subscription = null;
+
+                int toDemand = 0;
+
+                try {
+                    // unsafe, but we are sure that this won't throw any exceptions (unless there's a bug in the publisher)
+                    scope.forkUnsupervised(() -> {
+                        p.subscribe(new Subscriber<T>() {
+                            @Override
+                            public void onSubscribe(Subscription s) {
+                                subscriptionRef.set(s);
+                                s.request(capacity);
+                            }
+
+                            @Override
+                            public void onNext(T t) {
+                                try {
+                                    channel.send(t);
+                                } catch (InterruptedException e) {
+                                    throw new RuntimeException(e);
+                                }
+                            }
+
+                            @Override
+                            public void onError(Throwable t) {
+                                channel.error(t);
+                            }
+
+                            @Override
+                            public void onComplete() {
+                                channel.done();
+                            }
+                        });
+                        return null;
+                    });
+
+                    while (true) {
+                        Object t = channel.receiveOrClosed();
+                        if (t instanceof ChannelDone) {
+                            break;
+                        } else if (t instanceof ChannelError error) {
+                            throw error.toException();
+                        } else {
+                            //noinspection unchecked
+                            emit.apply((T) t);
+
+                            // if we have an element, onSubscribe must have already happened; we can read the subscription and cache it for later
+                            if (subscription == null) {
+                                subscription = subscriptionRef.get();
+                            }
+
+                            // now that we've received an element from the channel, we can request more
+                            toDemand += 1;
+                            // we request in batches, to avoid too many requests
+                            if (toDemand >= demandThreshold) {
+                                subscription.request(toDemand);
+                                toDemand = 0;
+                            }
+                        }
+                    }
+                    // exceptions might be propagated from the channel, but they might also originate from an interruption
+                    return null;
+                } catch (Exception e) {
+                    Subscription s = subscriptionRef.get();
+                    if (s != null) {
+                        s.cancel();
+                    }
+                    throw e;
+                }
+            });
+        });
+    }
+
+    /**
+     * Sends a given number of elements (determined by `segmentSize`) from each flow in `flows` to the returned flow and repeats. The order
+     * of elements in all flows is preserved.
+     * <p>
+     * If any of the flows is done before the others, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow
+     * is completed immediately, otherwise the interleaving continues with the remaining non-completed flows. Once all but one flows are
+     * complete, the elements of the remaining non-complete flow are emitted by the returned flow.
+     * <p>
+     * The provided flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     *
+     * @param flows
+     *   The flows whose elements will be interleaved.
+     * @param segmentSize
+     *   The number of elements sent from each flow before switching to the next one.
+     * @param eagerComplete
+     *   If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
+     *   remaining non-completed flows.
+     */
+    public static <T> Flow<T> interleaveAll(List<Flow<T>> flows, int segmentSize, boolean eagerComplete) {
+        return interleaveAll(flows, segmentSize, eagerComplete, Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
+    }
+
+    /**
      * Sends a given number of elements (determined by `segmentSize`) from each flow in `flows` to the returned flow and repeats. The order
      * of elements in all flows is preserved.
      * <p>
@@ -302,5 +449,73 @@ public final class Flows {
                 });
             });
         }
+    }
+
+    /**
+     * Converts a {@link java.io.InputStream} into a `Flow<byte[]>`.
+     *
+     * @param is
+     *   an `InputStream` to read bytes from.
+     * @param chunkSize
+     *   maximum number of bytes to read from the underlying `InputStream` before emitting a new chunk.
+     */
+    public static Flow<byte[]> fromInputStream(InputStream is, int chunkSize) {
+        return usingEmit(emit -> {
+            try (is) {
+                while (true) {
+                    byte[] buf = new byte[chunkSize];
+                    int readBytes = is.read(buf);
+                    if (readBytes == -1) {
+                        break;
+                    } else {
+                        if (readBytes > 0) {
+                            emit.apply(readBytes == chunkSize ? buf : Arrays.copyOf(buf, readBytes));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Creates a flow that emits byte chunks read from a file.
+     *
+     * @param path
+     *   path the file to read from.
+     * @param chunkSize
+     *   maximum number of bytes to read from the file before emitting a new chunk.
+     */
+    public static Flow<byte[]> fromFile(Path path, int chunkSize) {
+        return usingEmit(emit -> {
+            if (Files.isDirectory(path)) {
+                throw new IOException("Path %s is a directory".formatted(path));
+            }
+            SeekableByteChannel fileChannel;
+            try {
+                fileChannel = FileChannel.open(path, StandardOpenOption.READ);
+            } catch (UnsupportedOperationException e) {
+                // Some file systems don't support file channels
+                fileChannel = Files.newByteChannel(path, StandardOpenOption.READ);
+            }
+
+            try {
+                while (true) {
+                    ByteBuffer buf = ByteBuffer.allocate(chunkSize);
+                    int readBytes = fileChannel.read(buf);
+                    if (readBytes < 0) {
+                        break;
+                    } else {
+                        if (readBytes > 0) {
+                            byte[] byteArray = new byte[readBytes];
+                            buf.flip();
+                            buf.get(byteArray, 0, readBytes);
+                            emit.apply(byteArray);
+                        }
+                    }
+                }
+            } finally {
+                fileChannel.close();
+            }
+        });
     }
 }

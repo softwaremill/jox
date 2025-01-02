@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.Files;
@@ -28,6 +30,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -48,7 +51,7 @@ import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.CancellableFork;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
@@ -64,7 +67,7 @@ import com.softwaremill.jox.structured.UnsupervisedScope;
  * Running a flow is possible using one of the `run*` methods, such as {@link Flow#runToList}, {@link Flow#runToChannel} or {@link Flow#runFold}.
  */
 public class Flow<T> {
-    protected final FlowStage<T> last;
+    final FlowStage<T> last;
 
     public Flow(FlowStage<T> last) {
         this.last = last;
@@ -377,7 +380,7 @@ public class Flow<T> {
      */
     public <S, U> Flow<U> mapStatefulConcat(Supplier<S> initializeState, StatefulMapper<T, S, Iterable<U>> f, OnComplete<S, U> onComplete) {
         AtomicReference<S> state = new AtomicReference<>(initializeState.get());
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(t -> {
                 Map.Entry<S, Iterable<U>> result = f.apply(state.get(), t);
                 for (U u : result.getValue()) {
@@ -462,7 +465,7 @@ public class Flow<T> {
      * completes as well.
      */
     public Flow<T> take(int n) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicInteger taken = new AtomicInteger(0);
             try {
                 last.run(t -> {
@@ -559,8 +562,8 @@ public class Flow<T> {
         if (minWeight <= 0) throw new IllegalArgumentException("requirement failed: minWeight must be > 0");
         if (duration.toMillis() <= 0) throw new IllegalArgumentException("requirement failed: duration must be > 0");
 
-        return Flows.usingEmit(emit -> {
-            Scopes.unsupervised(scope -> {
+        return usingEmit(emit -> {
+            unsupervised(scope -> {
                 Source<T> flowSource = runToChannel(scope);
                 Channel<List<T>> outputChannel = Channel.withScopedBufferSize();
                 Channel<GroupingTimeout> timerChannel = Channel.withScopedBufferSize();
@@ -628,7 +631,7 @@ public class Flow<T> {
 
     private CancellableFork<GroupingTimeout> forkTimeout(UnsupervisedScope scope, Channel<GroupingTimeout> timerChannel, Duration duration) {
         return scope.forkCancellable(() -> {
-            Thread.sleep(duration);
+            sleep(duration);
             timerChannel.sendOrClosed(GroupingTimeout.INSTANCE);
             return null;
         });
@@ -659,7 +662,7 @@ public class Flow<T> {
             throw new IllegalArgumentException("minWeight must be > 0");
         }
 
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             List<T> buffer = new ArrayList<>();
             AtomicLong accumulatedCost = new AtomicLong(0L);
             last.run(t -> {
@@ -682,14 +685,117 @@ public class Flow<T> {
      * Discard all elements emitted by this flow. The returned flow completes only when this flow completes (successfully or with an error).
      */
     public Flow<Void> drain() {
-        return Flows.usingEmit(_ -> last.run(_ -> {}));
+        return usingEmit(_ -> last.run(_ -> {}));
+    }
+
+    /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
+     * that are split across chunks.
+     *
+     * @return
+     *   a flow of Strings decoded from incoming bytes.
+     */
+    public Flow<String> decodeStringUtf8() {
+        return ChunksUtf8Decoder.decodeStringUtf8(last);
+    }
+
+    /**
+     * Encodes a flow of `String` into a flow of bytes using UTF-8.
+     */
+    public Flow<byte[]> encodeUtf8() {
+        return map(s -> {
+            if (s instanceof String string) {
+                return string.getBytes(StandardCharsets.UTF_8);
+            }
+            throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
+        });
+    }
+
+    /**
+     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input decoded using UTF-8 charset.
+     *
+     * @return
+     *   a flow emitting lines read from the input byte chunks, assuming they represent text.
+     */
+    public Flow<String> linesUtf8() {
+        return lines(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input.
+     *
+     * @param charset the charset to use for decoding the bytes into text.
+     * @return a flow emitting lines read from the input byte arrays, assuming they represent text.
+     */
+    public Flow<String> lines(Charset charset) {
+        // buffer == Optional.empty() is a special state for handling empty chunks in onComplete, in order to tell them apart from empty lines
+        return mapStatefulConcat(Optional::<byte[]>empty,
+                (buffer, nextChunk) -> {
+                    if (!byte[].class.isInstance(nextChunk)) {
+                        throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
+                    }
+                    // get next incoming chunk
+                    byte[] chunk = (byte[]) nextChunk;
+                    if (chunk.length == 0) {
+                        return Map.entry(Optional.empty(), Collections.emptyList());
+                    }
+
+                    // check if chunk contains newline character, if not proceed to the next chunk
+                    int newLineIndex = getNewLineIndex(chunk);
+                    if (newLineIndex == -1) {
+                        if (buffer.isEmpty()) {
+                            return Map.entry(Optional.of(chunk), Collections.emptyList());
+                        }
+                        var b = buffer.get();
+                        byte[] newBuffer = Arrays.copyOf(b, b.length + chunk.length);
+                        newBuffer = ByteBuffer.wrap(newBuffer).put(b.length, chunk).array();
+                        return Map.entry(Optional.of(newBuffer), Collections.emptyList());
+                    }
+
+                    // buffer for lines, if chunk contains more than one newline character
+                    List<byte[]> lines = new ArrayList<>();
+
+                    // variable used to clear buffer after using it
+                    byte[] bufferFromPreviousChunk = buffer.orElse(new byte[0]);
+                    while (chunk.length > 0 && newLineIndex != -1) {
+                        byte[] line = new byte[newLineIndex];
+                        byte[] newChunk = new byte[chunk.length - newLineIndex - 1];
+                        ByteBuffer.wrap(chunk)
+                                .get(line, 0, newLineIndex)
+                                .get(newLineIndex + 1, newChunk, 0, chunk.length - newLineIndex - 1);
+
+                        if (bufferFromPreviousChunk.length > 0) {
+                            // concat accumulated buffer and line
+                            byte[] buf = Arrays.copyOf(bufferFromPreviousChunk, bufferFromPreviousChunk.length + line.length);
+                            lines.add(ByteBuffer.wrap(buf).put(bufferFromPreviousChunk.length, line).array());
+                            // cleanup buffer
+                            bufferFromPreviousChunk = new byte[0];
+                        } else {
+                            lines.add(line);
+                        }
+                        chunk = newChunk;
+                        newLineIndex = getNewLineIndex(chunk);
+                    }
+                    return Map.entry(Optional.of(chunk), lines);
+                },
+                buf -> buf
+        )
+                .map(chunk -> new String(chunk, charset));
+    }
+
+    private int getNewLineIndex(byte[] chunk) {
+        for (int i = 0; i < chunk.length; i++) {
+            if (chunk[i] == '\n') {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
      * Always runs `f` after the flow completes, whether it's because all elements are emitted, or when there's an error.
      */
     public Flow<T> onComplete(Runnable f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(emit);
             } finally {
@@ -702,7 +808,7 @@ public class Flow<T> {
      * Runs `f` after the flow completes successfully, that is when all elements are emitted.
      */
     public Flow<T> onDone(Runnable f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(emit);
             f.run();
         });
@@ -712,7 +818,7 @@ public class Flow<T> {
      * Runs `f` after the flow completes with an error. The error can't be recovered.
      */
     public Flow<T> onError(Consumer<Throwable> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(emit);
             } catch (Throwable e) {
@@ -742,7 +848,7 @@ public class Flow<T> {
     }
 
     private Flow<T> intersperse(Optional<T> start, T inject, Optional<T> end) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             if (start.isPresent()) {
                 emit.apply(start.get());
             }
@@ -798,7 +904,7 @@ public class Flow<T> {
      *   Whether the flow should also emit the first element that failed the predicate (`false` by default).
      */
     public Flow<T> takeWhile(Predicate<T> f, boolean includeFirstFailing) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     if (f.test(t)) {
@@ -834,7 +940,7 @@ public class Flow<T> {
      *   Number of elements to be dropped.
      */
     public Flow<T> drop(int n) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicInteger dropped = new AtomicInteger(0);
             last.run(t -> {
                 if (dropped.get() < n) {
@@ -862,7 +968,7 @@ public class Flow<T> {
      *   Should the resulting flow complete when the right flow (`outer`) completes, before `this` flow.
      */
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             unsupervised(scope -> {
                 Source<T> c1 = this.runToChannel(scope);
                 Source<T> c2 = other.runToChannel(scope);
@@ -903,7 +1009,7 @@ public class Flow<T> {
      *   An alternative flow to be used when this flow is empty.
      */
     public Flow<T> orElse(Flow<T> alternative) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicBoolean receivedAtLeastOneElement = new AtomicBoolean(false);
             last.run(t -> {
                 emit.apply(t);
@@ -938,6 +1044,28 @@ public class Flow<T> {
     }
 
     /**
+     * Emits a given number of elements (determined by `segmentSize`) from this flow to the returned flow, then emits the same number of
+     * elements from the `other` flow and repeats. The order of elements in both flows is preserved.
+     * <p>
+     * If one of the flows is done before the other, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow is
+     * completed immediately, otherwise the remaining elements from the other flow are emitted by the returned flow.
+     * <p>
+     * Both flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     *
+     * @param other
+     *   The flow whose elements will be interleaved with the elements of this flow.
+     * @param segmentSize
+     *   The number of elements sent from each flow before switching to the other one.
+     * @param eagerComplete
+     *   If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
+     *   non-completed flow are sent downstream.
+     */
+    public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete) {
+        //noinspection unchecked
+        return Flows.interleaveAll(Arrays.asList((Flow<U>) this, other), segmentSize, eagerComplete);
+    }
+
+    /**
      * Applies the given mapping function `f`, to each element emitted by this source, transforming it into an `Iterable` of results,
      * then the returned flow emits the results one by one. Can be used to unfold incoming sequences of elements into single elements.
      *
@@ -946,7 +1074,7 @@ public class Flow<T> {
      *   returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
      */
     public <U> Flow<U> mapConcat(Function<T, Iterable<U>> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(t -> {
                 for (U u : f.apply(t)) {
                     emit.apply(u);
@@ -969,7 +1097,7 @@ public class Flow<T> {
      *   The mapping function.
      */
     public <U> Flow<U> mapPar(int parallelism, Function<T, U> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             Semaphore semaphore = new Semaphore(parallelism);
             Channel<Fork<Optional<U>>> inProgress = new Channel<>(parallelism);
             Channel<U> results = Channel.withScopedBufferSize();
@@ -977,7 +1105,7 @@ public class Flow<T> {
             // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,
             // that is without closing the main scope; any error management must be done in the forks, as the scope is
             // unsupervised
-            Scopes.unsupervised(scope -> {
+            unsupervised(scope -> {
                 // a fork which runs the `last` pipeline, and for each emitted element creates a fork
                 // notifying only the `results` channels, as it will cause the scope to end, and any other forks to be
                 // interrupted, including the inProgress-fork, which might be waiting on a join()
@@ -1037,7 +1165,7 @@ public class Flow<T> {
      *   The mapping function.
      */
     public <U> Flow<U> mapParUnordered(int parallelism, Function<T, U> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             Channel<U> results = Channel.withScopedBufferSize();
             Semaphore s = new Semaphore(parallelism);
             unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
@@ -1083,7 +1211,7 @@ public class Flow<T> {
         if (n <= 0) throw new IllegalArgumentException("n must be > 0");
         if (step <= 0) throw new IllegalArgumentException("step must be > 0");
 
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             final AtomicReference<List<T>> buf = new AtomicReference<>(new ArrayList<>());
             last.run(t -> {
                 var buffer = buf.get();
@@ -1121,7 +1249,7 @@ public class Flow<T> {
      * @see #alsoToTap for a version that drops elements when the `other` sink is not available for receive.
      */
     public Flow<T> alsoTo(Sink<T> other) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     try {
@@ -1152,7 +1280,7 @@ public class Flow<T> {
      * @see #alsoTo for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
      */
     public Flow<T> alsoToTap(Sink<T> other) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     try {
@@ -1288,6 +1416,19 @@ public class Flow<T> {
             }
             throw cause != null ? cause : e;
         }
+    }
+  
+    /** Converts this {@link Flow} into a {@link Publisher}. The flow is run every time the publisher is subscribed to.
+     * <p>
+     * Must be run within a concurrency scope, as upon subscribing, a fork is created to run the publishing process. Hence, the scope should
+     * remain active as long as the publisher is used.
+     * <p>
+     * Elements emitted by the flow are buffered, using a buffer of capacity given by the {@link Channel#BUFFER_SIZE} in scope or default value {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * <p>
+     * The returned publisher implements the JDK 9+ {@code Flow.Publisher} API.
+     */
+    public Publisher<T> toPublisher(Scope scope) {
+        return new FromFlowPublisher<>(scope, last);
     }
 
     // endregion
