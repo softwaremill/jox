@@ -234,6 +234,28 @@ public final class Flows {
      * is completed immediately, otherwise the interleaving continues with the remaining non-completed flows. Once all but one flows are
      * complete, the elements of the remaining non-complete flow are emitted by the returned flow.
      * <p>
+     * The provided flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     *
+     * @param flows
+     *   The flows whose elements will be interleaved.
+     * @param segmentSize
+     *   The number of elements sent from each flow before switching to the next one.
+     * @param eagerComplete
+     *   If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
+     *   remaining non-completed flows.
+     */
+    public static <T> Flow<T> interleaveAll(List<Flow<T>> flows, int segmentSize, boolean eagerComplete) {
+        return interleaveAll(flows, segmentSize, eagerComplete, Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
+    }
+
+    /**
+     * Sends a given number of elements (determined by `segmentSize`) from each flow in `flows` to the returned flow and repeats. The order
+     * of elements in all flows is preserved.
+     * <p>
+     * If any of the flows is done before the others, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow
+     * is completed immediately, otherwise the interleaving continues with the remaining non-completed flows. Once all but one flows are
+     * complete, the elements of the remaining non-complete flow are emitted by the returned flow.
+     * <p>
      * The provided flows are run concurrently and asynchronously.
      *
      * @param flows

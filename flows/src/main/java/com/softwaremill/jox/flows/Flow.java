@@ -8,6 +8,9 @@ import static com.softwaremill.jox.structured.Scopes.supervised;
 import static com.softwaremill.jox.structured.Scopes.unsupervised;
 import static java.lang.Thread.sleep;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,7 +58,7 @@ import com.softwaremill.jox.structured.UnsupervisedScope;
  * Running a flow is possible using one of the `run*` methods, such as {@link Flow#runToList}, {@link Flow#runToChannel} or {@link Flow#runFold}.
  */
 public class Flow<T> {
-    protected final FlowStage<T> last;
+    final FlowStage<T> last;
 
     public Flow(FlowStage<T> last) {
         this.last = last;
@@ -677,6 +680,109 @@ public class Flow<T> {
         return Flows.usingEmit(_ -> last.run(_ -> {}));
     }
 
+    /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
+     * that are split across chunks.
+     *
+     * @return
+     *   a flow of Strings decoded from incoming bytes.
+     */
+    public Flow<String> decodeStringUtf8() {
+        return ChunksUtf8Decoder.decodeStringUtf8(last);
+    }
+
+    /**
+     * Encodes a flow of `String` into a flow of bytes using UTF-8.
+     */
+    public Flow<byte[]> encodeUtf8() {
+        return map(s -> {
+            if (s instanceof String string) {
+                return string.getBytes(StandardCharsets.UTF_8);
+            }
+            throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
+        });
+    }
+
+    /**
+     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input decoded using UTF-8 charset.
+     *
+     * @return
+     *   a flow emitting lines read from the input byte chunks, assuming they represent text.
+     */
+    public Flow<String> linesUtf8() {
+        return lines(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input.
+     *
+     * @param charset the charset to use for decoding the bytes into text.
+     * @return a flow emitting lines read from the input byte arrays, assuming they represent text.
+     */
+    public Flow<String> lines(Charset charset) {
+        // buffer == Optional.empty() is a special state for handling empty chunks in onComplete, in order to tell them apart from empty lines
+        return mapStatefulConcat(Optional::<byte[]>empty,
+                (buffer, nextChunk) -> {
+                    if (!byte[].class.isInstance(nextChunk)) {
+                        throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
+                    }
+                    // get next incoming chunk
+                    byte[] chunk = (byte[]) nextChunk;
+                    if (chunk.length == 0) {
+                        return Map.entry(Optional.empty(), Collections.emptyList());
+                    }
+
+                    // check if chunk contains newline character, if not proceed to the next chunk
+                    int newLineIndex = getNewLineIndex(chunk);
+                    if (newLineIndex == -1) {
+                        if (buffer.isEmpty()) {
+                            return Map.entry(Optional.of(chunk), Collections.emptyList());
+                        }
+                        var b = buffer.get();
+                        byte[] newBuffer = Arrays.copyOf(b, b.length + chunk.length);
+                        newBuffer = ByteBuffer.wrap(newBuffer).put(b.length, chunk).array();
+                        return Map.entry(Optional.of(newBuffer), Collections.emptyList());
+                    }
+
+                    // buffer for lines, if chunk contains more than one newline character
+                    List<byte[]> lines = new ArrayList<>();
+
+                    // variable used to clear buffer after using it
+                    byte[] bufferFromPreviousChunk = buffer.orElse(new byte[0]);
+                    while (chunk.length > 0 && newLineIndex != -1) {
+                        byte[] line = new byte[newLineIndex];
+                        byte[] newChunk = new byte[chunk.length - newLineIndex - 1];
+                        ByteBuffer.wrap(chunk)
+                                .get(line, 0, newLineIndex)
+                                .get(newLineIndex + 1, newChunk, 0, chunk.length - newLineIndex - 1);
+
+                        if (bufferFromPreviousChunk.length > 0) {
+                            // concat accumulated buffer and line
+                            byte[] buf = Arrays.copyOf(bufferFromPreviousChunk, bufferFromPreviousChunk.length + line.length);
+                            lines.add(ByteBuffer.wrap(buf).put(bufferFromPreviousChunk.length, line).array());
+                            // cleanup buffer
+                            bufferFromPreviousChunk = new byte[0];
+                        } else {
+                            lines.add(line);
+                        }
+                        chunk = newChunk;
+                        newLineIndex = getNewLineIndex(chunk);
+                    }
+                    return Map.entry(Optional.of(chunk), lines);
+                },
+                buf -> buf
+        )
+                .map(chunk -> new String(chunk, charset));
+    }
+
+    private int getNewLineIndex(byte[] chunk) {
+        for (int i = 0; i < chunk.length; i++) {
+            if (chunk[i] == '\n') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /**
      * Always runs `f` after the flow completes, whether it's because all elements are emitted, or when there's an error.
      */
@@ -927,6 +1033,28 @@ public class Flow<T> {
     public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete, int bufferCapacity) {
         //noinspection unchecked
         return Flows.interleaveAll(Arrays.asList((Flow<U>) this, other), segmentSize, eagerComplete, bufferCapacity);
+    }
+
+    /**
+     * Emits a given number of elements (determined by `segmentSize`) from this flow to the returned flow, then emits the same number of
+     * elements from the `other` flow and repeats. The order of elements in both flows is preserved.
+     * <p>
+     * If one of the flows is done before the other, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow is
+     * completed immediately, otherwise the remaining elements from the other flow are emitted by the returned flow.
+     * <p>
+     * Both flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     *
+     * @param other
+     *   The flow whose elements will be interleaved with the elements of this flow.
+     * @param segmentSize
+     *   The number of elements sent from each flow before switching to the other one.
+     * @param eagerComplete
+     *   If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
+     *   non-completed flow are sent downstream.
+     */
+    public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete) {
+        //noinspection unchecked
+        return Flows.interleaveAll(Arrays.asList((Flow<U>) this, other), segmentSize, eagerComplete);
     }
 
     /**
