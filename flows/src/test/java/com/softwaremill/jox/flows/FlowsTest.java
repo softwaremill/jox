@@ -1,19 +1,30 @@
 package com.softwaremill.jox.flows;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.softwaremill.jox.ChannelError;
@@ -306,5 +317,137 @@ class FlowsTest {
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 100, 200, 3, 4, 30), result);
+    }
+
+    @Test
+    void handleEmptyInputStream() throws Exception {
+        assertEquals(List.of(), Flows.fromInputStream(emptyInputStream(), 1024).runToList());
+    }
+
+    @Test
+    void handleInputStreamShorterThanBufferSize() throws Exception {
+        assertEquals(List.of("abc"), toStrings(Flows.fromInputStream(inputStream("abc", false), 1024)));
+    }
+
+    @Test
+    void handleInputStreamLongerThanBufferSize() throws Exception {
+        assertEquals(List.of("som", "e t", "ext"), toStrings(Flows.fromInputStream(inputStream("some text", false), 3)));
+    }
+
+    @Test
+    void closeInputStreamAfterReadingIt() throws Exception {
+        TestInputStream is = inputStream("abc", false);
+        assertFalse(is.isClosed());
+        Flows.fromInputStream(is, 1024).runToList();
+        assertTrue(is.isClosed());
+    }
+
+    @Test
+    void closeInputStreamAfterFailingWithException() {
+        TestInputStream is = inputStream("abc", true);
+        assertFalse(is.isClosed());
+        assertThrows(Exception.class, () -> Flows.fromInputStream(is, 1024).runToList());
+        assertTrue(is.isClosed());
+    }
+
+    @Test
+    void readContentFromFileSmallerThanChunkSize() throws Exception {
+        Path path = Files.createTempFile("ox", "test-readfile1");
+        Files.write(path, "Test1 file content".getBytes());
+        try {
+            List<String> result = toStrings(Flows.fromFile(path, 1024));
+            assertEquals(List.of("Test1 file content"), result);
+        } finally {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    @Test
+    void readContentFromFileLargerThanChunkSize() throws Exception {
+        Path path = Files.createTempFile("ox", "test-readfile1");
+        Files.write(path, "Test2 file content".getBytes());
+        try {
+            List<String> result = toStrings(Flows.fromFile(path, 3));
+            assertEquals(List.of("Tes", "t2 ", "fil", "e c", "ont", "ent"), result);
+        } finally {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    @Test
+    void handleEmptyFile() throws Exception {
+        Path path = Files.createTempFile("ox", "test-readfile1");
+        try {
+            List<String> result = toStrings(Flows.fromFile(path, 1024));
+            assertEquals(List.of(), result);
+        } finally {
+            Files.deleteIfExists(path);
+        }
+    }
+
+    @Test
+    void throwExceptionForMissingFile() {
+        Path path = Paths.get("/no/such/file.txt");
+        assertThrows(NoSuchFileException.class, () -> Flows.fromFile(path, 1024).runToList());
+    }
+
+    @Test
+    void throwExceptionIfPathIsDirectory() throws URISyntaxException {
+        Path path = Paths.get(getClass().getResource("/").toURI());
+        IOException exception = assertThrows(IOException.class, () -> Flows.fromFile(path, 1024).runToList());
+        assertTrue(exception.getMessage().endsWith("is a directory"));
+    }
+
+    @Test
+    void shouldUnfoldFunction() throws Exception {
+        Flow<Integer> c = Flows.unfold(0, i -> i < 3 ? Optional.of(Map.entry(i, i + 1)) : Optional.empty());
+        assertEquals(List.of(0, 1, 2), c.runToList());
+    }
+
+    private List<String> toStrings(Flow<byte[]> source) throws Exception {
+        return source.runToList().stream()
+                .map(chunk -> new String(chunk, StandardCharsets.UTF_8))
+                .toList();
+    }
+
+    private TestInputStream emptyInputStream() {
+        return new TestInputStream("");
+    }
+
+    private TestInputStream inputStream(String text, boolean failing) {
+        return new TestInputStream(text, failing);
+    }
+
+    private static class TestInputStream extends ByteArrayInputStream {
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+        private final boolean throwOnRead;
+
+        public TestInputStream(String text) {
+            this(text, false);
+        }
+
+        public TestInputStream(String text, boolean throwOnRead) {
+            super(text.getBytes());
+            this.throwOnRead = throwOnRead;
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed.set(true);
+            super.close();
+        }
+
+        @Override
+        public int read(byte[] a) throws IOException {
+            if (throwOnRead) {
+                throw new IOException("expected failed read");
+            } else {
+                return super.read(a);
+            }
+        }
+
+        public boolean isClosed() {
+            return closed.get();
+        }
     }
 }

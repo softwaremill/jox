@@ -22,6 +22,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -42,7 +43,7 @@ import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.CancellableFork;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
@@ -371,7 +372,7 @@ public class Flow<T> {
      */
     public <S, U> Flow<U> mapStatefulConcat(Supplier<S> initializeState, StatefulMapper<T, S, Iterable<U>> f, OnComplete<S, U> onComplete) {
         AtomicReference<S> state = new AtomicReference<>(initializeState.get());
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(t -> {
                 Map.Entry<S, Iterable<U>> result = f.apply(state.get(), t);
                 for (U u : result.getValue()) {
@@ -456,7 +457,7 @@ public class Flow<T> {
      * completes as well.
      */
     public Flow<T> take(int n) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicInteger taken = new AtomicInteger(0);
             try {
                 last.run(t -> {
@@ -553,8 +554,8 @@ public class Flow<T> {
         if (minWeight <= 0) throw new IllegalArgumentException("requirement failed: minWeight must be > 0");
         if (duration.toMillis() <= 0) throw new IllegalArgumentException("requirement failed: duration must be > 0");
 
-        return Flows.usingEmit(emit -> {
-            Scopes.unsupervised(scope -> {
+        return usingEmit(emit -> {
+            unsupervised(scope -> {
                 Source<T> flowSource = runToChannel(scope);
                 Channel<List<T>> outputChannel = Channel.withScopedBufferSize();
                 Channel<GroupingTimeout> timerChannel = Channel.withScopedBufferSize();
@@ -623,7 +624,7 @@ public class Flow<T> {
 
     private CancellableFork<GroupingTimeout> forkTimeout(UnsupervisedScope scope, Channel<GroupingTimeout> timerChannel, Duration duration) {
         return scope.forkCancellable(() -> {
-            Thread.sleep(duration);
+            sleep(duration);
             timerChannel.sendOrClosed(GroupingTimeout.INSTANCE);
             return null;
         });
@@ -654,7 +655,7 @@ public class Flow<T> {
             throw new IllegalArgumentException("minWeight must be > 0");
         }
 
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             List<T> buffer = new ArrayList<>();
             AtomicLong accumulatedCost = new AtomicLong(0L);
             last.run(t -> {
@@ -677,7 +678,7 @@ public class Flow<T> {
      * Discard all elements emitted by this flow. The returned flow completes only when this flow completes (successfully or with an error).
      */
     public Flow<Void> drain() {
-        return Flows.usingEmit(_ -> last.run(_ -> {}));
+        return usingEmit(_ -> last.run(_ -> {}));
     }
 
     /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
@@ -787,7 +788,7 @@ public class Flow<T> {
      * Always runs `f` after the flow completes, whether it's because all elements are emitted, or when there's an error.
      */
     public Flow<T> onComplete(Runnable f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(emit);
             } finally {
@@ -800,7 +801,7 @@ public class Flow<T> {
      * Runs `f` after the flow completes successfully, that is when all elements are emitted.
      */
     public Flow<T> onDone(Runnable f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(emit);
             f.run();
         });
@@ -810,7 +811,7 @@ public class Flow<T> {
      * Runs `f` after the flow completes with an error. The error can't be recovered.
      */
     public Flow<T> onError(Consumer<Throwable> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(emit);
             } catch (Throwable e) {
@@ -840,7 +841,7 @@ public class Flow<T> {
     }
 
     private Flow<T> intersperse(Optional<T> start, T inject, Optional<T> end) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             if (start.isPresent()) {
                 emit.apply(start.get());
             }
@@ -896,7 +897,7 @@ public class Flow<T> {
      *   Whether the flow should also emit the first element that failed the predicate (`false` by default).
      */
     public Flow<T> takeWhile(Predicate<T> f, boolean includeFirstFailing) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     if (f.test(t)) {
@@ -932,7 +933,7 @@ public class Flow<T> {
      *   Number of elements to be dropped.
      */
     public Flow<T> drop(int n) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicInteger dropped = new AtomicInteger(0);
             last.run(t -> {
                 if (dropped.get() < n) {
@@ -960,7 +961,7 @@ public class Flow<T> {
      *   Should the resulting flow complete when the right flow (`outer`) completes, before `this` flow.
      */
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             unsupervised(scope -> {
                 Source<T> c1 = this.runToChannel(scope);
                 Source<T> c2 = other.runToChannel(scope);
@@ -1001,7 +1002,7 @@ public class Flow<T> {
      *   An alternative flow to be used when this flow is empty.
      */
     public Flow<T> orElse(Flow<T> alternative) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             AtomicBoolean receivedAtLeastOneElement = new AtomicBoolean(false);
             last.run(t -> {
                 emit.apply(t);
@@ -1066,7 +1067,7 @@ public class Flow<T> {
      *   returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
      */
     public <U> Flow<U> mapConcat(Function<T, Iterable<U>> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             last.run(t -> {
                 for (U u : f.apply(t)) {
                     emit.apply(u);
@@ -1089,7 +1090,7 @@ public class Flow<T> {
      *   The mapping function.
      */
     public <U> Flow<U> mapPar(int parallelism, Function<T, U> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             Semaphore semaphore = new Semaphore(parallelism);
             Channel<Fork<Optional<U>>> inProgress = new Channel<>(parallelism);
             Channel<U> results = Channel.withScopedBufferSize();
@@ -1097,7 +1098,7 @@ public class Flow<T> {
             // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,
             // that is without closing the main scope; any error management must be done in the forks, as the scope is
             // unsupervised
-            Scopes.unsupervised(scope -> {
+            unsupervised(scope -> {
                 // a fork which runs the `last` pipeline, and for each emitted element creates a fork
                 // notifying only the `results` channels, as it will cause the scope to end, and any other forks to be
                 // interrupted, including the inProgress-fork, which might be waiting on a join()
@@ -1157,7 +1158,7 @@ public class Flow<T> {
      *   The mapping function.
      */
     public <U> Flow<U> mapParUnordered(int parallelism, Function<T, U> f) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             Channel<U> results = Channel.withScopedBufferSize();
             Semaphore s = new Semaphore(parallelism);
             unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
@@ -1203,7 +1204,7 @@ public class Flow<T> {
         if (n <= 0) throw new IllegalArgumentException("n must be > 0");
         if (step <= 0) throw new IllegalArgumentException("step must be > 0");
 
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             final AtomicReference<List<T>> buf = new AtomicReference<>(new ArrayList<>());
             last.run(t -> {
                 var buffer = buf.get();
@@ -1241,7 +1242,7 @@ public class Flow<T> {
      * @see #alsoToTap for a version that drops elements when the `other` sink is not available for receive.
      */
     public Flow<T> alsoTo(Sink<T> other) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     try {
@@ -1272,7 +1273,7 @@ public class Flow<T> {
      * @see #alsoTo for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
      */
     public Flow<T> alsoToTap(Sink<T> other) {
-        return Flows.usingEmit(emit -> {
+        return usingEmit(emit -> {
             try {
                 last.run(t -> {
                     try {
@@ -1287,6 +1288,19 @@ public class Flow<T> {
                 other.errorOrClosed(e);
             }
         });
+    }
+
+    /** Converts this {@link Flow} into a {@link Publisher}. The flow is run every time the publisher is subscribed to.
+     * <p>
+     * Must be run within a concurrency scope, as upon subscribing, a fork is created to run the publishing process. Hence, the scope should
+     * remain active as long as the publisher is used.
+     * <p>
+     * Elements emitted by the flow are buffered, using a buffer of capacity given by the {@link Channel#BUFFER_SIZE} in scope or default value {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * <p>
+     * The returned publisher implements the JDK 9+ {@code Flow.Publisher} API.
+     */
+    public Publisher<T> toPublisher(Scope scope) {
+        return new FromFlowPublisher<>(scope, last);
     }
 
     // endregion
