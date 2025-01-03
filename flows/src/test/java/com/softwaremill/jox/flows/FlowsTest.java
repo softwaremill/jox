@@ -404,9 +404,9 @@ class FlowsTest {
         assertEquals(List.of(0, 1, 2), c.runToList());
     }
 
-    private List<String> toStrings(Flow<byte[]> source) throws Exception {
+    private List<String> toStrings(Flow<ByteChunk> source) throws Exception {
         return source.runToList().stream()
-                .map(chunk -> new String(chunk, StandardCharsets.UTF_8))
+                .map(chunk -> chunk.convertToString(StandardCharsets.UTF_8))
                 .toList();
     }
 
