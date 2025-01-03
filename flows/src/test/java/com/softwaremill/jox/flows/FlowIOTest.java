@@ -70,7 +70,7 @@ public class FlowIOTest {
     }
 
     @Test
-    void runToInputStream_shouldThrowWhenRunOnNonByteArrayFlow() throws ExecutionException, InterruptedException {
+    void runToInputStream_shouldThrowWhenRunOnNonByteArrayNorByteChunkFlow() throws ExecutionException, InterruptedException {
         Scopes.unsupervised(scope -> {
             ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
                 //noinspection resource
@@ -78,7 +78,7 @@ public class FlowIOTest {
                 // reading the stream triggers the exception as it is written via channel
                 inputStream.readAllBytes();
             });
-            assertEquals("requirement failed: method can be called only on flow containing byte[]", exception.getCause().getMessage());
+            assertEquals("requirement failed: method can be called only on flow containing ByteChunk or byte[]", exception.getCause().getMessage());
             return null;
         });
     }
@@ -159,14 +159,14 @@ public class FlowIOTest {
     }
 
     @Test
-    void runToFile_runToOutputStream_shouldThrowWhenRunOnNonByteArrayFlow() {
+    void runToFile_runToOutputStream_shouldThrowWhenRunOnNonByteArrayNorByteChunkFlow() {
         // given
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             Flows.fromValues(1, 2, 3).runToOutputStream(new ByteArrayOutputStream());
         });
 
         // then
-        assertEquals("requirement failed: method can be called only on flow containing byte[]", exception.getMessage());
+        assertEquals("requirement failed: method can be called only on flow containing ByteChunk or byte[]", exception.getMessage());
     }
 
     @Test
@@ -305,12 +305,12 @@ public class FlowIOTest {
     }
 
     @Test
-    void runToFile_shouldThrowWhenRunOnNonByteArrayFlow() throws IOException {
+    void runToFile_shouldThrowWhenRunOnNonByteArrayNorByteChunkFlow() throws IOException {
         Path path = Files.createTempFile("jox", "test-writefile5");
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             Flows.fromValues(1, 2, 3).runToFile(path);
         });
-        assertEquals("requirement failed: method can be called only on flow containing byte[]", exception.getMessage());
+        assertEquals("requirement failed: method can be called only on flow containing ByteChunk or byte[]", exception.getMessage());
     }
 
     private List<String> fileContent(Path path) throws IOException {

@@ -285,7 +285,7 @@ public final class Flows {
                 try {
                     // unsafe, but we are sure that this won't throw any exceptions (unless there's a bug in the publisher)
                     scope.forkUnsupervised(() -> {
-                        p.subscribe(new Subscriber<T>() {
+                        p.subscribe(new Subscriber<>() {
                             @Override
                             public void onSubscribe(Subscription s) {
                                 subscriptionRef.set(s);
@@ -452,14 +452,14 @@ public final class Flows {
     }
 
     /**
-     * Converts a {@link java.io.InputStream} into a `Flow<byte[]>`.
+     * Converts a {@link java.io.InputStream} into a `Flow<ByteChunk>`.
      *
      * @param is
      *   an `InputStream` to read bytes from.
      * @param chunkSize
      *   maximum number of bytes to read from the underlying `InputStream` before emitting a new chunk.
      */
-    public static Flow<byte[]> fromInputStream(InputStream is, int chunkSize) {
+    public static Flow<ByteChunk> fromInputStream(InputStream is, int chunkSize) {
         return usingEmit(emit -> {
             try (is) {
                 while (true) {
@@ -469,7 +469,7 @@ public final class Flows {
                         break;
                     } else {
                         if (readBytes > 0) {
-                            emit.apply(readBytes == chunkSize ? buf : Arrays.copyOf(buf, readBytes));
+                            emit.apply(ByteChunk.fromArray(buf).take(readBytes));
                         }
                     }
                 }
@@ -478,14 +478,14 @@ public final class Flows {
     }
 
     /**
-     * Creates a flow that emits byte chunks read from a file.
+     * Creates a flow that emits {@link ByteChunk} read from a file.
      *
      * @param path
      *   path the file to read from.
      * @param chunkSize
      *   maximum number of bytes to read from the file before emitting a new chunk.
      */
-    public static Flow<byte[]> fromFile(Path path, int chunkSize) {
+    public static Flow<ByteChunk> fromFile(Path path, int chunkSize) {
         return usingEmit(emit -> {
             if (Files.isDirectory(path)) {
                 throw new IOException("Path %s is a directory".formatted(path));
@@ -506,10 +506,7 @@ public final class Flows {
                         break;
                     } else {
                         if (readBytes > 0) {
-                            byte[] byteArray = new byte[readBytes];
-                            buf.flip();
-                            buf.get(byteArray, 0, readBytes);
-                            emit.apply(byteArray);
+                            emit.apply(ByteChunk.fromArray(buf.array()).take(readBytes));
                         }
                     }
                 }
