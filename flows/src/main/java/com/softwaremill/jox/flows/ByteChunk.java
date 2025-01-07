@@ -23,14 +23,6 @@ public class ByteChunk {
         return new ByteChunk(array);
     }
 
-    public static ByteChunk fromArray(Byte[] array) {
-        byte[] bytes = new byte[array.length];
-        for (int i = 0; i < array.length; i++) {
-            bytes[i] = array[i];
-        }
-        return new ByteChunk(bytes);
-    }
-
     public static ByteChunk empty() {
         return new ByteChunk(new byte[0]);
     }

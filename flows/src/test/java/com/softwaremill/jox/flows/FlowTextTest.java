@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.flows.ByteChunk.empty;
 import static com.softwaremill.jox.flows.ByteChunk.fromArray;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -28,7 +29,7 @@ public class FlowTextTest {
         assertEquals("BF", String.format("%02X", inputBytes[2])); // making sure 'ż' is encoded in ISO-8859-2
 
         // when & then
-        assertEquals(List.of("zażółć", "gęślą", "jaźń"), Flows.fromValues(ByteChunk.fromArray(inputBytes))
+        assertEquals(List.of("zażółć", "gęślą", "jaźń"), Flows.fromValues(fromArray(inputBytes))
                 .lines(Charset.forName("ISO-8859-2")).runToList());
     }
 
@@ -38,10 +39,14 @@ public class FlowTextTest {
         List<String> lines = List.of("aa", "bbbbb", "cccccccc", "ddd", "ee", "fffff");
         byte[] inputBytes = String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
 
-        Collection<Byte[]> values = IntStream.range(0, inputBytes.length)
+        Collection<byte[]> values = IntStream.range(0, inputBytes.length)
                 .mapToObj(i -> inputBytes[i])
                 .collect(Collectors.groupingBy(equalSizeChunks(5))).values().stream()
-                .map(list -> list.toArray(new Byte[0]))
+                .map(list -> {
+                    byte[] bytes = new byte[list.size()];
+                    IntStream.range(0, list.size()).forEach(i -> bytes[i] = list.get(i));
+                    return bytes;
+                })
                 .toList();
 
         // when & then
@@ -124,7 +129,7 @@ public class FlowTextTest {
 
     @Test
     void splitMultipleChunksIntoLinesMultipleEmptyChunks() throws Exception {
-        var emptyChunk = fromArray(new Byte[0]);
+        var emptyChunk = empty();
         var chunk1 = fromArray("\n\n".getBytes());
         List<String> result = Flows.fromValues(emptyChunk, emptyChunk, chunk1, emptyChunk).linesUtf8().runToList();
         assertEquals(List.of("", ""), result);
@@ -140,7 +145,7 @@ public class FlowTextTest {
         String text = "Simple test を解放 text";
         List<ByteChunk> results = Flows.fromValues(text).encodeUtf8().runToList();
         assertEquals(1, results.size());
-        assertEquals(ByteChunk.fromArray(text.getBytes()), results.getFirst());
+        assertEquals(fromArray(text.getBytes()), results.getFirst());
     }
 
     @Test
