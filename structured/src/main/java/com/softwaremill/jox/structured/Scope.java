@@ -3,6 +3,8 @@ package com.softwaremill.jox.structured;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Capability granted by an {@link Scopes#supervised(Scoped)} or {@link Scopes#unsupervised(ScopedUnsupervised)}
@@ -15,8 +17,11 @@ import java.util.concurrent.StructuredTaskScope;
  * @see ScopedUnsupervised
  */
 public class Scope extends UnsupervisedScope {
+
+
     private final StructuredTaskScope<Object> scope;
     private final Supervisor supervisor;
+    private final Lock externalSchedulerLock = new ReentrantLock();
     private ActorRef<ExternalScheduler> externalSchedulerActor;
 
     Scope(Supervisor supervisor) {
@@ -118,8 +123,13 @@ public class Scope extends UnsupervisedScope {
      *  ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
      */
     public ExternalRunner externalRunner() {
-        if (externalSchedulerActor == null) {
-            externalSchedulerActor = ActorRef.create(this, r -> r.accept(Scope.this));
+        externalSchedulerLock.lock();
+        try {
+            if (externalSchedulerActor == null) {
+                externalSchedulerActor = ActorRef.create(this, r -> r.accept(Scope.this));
+            }
+        } finally {
+            externalSchedulerLock.unlock();
         }
         return new ExternalRunner(externalSchedulerActor);
     }
