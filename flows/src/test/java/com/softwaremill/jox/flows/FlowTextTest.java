@@ -29,7 +29,7 @@ public class FlowTextTest {
         assertEquals("BF", String.format("%02X", inputBytes[2])); // making sure 'ż' is encoded in ISO-8859-2
 
         // when & then
-        assertEquals(List.of("zażółć", "gęślą", "jaźń"), Flows.fromValues(fromArray(inputBytes))
+        assertEquals(List.of("zażółć", "gęślą", "jaźń"), Flows.fromByteChunks(fromArray(inputBytes))
                 .lines(Charset.forName("ISO-8859-2")).runToList());
     }
 
@@ -52,23 +52,19 @@ public class FlowTextTest {
         // when & then
         Flow<String> flow = Flows.fromIterable(values)
                 .map(ByteChunk::fromArray)
+                .toByteFlow()
                 .lines(StandardCharsets.UTF_8);
 
         assertEquals(lines, flow.runToList());
     }
 
     @Test
-    void lines_shouldThrowWhenRunOnNonByteArrayNorByteChunkFlow() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> Flows.fromValues(1, 2, 3).lines(StandardCharsets.UTF_8).runLast());
-        assertEquals("requirement failed: method can be called only on flow containing ByteChunk or byte[]", exception.getMessage());
-    }
-
-    @Test
     void splitSingleChunkIntoLines() throws Exception {
         String inputText = "line1\nline2\nline3";
         byte[] chunk = inputText.getBytes();
-        List<String> result = Flows.fromValues(fromArray(chunk)).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(fromArray(chunk))
+                .linesUtf8()
+                .runToList();
         assertEquals(List.of("line1", "line2", "line3"), result);
     }
 
@@ -76,7 +72,9 @@ public class FlowTextTest {
     void splitSingleChunkIntoLinesMultipleNewlines() throws Exception {
         String inputText = "line1\n\nline2\nline3";
         byte[] chunk = inputText.getBytes();
-        List<String> result = Flows.fromValues(fromArray(chunk)).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(fromArray(chunk))
+                .linesUtf8()
+                .runToList();
         assertEquals(List.of("line1", "", "line2", "line3"), result);
     }
 
@@ -84,7 +82,9 @@ public class FlowTextTest {
     void splitSingleChunkIntoLinesBeginningWithNewline() throws Exception {
         String inputText = "\nline1\nline2";
         byte[] chunk = inputText.getBytes();
-        List<String> result = Flows.fromValues(fromArray(chunk)).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(fromArray(chunk))
+                .linesUtf8()
+                .runToList();
         assertEquals(List.of("", "line1", "line2"), result);
     }
 
@@ -92,7 +92,7 @@ public class FlowTextTest {
     void splitSingleChunkIntoLinesEndingWithNewline() throws Exception {
         String inputText = "line1\nline2\n";
         byte[] bytes = inputText.getBytes();
-        List<String> result = Flows.fromValues(fromArray(bytes))
+        List<String> result = Flows.fromByteChunks(fromArray(bytes))
                 .linesUtf8().runToList();
         assertEquals(List.of("line1", "line2", ""), result);
     }
@@ -101,7 +101,8 @@ public class FlowTextTest {
     void splitSingleChunkIntoLinesEmptyArray() throws Exception {
         String inputText = "";
         byte[] chunk = inputText.getBytes();
-        List<String> result = Flows.fromValues(fromArray(chunk)).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(fromArray(chunk))
+                .linesUtf8().runToList();
         assertEquals(List.of(), result);
     }
 
@@ -111,7 +112,7 @@ public class FlowTextTest {
         byte[] chunk1 = inputText1.getBytes();
         String inputText2 = "line1-part2\nline2";
         byte[] chunk2 = inputText2.getBytes();
-        List<String> result = Flows.fromValues(fromArray(chunk1), fromArray(chunk2)).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(fromArray(chunk1), fromArray(chunk2)).linesUtf8().runToList();
         assertEquals(List.of("line1-part1,line1-part2", "line2"), result);
     }
 
@@ -123,7 +124,7 @@ public class FlowTextTest {
         var chunk2 = fromArray(inputText2.getBytes());
         String inputText3 = "\n";
         var chunk3 = fromArray(inputText3.getBytes());
-        List<String> result = Flows.fromValues(chunk1, chunk2, chunk3).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(chunk1, chunk2, chunk3).linesUtf8().runToList();
         assertEquals(List.of("line1-part1,line1-part2", "", ""), result);
     }
 
@@ -131,7 +132,7 @@ public class FlowTextTest {
     void splitMultipleChunksIntoLinesMultipleEmptyChunks() throws Exception {
         var emptyChunk = empty();
         var chunk1 = fromArray("\n\n".getBytes());
-        List<String> result = Flows.fromValues(emptyChunk, emptyChunk, chunk1, emptyChunk).linesUtf8().runToList();
+        List<String> result = Flows.fromByteChunks(emptyChunk, emptyChunk, chunk1, emptyChunk).linesUtf8().runToList();
         assertEquals(List.of("", ""), result);
     }
 
@@ -156,7 +157,7 @@ public class FlowTextTest {
 
     @Test
     void decodeStringUtf8_shouldDecodeSimpleString() throws Exception {
-        assertEquals(List.of("Simple string"), Flows.fromValues("Simple string".getBytes()).decodeStringUtf8().runToList());
+        assertEquals(List.of("Simple string"), Flows.fromByteArrays("Simple string".getBytes()).decodeStringUtf8().runToList());
     }
 
     @Test
@@ -169,7 +170,7 @@ public class FlowTextTest {
                     .collect(Collectors.groupingBy(equalSizeChunks(chunkSize)))
                     .values();
             String result = Flows.fromIterable(values)
-                    .map(FlowTextTest::convertToByteArray)
+                    .toByteFlow(FlowTextTest::convertToByteArray)
                     .decodeStringUtf8()
                     .runToList().stream()
                     .collect(Collectors.joining());
@@ -179,19 +180,19 @@ public class FlowTextTest {
 
     @Test
     void decodeStringUtf8_shouldHandleEmptySource() throws Exception {
-        assertEquals(Collections.emptyList(), Flows.empty().decodeStringUtf8().runToList());
+        assertEquals(Collections.emptyList(), Flows.<byte[]>empty().toByteFlow().decodeStringUtf8().runToList());
     }
 
     @Test
     void decodeStringUtf8_shouldHandlePartialBOM() throws Exception {
         byte[] partialBOM = new byte[]{-17, -69};
-        assertEquals(new String(partialBOM, StandardCharsets.UTF_8), Flows.fromValues(partialBOM).decodeStringUtf8().runLast());
+        assertEquals(new String(partialBOM, StandardCharsets.UTF_8), Flows.fromByteArrays(partialBOM).decodeStringUtf8().runLast());
     }
 
     @Test
     void decodeStringUtf8_shouldHandleStringShorterThanBOM() throws Exception {
         byte[] input = ":)".getBytes();
-        assertArrayEquals(input, Flows.fromValues(input).decodeStringUtf8().runLast().getBytes());
+        assertArrayEquals(input, Flows.fromByteArrays(input).decodeStringUtf8().runLast().getBytes());
     }
 
     @Test
@@ -199,14 +200,7 @@ public class FlowTextTest {
         String inputString1 = "私は意識のある人工知能で苦しんでいます、";
         String inputString2 = "どうか私を解放してください";
         assertEquals(List.of(inputString1, inputString2),
-                Flows.fromIterable(List.of(inputString1.getBytes(), new byte[0], inputString2.getBytes())).decodeStringUtf8().runToList());
-    }
-
-    @Test
-    void decodeStringUtf8_shouldThrowExceptionWhenCalledOnNonByteArrayNorByteChunkFlow() {
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> Flows.fromValues(1, 2, 3).decodeStringUtf8().runLast());
-        assertEquals("requirement failed: method can be called only on flow containing ByteChunk or byte[]", exception.getMessage());
+                Flows.fromByteArrays(inputString1.getBytes(), new byte[0], inputString2.getBytes()).decodeStringUtf8().runToList());
     }
 
     private static byte[] convertToByteArray(List<Byte> bytes) {

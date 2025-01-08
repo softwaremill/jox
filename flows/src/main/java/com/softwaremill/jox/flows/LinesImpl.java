@@ -9,17 +9,10 @@ import java.util.Optional;
 
 class LinesImpl {
 
-    static <T> Flow<String> lines(Charset charset, Flow<T> parentFlow) {
+    static Flow<String> lines(Charset charset, Flow.ByteFlow parentFlow) {
         return parentFlow.mapStatefulConcat(Optional::<ByteChunk>empty,
                 (buffer, nextChunk) -> {
-                    ByteChunk chunk;
-                    if (nextChunk instanceof ByteChunk byteChunk) {
-                        chunk = byteChunk;
-                    } else if (nextChunk instanceof byte[] rawBytes) {
-                        chunk = ByteChunk.fromArray(rawBytes);
-                    } else {
-                        throw new IllegalArgumentException("requirement failed: method can be called only on flow containing ByteChunk or byte[]");
-                    }
+                    ByteChunk chunk = nextChunk;
                     if (chunk.length() == 0) {
                         // get next incoming chunk
                         return Map.entry(Optional.empty(), Collections.emptyList());

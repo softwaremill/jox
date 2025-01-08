@@ -72,6 +72,14 @@ public final class Flows {
         return fromIterator(Arrays.asList(ts).iterator());
     }
 
+    public static Flow.ByteFlow fromByteChunks(ByteChunk... chunks) {
+        return fromIterator(Arrays.asList(chunks).iterator()).toByteFlow();
+    }
+
+    public static Flow.ByteFlow fromByteArrays(byte[]... byteArrays) {
+        return fromValues(byteArrays).toByteFlow();
+    }
+
     /**
      * Creates a flow from the given (lazily evaluated) `iterator`. Each element of the iterator is emitted in order.
      */

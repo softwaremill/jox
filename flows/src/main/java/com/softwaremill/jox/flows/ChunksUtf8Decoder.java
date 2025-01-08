@@ -17,28 +17,20 @@ class ChunksUtf8Decoder {
     private static final int BOM_SIZE = 3; // const for UTF-8
     private static final ByteChunk BOM_UTF8 = ByteChunk.fromArray(new byte[]{-17, -69, -65});
 
-    public static <T> Flow<String> decodeStringUtf8(FlowStage<T> flowStage) {
+    public static Flow<String> decodeStringUtf8(FlowStage<ByteChunk> flowStage) {
         return Flows.usingEmit(emit -> {
             final AtomicReference<State> state = new AtomicReference<>(State.ProcessBOM);
             final AtomicReference<ByteChunk> buffer = new AtomicReference<>(null);
 
             flowStage.run(t -> {
-                ByteChunk bytes;
-                if (t instanceof ByteChunk bytesChunk) {
-                    bytes = bytesChunk;
-                } else if (t instanceof byte[] rawBytes) {
-                    bytes = ByteChunk.fromArray(rawBytes);
-                } else {
-                    throw new IllegalArgumentException("requirement failed: method can be called only on flow containing ByteChunk or byte[]");
-                }
                 ByteChunk newBuffer;
                 State newState;
                 if (state.get() == State.ProcessBOM) {
-                    Map.Entry<ByteChunk, State> processResult = processByteOrderMark(bytes, buffer.get());
+                    Map.Entry<ByteChunk, State> processResult = processByteOrderMark(t, buffer.get());
                     newBuffer = processResult.getKey();
                     newState = processResult.getValue();
                 } else {
-                    newBuffer = doPull(bytes, buffer.get(), emit);
+                    newBuffer = doPull(t, buffer.get(), emit);
                     newState = State.Pull;
                 }
                 buffer.set(newBuffer);
