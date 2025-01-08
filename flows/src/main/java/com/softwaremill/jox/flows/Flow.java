@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,6 +28,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -52,6 +54,7 @@ import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.CancellableFork;
 import com.softwaremill.jox.structured.Fork;
 import com.softwaremill.jox.structured.Scope;
+import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
@@ -438,6 +441,198 @@ public class Flow<T> {
             });
         });
     }
+
+    /**
+     * Emits only every nth element emitted by this flow.
+     *
+     * @param n
+     *   The interval between two emitted elements.
+     */
+    public Flow<T> sample(int n) {
+        return Flows.usingEmit(emit -> {
+            AtomicInteger sampleCounter = new AtomicInteger(0);
+            last.run(t -> {
+                int counter = sampleCounter.incrementAndGet();
+                if (n != 0 && counter % n == 0) {
+                    emit.apply(t);
+                }
+            });
+        });
+    }
+
+    /** Remove subsequent, repeating elements
+     */
+    public Flow<T> debounce() {
+        return debounceBy(Function.identity());
+    }
+
+    /**
+     * Remove subsequent, repeating elements matching 'f'
+     *
+     * @param f The function used to compare the previous and current elements
+     */
+    public <U> Flow<T> debounceBy(Function<T, U> f) {
+        return Flows.usingEmit(emit -> {
+            AtomicReference<Optional<U>> previousElement = new AtomicReference<>(Optional.empty());
+            last.run(t -> {
+                U currentElement = f.apply(t);
+                if (!previousElement.get().equals(Optional.ofNullable(currentElement))) {
+                    emit.apply(t);
+                }
+                previousElement.set(Optional.ofNullable(currentElement));
+            });
+        });
+    }
+
+    /**
+     * Applies the given mapping function `f` to each element emitted by this flow, for which the function returns a non-empty Optional, and emits the result.
+     * If `f` returns an empty Optional at an element, the element will be skipped.
+     *
+     * @param f
+     *   The mapping function.
+     */
+    public <U> Flow<U> collect(Function<T, Optional<U>> f) {
+        return Flows.usingEmit(emit ->
+                last.run(t -> {
+                    Optional<U> result = f.apply(t);
+                    if (result.isPresent()) {
+                        emit.apply(result.get());
+                    }
+                })
+        );
+    }
+
+    /**
+     * Transforms the elements of the flow by applying an accumulation function to each element, producing a new value at each step. The
+     * resulting flow contains the accumulated values at each point in the original flow.
+     *
+     * @param initial The initial value to start the accumulation.
+     * @param f The accumulation function that is applied to each element of the flow.
+     * @return A new Flow containing the accumulated values.
+     */
+    public <V> Flow<V> scan(V initial, BiFunction<V, T, V> f) {
+        return Flows.usingEmit(emit -> {
+            emit.apply(initial);
+            AtomicReference<V> accumulator = new AtomicReference<>(initial);
+            last.run(t -> {
+                emit.apply(accumulator.updateAndGet(acc -> f.apply(acc, t)));
+            });
+        });
+    }
+
+    /** Combines elements from this and the other flow into Map.Entry. Completion of either flow completes the returned flow as well. The flows
+     * are run concurrently.
+     * <p>
+     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * 
+     * @see
+     *   Flow#zipAll 
+     */
+    public <U> Flow<Map.Entry<T, U>> zip(Flow<U> other) {
+        return Flows.usingEmit(emit -> {
+            Scopes.unsupervised(scope -> {
+                Source<T> s1 = this.runToChannel(scope);
+                Source<U> s2 = other.runToChannel(scope);
+
+                while (true) {
+                    Object result1 = s1.receiveOrClosed();
+                    if (result1 instanceof ChannelDone) {
+                        return null;
+                    } else if (result1 instanceof ChannelError error) {
+                        throw error.toException();
+                    } else {
+                        // noinspection unchecked
+                        T t = (T) result1;
+                        Object result2 = s2.receiveOrClosed();
+                        if (result2 instanceof ChannelDone) {
+                            return null;
+                        } else if (result2 instanceof ChannelError error) {
+                            throw error.toException();
+                        } else {
+                            // noinspection unchecked
+                            U u = (U) result2;
+                            emit.apply(new AbstractMap.SimpleEntry<>(t, u));
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    /**
+     * Combines elements from this and the other flow into tuples, handling early completion of either flow with defaults. The flows are run
+     * concurrently.
+     * <p>
+     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * 
+     * @param other
+     *   A flow of elements to be combined with.
+     * @param thisDefault
+     *   A default element to be used in the result tuple when the other flow is longer.
+     * @param otherDefault
+     *   A default element to be used in the result tuple when the current flow is longer.
+     */
+    public <U> Flow<Map.Entry<T, U>> zipAll(Flow<U> other, T thisDefault, U otherDefault) {
+        return Flows.usingEmit(emit -> {
+            Scopes.unsupervised(scope -> {
+                Source<T> s1 = this.runToChannel(scope);
+                Source<U> s2 = other.runToChannel(scope);
+
+                boolean continueLoop = true;
+                while (continueLoop) {
+                    Object received1 = s1.receiveOrClosed();
+                    if (received1 instanceof ChannelDone) {
+                        Object received2 = s2.receiveOrClosed();
+                        if (received2 instanceof ChannelDone) {
+                            continueLoop = false;
+                        } else if (received2 instanceof ChannelError e) {
+                            throw e.toException();
+                        } else {
+                            //noinspection unchecked
+                            emit.apply(Map.entry(thisDefault, (U) received2));
+                        }
+                    } else if (received1 instanceof ChannelError e) {
+                        throw e.toException();
+                    } else {
+                        Object received2 = s2.receiveOrClosed();
+                        if (received2 instanceof ChannelDone) {
+                            //noinspection unchecked
+                            emit.apply(Map.entry((T) received1, otherDefault));
+                        } else if (received2 instanceof ChannelError e) {
+                            throw e.toException();
+                        } else {
+                            //noinspection unchecked
+                            emit.apply(Map.entry((T) received1, (U) received2));
+                        }
+                    }
+                }
+                return null;
+            });
+        });
+    }
+
+    /**
+     * Combines each element from this and the index of the element (starting at 0).
+     */
+    public Flow<Map.Entry<T, Long>> zipWithIndex() {
+        return Flows.usingEmit(emit -> {
+            AtomicLong index = new AtomicLong(0L);
+            last.run(t -> {
+                Map.Entry<T, Long> zipped = Map.entry(t, index.getAndIncrement());
+                emit.apply(zipped);
+            });
+        });
+    }
+
+    @SafeVarargs
+    public final <U> Flow<U> flatten(T... args) {
+        if (!Flow.class.equals(args.getClass().getComponentType())) {
+            throw new IllegalArgumentException("requirement failed: flatten can be called on Flow containing Flows");
+        }
+        //noinspection unchecked
+        return this.flatMap(t -> ((Flow<U>) t));
+    }
+
 
     /**
      * Applies the given `mappingFunction` to each element emitted by this flow, in sequence.
