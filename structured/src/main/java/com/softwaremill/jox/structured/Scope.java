@@ -123,13 +123,15 @@ public class Scope extends UnsupervisedScope {
      *  ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
      */
     public ExternalRunner externalRunner() {
-        externalSchedulerLock.lock();
-        try {
-            if (externalSchedulerActor == null) {
-                externalSchedulerActor = ActorRef.create(this, r -> r.accept(Scope.this));
+        if (externalSchedulerActor == null) {
+            externalSchedulerLock.lock();
+            try {
+                if (externalSchedulerActor == null) {
+                    externalSchedulerActor = ActorRef.create(this, r -> r.accept(Scope.this));
+                }
+            } finally {
+                externalSchedulerLock.unlock();
             }
-        } finally {
-            externalSchedulerLock.unlock();
         }
         return new ExternalRunner(externalSchedulerActor);
     }
