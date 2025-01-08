@@ -3,6 +3,7 @@ package com.softwaremill.jox.structured;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -22,7 +23,7 @@ public class Scope extends UnsupervisedScope {
     private final StructuredTaskScope<Object> scope;
     private final Supervisor supervisor;
     private final Lock externalSchedulerLock = new ReentrantLock();
-    private ActorRef<ExternalScheduler> externalSchedulerActor;
+    private volatile ActorRef<ExternalScheduler> externalSchedulerActor;
 
     Scope(Supervisor supervisor) {
         this.scope = new DoNothingScope();
