@@ -3,6 +3,9 @@ package com.softwaremill.jox.structured;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.StructuredTaskScope;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Capability granted by an {@link Scopes#supervised(Scoped)} or {@link Scopes#unsupervised(ScopedUnsupervised)}
@@ -15,8 +18,12 @@ import java.util.concurrent.StructuredTaskScope;
  * @see ScopedUnsupervised
  */
 public class Scope extends UnsupervisedScope {
+
+
     private final StructuredTaskScope<Object> scope;
     private final Supervisor supervisor;
+    private final Lock externalSchedulerLock = new ReentrantLock();
+    private volatile ActorRef<ExternalScheduler> externalSchedulerActor;
 
     Scope(Supervisor supervisor) {
         this.scope = new DoNothingScope();
@@ -97,6 +104,38 @@ public class Scope extends UnsupervisedScope {
         });
         return new ForkUsingResult(result);
     }
+
+    /** Returns a concurrency-scope-specific runner, which allows scheduling of functions to be run within the current concurrency scope, from
+     * the context of arbitrary threads (not necessarily threads that are part of the current concurrency scope).
+     * <p>
+     * Usage: obtain a runner from within a concurrency scope, while on a fork/thread that is managed by the concurrency scope. Then, pass that
+     * runner to the external library. It can then schedule functions (e.g. create forks) to be run within the concurrency scope from arbitary
+     * threads, as long as the concurrency scope isn't complete.
+     * <p>
+     * Execution is scheduled through an {@link ActorRef}, which is lazily created, and bound to an {@link Scope} instances.
+     * <p>
+     * This method should **only** be used when integrating `Jox` with libraries that manage concurrency on their own, and which run callbacks on
+     * a managed thread pool. The logic executed by the third-party library should be entirely contained within the lifetime of this
+     * concurrency scope. The sole purpose of this method is to enable running scope-aware logic from threads **other** than Jox-managed.
+     * <p>
+     * Use with care!
+     *
+     * @see
+     *  ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
+     */
+    public ExternalRunner externalRunner() {
+        if (externalSchedulerActor == null) {
+            externalSchedulerLock.lock();
+            try {
+                if (externalSchedulerActor == null) {
+                    externalSchedulerActor = ActorRef.create(this, r -> r.accept(Scope.this));
+                }
+            } finally {
+                externalSchedulerLock.unlock();
+            }
+        }
+        return new ExternalRunner(externalSchedulerActor);
+    }
 }
 
 class DoNothingScope extends StructuredTaskScope<Object> {
@@ -104,3 +143,8 @@ class DoNothingScope extends StructuredTaskScope<Object> {
         super(null, Thread.ofVirtual().factory());
     }
 }
+
+interface ExternalScheduler {
+    void run(ThrowingConsumer<Scope> r) throws Exception;
+}
+

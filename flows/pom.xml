@@ -13,7 +13,29 @@
     <version>0.3.1</version>
     <packaging>jar</packaging>
 
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.pekko</groupId>
+                <artifactId>pekko-bom_3</artifactId>
+                <version>1.1.2</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <dependency>
+            <groupId>com.softwaremill.jox</groupId>
+            <artifactId>channels</artifactId>
+            <version>0.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>com.softwaremill.jox</groupId>
+            <artifactId>structured</artifactId>
+            <version>0.3.1</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
@@ -55,14 +77,14 @@
             </exclusions>
         </dependency>
         <dependency>
-            <groupId>com.softwaremill.jox</groupId>
-            <artifactId>channels</artifactId>
-            <version>0.3.1</version>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-stream_3</artifactId>
+            <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>com.softwaremill.jox</groupId>
-            <artifactId>structured</artifactId>
-            <version>0.3.1</version>
+            <groupId>org.apache.pekko</groupId>
+            <artifactId>pekko-stream-testkit_3</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

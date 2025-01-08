@@ -33,6 +33,7 @@ import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
 import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingConsumer;
 
 public final class Flows {
 

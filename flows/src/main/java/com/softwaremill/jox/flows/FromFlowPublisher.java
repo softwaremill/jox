@@ -14,16 +14,17 @@ import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Sink;
+import com.softwaremill.jox.structured.ExternalRunner;
 import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
-    private final Scope scope;
+    private final ExternalRunner externalRunner;
     private final FlowStage<T> last;
 
     FromFlowPublisher(Scope scope, FlowStage<T> last) {
-        this.scope = scope;
+        this.externalRunner = scope.externalRunner();
         this.last = last;
     }
 
@@ -39,10 +40,12 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
         // we cannot block `subscribe` (see https://github.com/reactive-streams/reactive-streams-jvm/issues/393),
         // hence running in a fork; however, the reactive library might run .subscribe on a different thread, that's
         // why we need to use the external runner functionality
-        scope.fork(() -> {
-            runToSubscriber(subscriber);
-            return null;
-        });
+        externalRunner.runAsync(scope ->
+                scope.fork(() -> {
+                    runToSubscriber(subscriber);
+                    return null;
+                })
+        );
     }
 
     private void runToSubscriber(Flow.Subscriber<? super T> subscriber) throws ExecutionException, InterruptedException {
