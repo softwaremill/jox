@@ -1230,22 +1230,24 @@ public class Flow<T> {
      *
      * @throws IllegalArgumentException if the flow does not contain `byte[]` or {@link ByteChunk} elements.
      */
-    public final ByteFlow toByteFlow() {
-        return new ByteFlow(last);
+    @SafeVarargs
+    public final ByteFlow toByteFlow(T... args) {
+        //noinspection unchecked
+        return new ByteFlow(last, (Class<T>) args.getClass().getComponentType());
     }
 
     /**
      * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into {@link ByteChunk}.
      */
     public ByteFlow toByteFlow(ByteChunkMapper<T> f) {
-        return new ByteFlow(map(f).last);
+        return new ByteFlow(map(f).last, ByteChunk.class);
     }
 
     /**
      * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into `byte[]`.
      */
     public ByteFlow toByteFlow(ByteArrayMapper<T> f) {
-        return new ByteFlow(map(f).last);
+        return new ByteFlow(map(f).last, byte[].class);
     }
 
     /**
@@ -1258,7 +1260,7 @@ public class Flow<T> {
             }
             throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
         });
-        return new ByteFlow(flow.last);
+        return new ByteFlow(flow.last, ByteChunk.class);
     }
 
     /**
@@ -1266,15 +1268,11 @@ public class Flow<T> {
      */
     public static class ByteFlow extends Flow<ByteChunk> {
 
-        @SafeVarargs
-        private <T> ByteFlow(FlowStage<T> last, T... args) {
-            super(getLast(last, args));
+        private <T> ByteFlow(FlowStage<T> last, Class<T> clazz) {
+            super(getLast(last, clazz));
         }
 
-        @SafeVarargs
-        private static <T> FlowStage<ByteChunk> getLast(FlowStage<T> last, T... args) {
-            // noinspection unchecked
-            Class<T> clazz = (Class<T>) args.getClass().getComponentType();
+        private static <T> FlowStage<ByteChunk> getLast(FlowStage<T> last, Class<T> clazz) {
             if (ByteChunk.class.equals(clazz)) {
                 //noinspection unchecked
                 return (FlowStage<ByteChunk>) last;
