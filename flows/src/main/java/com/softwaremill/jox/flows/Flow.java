@@ -12,10 +12,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -272,6 +272,17 @@ public class Flow<T> {
                 return null;
             });
         });
+    }
+
+    /** When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
+     *  The elements of the buffer are then emitted by the returned flow.
+     * <p>
+     * Buffer capacity is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * <p>
+     * Any exceptions are propagated by the returned flow.
+     */
+    public Flow<T> buffer() {
+        return buffer(Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
     }
 
     /**
@@ -686,109 +697,6 @@ public class Flow<T> {
      */
     public Flow<Void> drain() {
         return usingEmit(_ -> last.run(_ -> {}));
-    }
-
-    /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
-     * that are split across chunks.
-     *
-     * @return
-     *   a flow of Strings decoded from incoming bytes.
-     */
-    public Flow<String> decodeStringUtf8() {
-        return ChunksUtf8Decoder.decodeStringUtf8(last);
-    }
-
-    /**
-     * Encodes a flow of `String` into a flow of bytes using UTF-8.
-     */
-    public Flow<byte[]> encodeUtf8() {
-        return map(s -> {
-            if (s instanceof String string) {
-                return string.getBytes(StandardCharsets.UTF_8);
-            }
-            throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
-        });
-    }
-
-    /**
-     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input decoded using UTF-8 charset.
-     *
-     * @return
-     *   a flow emitting lines read from the input byte chunks, assuming they represent text.
-     */
-    public Flow<String> linesUtf8() {
-        return lines(StandardCharsets.UTF_8);
-    }
-
-    /**
-     * Transforms a flow of byte arrays such that each emitted `String` is a text line from the input.
-     *
-     * @param charset the charset to use for decoding the bytes into text.
-     * @return a flow emitting lines read from the input byte arrays, assuming they represent text.
-     */
-    public Flow<String> lines(Charset charset) {
-        // buffer == Optional.empty() is a special state for handling empty chunks in onComplete, in order to tell them apart from empty lines
-        return mapStatefulConcat(Optional::<byte[]>empty,
-                (buffer, nextChunk) -> {
-                    if (!byte[].class.isInstance(nextChunk)) {
-                        throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
-                    }
-                    // get next incoming chunk
-                    byte[] chunk = (byte[]) nextChunk;
-                    if (chunk.length == 0) {
-                        return Map.entry(Optional.empty(), Collections.emptyList());
-                    }
-
-                    // check if chunk contains newline character, if not proceed to the next chunk
-                    int newLineIndex = getNewLineIndex(chunk);
-                    if (newLineIndex == -1) {
-                        if (buffer.isEmpty()) {
-                            return Map.entry(Optional.of(chunk), Collections.emptyList());
-                        }
-                        var b = buffer.get();
-                        byte[] newBuffer = Arrays.copyOf(b, b.length + chunk.length);
-                        newBuffer = ByteBuffer.wrap(newBuffer).put(b.length, chunk).array();
-                        return Map.entry(Optional.of(newBuffer), Collections.emptyList());
-                    }
-
-                    // buffer for lines, if chunk contains more than one newline character
-                    List<byte[]> lines = new ArrayList<>();
-
-                    // variable used to clear buffer after using it
-                    byte[] bufferFromPreviousChunk = buffer.orElse(new byte[0]);
-                    while (chunk.length > 0 && newLineIndex != -1) {
-                        byte[] line = new byte[newLineIndex];
-                        byte[] newChunk = new byte[chunk.length - newLineIndex - 1];
-                        ByteBuffer.wrap(chunk)
-                                .get(line, 0, newLineIndex)
-                                .get(newLineIndex + 1, newChunk, 0, chunk.length - newLineIndex - 1);
-
-                        if (bufferFromPreviousChunk.length > 0) {
-                            // concat accumulated buffer and line
-                            byte[] buf = Arrays.copyOf(bufferFromPreviousChunk, bufferFromPreviousChunk.length + line.length);
-                            lines.add(ByteBuffer.wrap(buf).put(bufferFromPreviousChunk.length, line).array());
-                            // cleanup buffer
-                            bufferFromPreviousChunk = new byte[0];
-                        } else {
-                            lines.add(line);
-                        }
-                        chunk = newChunk;
-                        newLineIndex = getNewLineIndex(chunk);
-                    }
-                    return Map.entry(Optional.of(chunk), lines);
-                },
-                buf -> buf
-        )
-                .map(chunk -> new String(chunk, charset));
-    }
-
-    private int getNewLineIndex(byte[] chunk) {
-        for (int i = 0; i < chunk.length; i++) {
-            if (chunk[i] == '\n') {
-                return i;
-            }
-        }
-        return -1;
     }
 
     /**
@@ -1296,127 +1204,6 @@ public class Flow<T> {
             }
         });
     }
-
-    /**
-     * Runs the flow into a {@link java.io.InputStream}.
-     * <p>
-     * Must be run within a concurrency scope, as under the hood the flow is run in the background.
-     * <p>
-     * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
-     */
-    public InputStream runToInputStream(UnsupervisedScope scope) {
-        Source<byte[]> ch = this
-                .map(t -> {
-                    if (t instanceof byte[] bytes) {
-                        return bytes;
-                    } else {
-                        throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
-                    }
-                })
-                .runToChannel(scope);
-
-        return new InputStream() {
-            private ByteArrayIterator currentChunk = ByteArrayIterator.empty();
-
-            @Override
-            public int read() {
-                try {
-                    if (!currentChunk.hasNext()) {
-                        Object result = ch.receiveOrClosed();
-                        if (result instanceof ChannelDone) {
-                            return -1;
-                        } else if (result instanceof ChannelError error) {
-                            throw error.toException();
-                        } else {
-                            byte[] chunk = (byte[]) result;
-                            currentChunk = new ByteArrayIterator(chunk);
-                        }
-                    }
-                    return currentChunk.next() & 0xff; // Convert to unsigned
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            @Override
-            public int available() {
-                return currentChunk.available();
-            }
-        };
-    }
-
-    /**
-     * Writes content of this flow to an {@link java.io.OutputStream}.
-     *
-     * @param outputStream
-     *   Target `OutputStream` to write to. Will be closed after finishing the process or on error.
-     */
-    public void runToOutputStream(OutputStream outputStream) throws Exception {
-        try {
-            last.run(t -> {
-                if (t instanceof byte[] chunk) {
-                    outputStream.write(chunk);
-                } else {
-                    throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
-                }
-            });
-            close(outputStream, null);
-        } catch (Exception e) {
-            close(outputStream, e);
-            throw e;
-        }
-    }
-
-    /** Writes content of this flow to a file.
-     *
-     * @param path
-     *   Path to the target file. If not exists, it will be created.s
-     */
-    public void runToFile(Path path) throws Exception {
-        if (Files.isDirectory(path)) {
-            throw new IOException("Path %s is a directory".formatted(path));
-        }
-        final SeekableByteChannel channel = getFileChannel(path);
-        try {
-            map(t -> {
-                if (t instanceof byte[] chunk) {
-                    return chunk;
-                } else {
-                    throw new IllegalArgumentException("requirement failed: method can be called only on flow containing byte[]");
-                }
-            }).runForeach(chunk -> {
-                try {
-                    channel.write(ByteBuffer.wrap(chunk));
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            close(channel, null);
-        } catch (Exception t) {
-            close(channel, t);
-            throw t;
-        }
-    }
-
-    private SeekableByteChannel getFileChannel(Path path) throws IOException {
-        try {
-            return FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-        } catch (UnsupportedOperationException e) {
-            // Some file systems don't support file channels
-            return Files.newByteChannel(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-        }
-    }
-
-    private void close(AutoCloseable closeable, Exception cause) throws Exception {
-        try {
-            closeable.close();
-        } catch (IOException e) {
-            if (cause != null) {
-                cause.addSuppressed(e);
-            }
-            throw cause != null ? cause : e;
-        }
-    }
   
     /** Converts this {@link Flow} into a {@link Publisher}. The flow is run every time the publisher is subscribed to.
      * <p>
@@ -1429,6 +1216,206 @@ public class Flow<T> {
      */
     public Publisher<T> toPublisher(Scope scope) {
         return new FromFlowPublisher<>(scope, last);
+    }
+
+    // endregion
+
+    // region ByteFlow
+
+    public interface ByteChunkMapper<T> extends Function<T, ByteChunk> {}
+    public interface ByteArrayMapper<T> extends Function<T, byte[]> {}
+
+    /**
+     * Converts a flow of `byte[]` or {@link ByteChunk} into a dedicated Flow type {@link ByteFlow}.
+     *
+     * @throws IllegalArgumentException if the flow does not contain `byte[]` or {@link ByteChunk} elements.
+     */
+    @SafeVarargs
+    public final ByteFlow toByteFlow(T... args) {
+        //noinspection unchecked
+        return new ByteFlow(last, (Class<T>) args.getClass().getComponentType());
+    }
+
+    /**
+     * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into {@link ByteChunk}.
+     */
+    public ByteFlow toByteFlow(ByteChunkMapper<T> f) {
+        return new ByteFlow(map(f).last, ByteChunk.class);
+    }
+
+    /**
+     * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into `byte[]`.
+     */
+    public ByteFlow toByteFlow(ByteArrayMapper<T> f) {
+        return new ByteFlow(map(f).last, byte[].class);
+    }
+
+    /**
+     * Encodes a flow of `String` into a flow of bytes using UTF-8.
+     */
+    public ByteFlow encodeUtf8() {
+        Flow<ByteChunk> flow = map(s -> {
+            if (s instanceof String string) {
+                return ByteChunk.fromArray(string.getBytes(StandardCharsets.UTF_8));
+            }
+            throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
+        });
+        return new ByteFlow(flow.last, ByteChunk.class);
+    }
+
+    /**
+     * Subclass dedicated for flow containing ByteChunk
+     */
+    public static class ByteFlow extends Flow<ByteChunk> {
+
+        private <T> ByteFlow(FlowStage<T> last, Class<T> clazz) {
+            super(getLast(last, clazz));
+        }
+
+        private static <T> FlowStage<ByteChunk> getLast(FlowStage<T> last, Class<T> clazz) {
+            if (ByteChunk.class.equals(clazz)) {
+                //noinspection unchecked
+                return (FlowStage<ByteChunk>) last;
+            } else if (byte[].class.equals(clazz)) {
+                return new Flow<>(last).map(t -> ByteChunk.fromArray((byte[]) t)).last;
+            } else {
+                throw new IllegalArgumentException("requirement failed: ByteFlow can only be created from ByteChunk or byte[]");
+            }
+        }
+
+        /**
+         * Transforms a ByteFlow such that each emitted `String` is a text line from the input.
+         *
+         * @param charset the charset to use for decoding the bytes into text.
+         * @return a flow emitting lines read from the input byte arrays, assuming they represent text.
+         */
+        public Flow<String> lines(Charset charset) {
+            return LinesImpl.lines(charset, this);
+        }
+
+        /**
+         * Transforms a ByteFlow such that each emitted `String` is a text line from the input decoded using UTF-8 charset.
+         *
+         * @return
+         *   a flow emitting lines read from the input byte chunks, assuming they represent text.
+         */
+        public Flow<String> linesUtf8() {
+            return lines(StandardCharsets.UTF_8);
+        }
+
+
+        /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
+         * that are split across chunks.
+         *
+         * @return
+         *   a flow of Strings decoded from incoming bytes.
+         */
+        public Flow<String> decodeStringUtf8() {
+            return ChunksUtf8Decoder.decodeStringUtf8(last);
+        }
+
+        /**
+         * Runs the flow into a {@link java.io.InputStream}.
+         * <p>
+         * Must be run within a concurrency scope, as under the hood the flow is run in the background.
+         * <p>
+         * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+         */
+        public InputStream runToInputStream(UnsupervisedScope scope) {
+            Source<ByteChunk> ch = this
+                    .runToChannel(scope);
+
+            return new InputStream() {
+                private ByteArrayIterator currentChunk = ByteArrayIterator.empty();
+
+                @Override
+                public int read() {
+                    try {
+                        if (!currentChunk.hasNext()) {
+                            Object result = ch.receiveOrClosed();
+                            if (result instanceof ChannelDone) {
+                                return -1;
+                            } else if (result instanceof ChannelError error) {
+                                throw error.toException();
+                            } else {
+                                var chunk = (ByteChunk) result;
+                                currentChunk = new ByteArrayIterator(chunk.toArray());
+                            }
+                        }
+                        return currentChunk.next() & 0xff; // Convert to unsigned
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                @Override
+                public int available() {
+                    return currentChunk.available();
+                }
+            };
+        }
+
+
+        /**
+         * Writes content of this flow to an {@link java.io.OutputStream}.
+         *
+         * @param outputStream
+         *   Target `OutputStream` to write to. Will be closed after finishing the process or on error.
+         */
+        public void runToOutputStream(OutputStream outputStream) throws Exception {
+            try {
+                last.run(t -> outputStream.write(t.toArray()));
+                close(outputStream, null);
+            } catch (Exception e) {
+                close(outputStream, e);
+                throw e;
+            }
+        }
+
+        /** Writes content of this flow to a file.
+         *
+         * @param path
+         *   Path to the target file. If not exists, it will be created.s
+         */
+        public void runToFile(Path path) throws Exception {
+            if (Files.isDirectory(path)) {
+                throw new IOException("Path %s is a directory".formatted(path));
+            }
+            final SeekableByteChannel channel = getFileChannel(path);
+            try {
+                runForeach(chunk -> {
+                    try {
+                        channel.write(ByteBuffer.wrap(chunk.toArray()));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                close(channel, null);
+            } catch (Exception t) {
+                close(channel, t);
+                throw t;
+            }
+        }
+
+        private SeekableByteChannel getFileChannel(Path path) throws IOException {
+            try {
+                return FileChannel.open(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            } catch (UnsupportedOperationException e) {
+                // Some file systems don't support file channels
+                return Files.newByteChannel(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+            }
+        }
+
+        private void close(AutoCloseable closeable, Exception cause) throws Exception {
+            try {
+                closeable.close();
+            } catch (IOException e) {
+                if (cause != null) {
+                    cause.addSuppressed(e);
+                }
+                throw cause != null ? cause : e;
+            }
+        }
     }
 
     // endregion
