@@ -1230,24 +1230,22 @@ public class Flow<T> {
      *
      * @throws IllegalArgumentException if the flow does not contain `byte[]` or {@link ByteChunk} elements.
      */
-    @SafeVarargs
-    public final ByteFlow toByteFlow(T... args) {
-        //noinspection unchecked
-        return new ByteFlow(last, (Class<T>) args.getClass().getComponentType());
+    public final ByteFlow toByteFlow() {
+        return new ByteFlow(last);
     }
 
     /**
      * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into {@link ByteChunk}.
      */
     public ByteFlow toByteFlow(ByteChunkMapper<T> f) {
-        return new ByteFlow(map(f).last, ByteChunk.class);
+        return new ByteFlow(map(f).last);
     }
 
     /**
      * Allows to convert given flow into a {@link ByteFlow} by providing a mapping function that converts elements of the flow into `byte[]`.
      */
     public ByteFlow toByteFlow(ByteArrayMapper<T> f) {
-        return new ByteFlow(map(f).last, byte[].class);
+        return new ByteFlow(map(f).last);
     }
 
     /**
@@ -1260,7 +1258,7 @@ public class Flow<T> {
             }
             throw new IllegalArgumentException("requirement failed: method can be called only on flow containing String");
         });
-        return new ByteFlow(flow.last, ByteChunk.class);
+        return new ByteFlow(flow.last);
     }
 
     /**
@@ -1268,15 +1266,19 @@ public class Flow<T> {
      */
     public static class ByteFlow extends Flow<ByteChunk> {
 
-        private  <T> ByteFlow(FlowStage<T> last, Class<T> clazz) {
-            super(getLast(last, clazz));
+        @SafeVarargs
+        private <T> ByteFlow(FlowStage<T> last, T... args) {
+            super(getLast(last, args));
         }
 
-        private static <T> FlowStage<ByteChunk> getLast(FlowStage<T> last, Class<T> clazz) {
-            if (clazz == ByteChunk.class) {
+        @SafeVarargs
+        private static <T> FlowStage<ByteChunk> getLast(FlowStage<T> last, T... args) {
+            // noinspection unchecked
+            Class<T> clazz = (Class<T>) args.getClass().getComponentType();
+            if (ByteChunk.class.equals(clazz)) {
                 //noinspection unchecked
                 return (FlowStage<ByteChunk>) last;
-            } else if (clazz == byte[].class) {
+            } else if (byte[].class.equals(clazz)) {
                 return new Flow<>(last).map(t -> ByteChunk.fromArray((byte[]) t)).last;
             } else {
                 throw new IllegalArgumentException("requirement failed: ByteFlow can only be created from ByteChunk or byte[]");
