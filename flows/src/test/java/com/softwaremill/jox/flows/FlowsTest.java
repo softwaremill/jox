@@ -404,6 +404,24 @@ class FlowsTest {
         assertEquals(List.of(0, 1, 2), c.runToList());
     }
 
+    @Test
+    void shouldRunFromIteratorOnlyOnce() throws Exception {
+        Flow<Integer> flow = Flows.fromIterator(List.of(1, 2, 3).iterator());
+
+        assertEquals(List.of(1, 2, 3), flow.runToList()); // first run traverses iterator
+        assertEquals(Collections.emptyList(), flow.runToList()); // second run is empty, as iterator is exhausted
+    }
+
+    @Test
+    void shouldRunFromIteratorSupplierMultipleTimes() throws Exception {
+        List<Integer> source = List.of(1, 2, 3);
+        var flow = Flows.fromIterator(source::iterator);
+
+        for (int i = 0; i < 5; i++) {
+            assertEquals(List.of(1, 2, 3), flow.runToList()); // each run gets new iterator, and is able to traverse it
+        }
+    }
+
     private List<String> toStrings(Flow<ByteChunk> source) throws Exception {
         return source.runToList().stream()
                 .map(chunk -> chunk.convertToString(StandardCharsets.UTF_8))

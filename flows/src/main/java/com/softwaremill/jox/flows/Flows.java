@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -60,32 +59,64 @@ public final class Flows {
 
     /**
      * Creates a flow from the given `iterable`. Each element of the iterable is emitted in order.
+     * The flow can be run multiple times.
      */
     public static <T> Flow<T> fromIterable(Iterable<T> iterable) {
-        return fromIterator(iterable.iterator());
+        return usingEmit(emit -> {
+            for (T t : iterable) {
+                emit.apply(t);
+            }
+        });
     }
 
     /**
      * Creates a flow from the given values. Each value is emitted in order.
+     * Flow can be run multiple times.
      */
     @SafeVarargs
     public static <T> Flow<T> fromValues(T... ts) {
-        return fromIterator(Arrays.asList(ts).iterator());
+        return usingEmit(emit -> {
+            for (T t : ts) {
+                emit.apply(t);
+            }
+        });
     }
 
+    /**
+     * Creates a ByteFlow from given {@link ByteChunk}s. Each ByteChunk is emitted in order.
+     * Flow can be run multiple times.
+     */
     public static Flow.ByteFlow fromByteChunks(ByteChunk... chunks) {
-        return fromIterator(Arrays.asList(chunks).iterator()).toByteFlow();
+        return fromValues(chunks).toByteFlow();
     }
 
+    /**
+     * Creates a ByteFlow from given byte[]. Each byte[] is emitted in order.
+     * Flow can be run multiple times.
+     */
     public static Flow.ByteFlow fromByteArrays(byte[]... byteArrays) {
         return fromValues(byteArrays).toByteFlow();
     }
 
     /**
      * Creates a flow from the given (lazily evaluated) `iterator`. Each element of the iterator is emitted in order.
+     * The flow can be run only once, as the iterator is consumed. If you need to run the flow multiple times, use {@link #fromIterator(Supplier)}.
      */
     public static <T> Flow<T> fromIterator(Iterator<T> it) {
         return usingEmit(emit -> {
+            while (it.hasNext()) {
+                emit.apply(it.next());
+            }
+        });
+    }
+
+    /**
+     * Creates a flow from the given (lazily evaluated) `iterator`. Each element of the iterator is emitted in order.
+     * The flow can be run multiple times, as the `iteratorSupplier` is called each time the flow is run.
+     */
+    public static <T> Flow<T> fromIterator(Supplier<Iterator<T>> iteratorSupplier) {
+        return usingEmit(emit -> {
+            var it = iteratorSupplier.get();
             while (it.hasNext()) {
                 emit.apply(it.next());
             }

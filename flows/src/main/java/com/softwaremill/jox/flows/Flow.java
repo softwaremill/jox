@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,7 +27,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -55,6 +53,7 @@ import com.softwaremill.jox.structured.CancellableFork;
 import com.softwaremill.jox.structured.Fork;
 import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingRunnable;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 /**
@@ -551,7 +550,7 @@ public class Flow<T> {
                         } else {
                             // noinspection unchecked
                             U u = (U) result2;
-                            emit.apply(new AbstractMap.SimpleEntry<>(t, u));
+                            emit.apply(Map.entry(t, u));
                         }
                     }
                 }
@@ -625,14 +624,80 @@ public class Flow<T> {
     }
 
     @SafeVarargs
-    public final <U> Flow<U> flatten(T... args) {
-        if (!Flow.class.equals(args.getClass().getComponentType())) {
+    public final T flatten(T... args) {
+        if (!Flow.class.equals(getTClass(args))) {
             throw new IllegalArgumentException("requirement failed: flatten can be called on Flow containing Flows");
         }
-        //noinspection unchecked
-        return this.flatMap(t -> ((Flow<U>) t));
+        //noinspection unchecked,rawtypes
+        return (T) this.flatMap(t -> (Flow) t);
     }
 
+    @SuppressWarnings("unchecked")
+    @SafeVarargs
+    public final <U> T flattenPar(int parallelism, T... args) {
+        if (!Flow.class.equals(getTClass(args))) {
+            throw new IllegalArgumentException("requirement failed: flattenPar can be called on Flow containing Flows");
+        }
+        return (T) Flows.usingEmit(emit -> {
+            class Nested {
+                final Flow<U> child;
+                Nested(Flow<U> child) {
+                    this.child = child;
+                }
+            }
+            final class ChildDone {}
+
+            unsupervised(scope -> {
+                Channel<U> childOutputChannel = Channel.withScopedBufferSize();
+                Channel<ChildDone> childDoneChannel = Channel.withScopedBufferSize();
+
+                // When an error occurs in the parent, propagating it also to `childOutputChannel`, from which we always
+                // `select` in the main loop. That way, even if max parallelism is reached, errors in the parent will
+                // be discovered without delay.
+                //noinspection unchecked
+                Source<Nested> parentChannel = map(t -> new Nested((Flow<U>) t))
+                        .onError(childOutputChannel::error)
+                        .runToChannel(scope);
+
+                int runningChannelCount = 1; // parent is running
+                boolean parentDone = false;
+
+                while (runningChannelCount > 0) {
+                    assert runningChannelCount <= parallelism + 1;
+
+                    Object result;
+                    if (runningChannelCount == parallelism + 1 || parentDone) {
+                        result = selectOrClosed(childOutputChannel.receiveClause(), childDoneChannel.receiveClause());
+                    } else {
+                        result = selectOrClosed(childOutputChannel.receiveClause(), childDoneChannel.receiveClause(), parentChannel.receiveClause());
+                    }
+
+                    // Only `parentChannel` might be done, child completion is signalled via `childDoneChannel`.
+                    if (result instanceof ChannelDone) {
+                        parentDone = parentChannel.isClosedForReceive();
+                        assert parentDone;
+                        runningChannelCount--;
+                    } else if (result instanceof ChannelError e) {
+                        throw e.toException();
+                    } else if (ChildDone.class.isInstance(result)) {
+                        runningChannelCount--;
+                    } else if (Nested.class.isInstance(result)) {
+                        //noinspection unchecked
+                        Nested t = (Nested) result;
+                        scope.forkUnsupervised(() -> {
+                            t.child.onDone(() -> childDoneChannel.send(new ChildDone()))
+                                    .runPipeToSink(childOutputChannel, false);
+                            return null;
+                        });
+                        runningChannelCount++;
+                    } else if (result != null) {
+                        emit.apply(result);
+                    }
+                }
+                return null;
+            });
+        });
+    }
 
     /**
      * Applies the given `mappingFunction` to each element emitted by this flow, in sequence.
@@ -910,7 +975,7 @@ public class Flow<T> {
     /**
      * Runs `f` after the flow completes successfully, that is when all elements are emitted.
      */
-    public Flow<T> onDone(Runnable f) {
+    public Flow<T> onDone(ThrowingRunnable f) {
         return usingEmit(emit -> {
             last.run(emit);
             f.run();
@@ -1416,7 +1481,6 @@ public class Flow<T> {
     // endregion
 
     // region ByteFlow
-
     public interface ByteChunkMapper<T> extends Function<T, ByteChunk> {}
     public interface ByteArrayMapper<T> extends Function<T, byte[]> {}
 
@@ -1427,8 +1491,7 @@ public class Flow<T> {
      */
     @SafeVarargs
     public final ByteFlow toByteFlow(T... args) {
-        //noinspection unchecked
-        return new ByteFlow(last, (Class<T>) args.getClass().getComponentType());
+        return new ByteFlow(last, getTClass(args));
     }
 
     /**
@@ -1649,6 +1712,14 @@ public class Flow<T> {
             }
             return null;
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> Class<T> getTClass(T[] args) {
+        if (args.length > 0) {
+            throw new IllegalArgumentException("Please do not pass any arguments for this method. Java will detect the type automatically.");
+        }
+        return (Class<T>) args.getClass().getComponentType();
     }
 
     private static class BreakException extends RuntimeException {
