@@ -623,6 +623,16 @@ public class Flow<T> {
         });
     }
 
+    /** Given that this flow emits other flows, flattens the nested flows into a single flow. The resulting flow emits elements from the
+     * nested flows in the order they are emitted.
+     * <p>
+     * The nested flows are run in sequence, that is, the next nested flow is started only after the previous one completes.
+     *
+     * @param args
+     *   This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
+     * @throws IllegalArgumentException
+     *   when flow does not contain nested flows, or when `args` are not empty
+     */
     @SafeVarargs
     public final T flatten(T... args) {
         if (!Flow.class.equals(getTClass(args))) {
@@ -632,6 +642,22 @@ public class Flow<T> {
         return (T) this.flatMap(t -> (Flow) t);
     }
 
+    /** Pipes the elements of child flows into the returned flow.
+     * <p>
+     * If this flow or any of the child flows emit an error, the pulling stops and the output flow propagates the error.
+     * <p>
+     * Up to `parallelism` child flows are run concurrently in the background. When the limit is reached, until a child flow completes, no
+     * more child flows are run.
+     * <p>
+     * The size of the buffers for the elements emitted by the child flows is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     *
+     * @param parallelism
+     *   An upper bound on the number of child flows that run in parallel.
+     * @param args
+     *   This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
+     * @throws IllegalArgumentException
+     *   when flow does not contain nested flows, or when `args` are not empty
+     */
     @SuppressWarnings("unchecked")
     @SafeVarargs
     public final <U> T flattenPar(int parallelism, T... args) {
@@ -1487,7 +1513,10 @@ public class Flow<T> {
     /**
      * Converts a flow of `byte[]` or {@link ByteChunk} into a dedicated Flow type {@link ByteFlow}.
      *
-     * @throws IllegalArgumentException if the flow does not contain `byte[]` or {@link ByteChunk} elements.
+     * @param args
+     *   This param should *NOT* be passed. It's only used to verify that this flow contains byte[] or {@link ByteChunk}.
+     * @throws IllegalArgumentException
+     *   if the flow does not contain `byte[]` or {@link ByteChunk} elements.
      */
     @SafeVarargs
     public final ByteFlow toByteFlow(T... args) {
