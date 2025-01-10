@@ -14,8 +14,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
@@ -587,5 +589,183 @@ class FlowTest {
             assertEquals(failure, ((ChannelError) source.receiveOrClosed()).cause());
             return null;
         });
+    }
+
+    @Test
+    void scan_shouldScanEmptyFlow() throws Exception {
+        // given
+        Flow<Integer> flow = Flows.empty();
+
+        // when & then
+        Flow<Integer> scannedFlow = flow.scan(0, Integer::sum);
+        assertEquals(List.of(0), scannedFlow.runToList());
+    }
+
+    @Test
+    void scan_shouldScanFlowOfSummedInt() throws Exception {
+        // given
+        Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        Flow<Integer> scannedFlow = flow.scan(0, Integer::sum);
+
+        // when & then
+        assertEquals(List.of(0, 1, 3, 6, 10, 15, 21, 28, 36, 45, 55), scannedFlow.runToList());
+    }
+
+    @Test
+    void scan_shouldScanFlowOfMultipliedInt() throws Exception {
+        // given
+        Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+        // when & then
+        Flow<Integer> scannedFlow = flow.scan(1, (acc, el) -> acc * el);
+        assertEquals(List.of(1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800), scannedFlow.runToList());
+    }
+
+    @Test
+    void scan_shouldScanFlowOfConcatenatedString() throws Exception {
+        // given
+        Flow<String> flow = Flows.fromValues("f", "l", "o", "w");
+        Flow<String> scannedFlow = flow.scan("my", (acc, el) -> acc + el);
+
+        // when & then
+        assertEquals(List.of("my", "myf", "myfl", "myflo", "myflow"), scannedFlow.runToList());
+    }
+
+    @Test
+    void debounceBy_shouldNotDebounceIfAppliedOnEmptyFlow() throws Exception {
+        // given
+        Flow<Integer> c = Flows.empty();
+
+        // when & then
+        Flow<Integer> s = c.debounceBy(x -> x * 2);
+        assertEquals(List.of(), s.runToList());
+    }
+
+    @Test
+    void debounceBy_shouldNotDebounceIfAppliedOnFlowContainingOnlyDistinctFValue() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+        // when & then
+        Flow<Integer> s = c.debounceBy(x -> x * 2);
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), s.runToList());
+    }
+
+    @Test
+    void debounceBy_shouldDebounceIfAppliedOnFlowContainingRepeatingFValue() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 1, 2, 3, 4, 4, 5);
+        Flow<Integer> s = c.debounceBy(x -> x * 2);
+
+        // when & then
+        assertEquals(List.of(1, 2, 3, 4, 5), s.runToList());
+    }
+
+    @Test
+    void debounceBy_shouldDebounceSubsequentOddPrimeNumbers() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 1, 1, 2, 4, 3, 7, 4, 5);
+
+        // when & then
+        Flow<Integer> s = c.debounceBy(x -> x % 2 == 0);
+        assertEquals(List.of(1, 2, 3, 4, 5), s.runToList());
+    }
+
+    @Test
+    void debounce_shouldNotDebounceIfAppliedOnEmptyFlow() throws Exception {
+        // given
+        Flow<Integer> c = Flows.empty();
+
+        // when & then
+        Flow<Integer> s = c.debounce();
+        assertEquals(List.of(), s.runToList());
+    }
+
+    @Test
+    void debounce_shouldNotDebounceIfAppliedOnFlowContainingOnlyDistinctValues() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+        // when & then
+        Flow<Integer> s = c.debounce();
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10), s.runToList());
+    }
+
+    @Test
+    void debounce_shouldDebounceIfAppliedOnFlowContainingOnlyRepeatingValues() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 1, 1, 1, 1);
+
+        // when & then
+        Flow<Integer> s = c.debounce();
+        assertEquals(List.of(1), s.runToList());
+    }
+
+    @Test
+    void debounce_shouldDebounceIfAppliedOnFlowContainingRepeatingElements() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 1, 2, 3, 4, 4, 5);
+
+        // when & then
+        Flow<Integer> s = c.debounce();
+        assertEquals(List.of(1, 2, 3, 4, 5), s.runToList());
+    }
+
+    @Test
+    void sample_shouldNotSampleAnythingFromEmptyFlow() throws Exception {
+        // given
+        Flow<Integer> c = Flows.empty();
+
+        // when & then
+        Flow<Integer> s = c.sample(5);
+        assertEquals(Collections.emptyList(), s.runToList());
+    }
+
+    @Test
+    void sample_shouldNotSampleAnythingWhenNIsZero() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+        // when & then
+        Flow<Integer> s = c.sample(0);
+        assertEquals(Collections.emptyList(), s.runToList());
+    }
+
+    @Test
+    void sample_shouldSampleEveryElementWhenNIsOne() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        int n = 1;
+
+        // when & then
+        Flow<Integer> s = c.sample(n);
+        assertEquals(IntStream.rangeClosed(n, 10).boxed().toList(), s.runToList());
+    }
+
+    @Test
+    void sample_shouldSampleEveryNthElement() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        int n = 3;
+
+        // when & then
+        Flow<Integer> s = c.sample(n);
+        assertEquals(List.of(3, 6, 9), s.runToList());
+    }
+
+    @Test
+    void shouldCollectOverSource() throws Exception {
+        // given
+        Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+
+        // when & then
+        Flow<Integer> s = c.collect(i -> {
+            if (i % 2 == 0) {
+                return Optional.of(i * 10);
+            }
+            return Optional.empty();
+        });
+        List<Integer> result = s.runToList();
+        assertEquals(List.of(20, 40, 60, 80, 100), result);
     }
 }
