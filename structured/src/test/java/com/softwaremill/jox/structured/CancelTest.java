@@ -106,7 +106,7 @@ public class CancelTest {
 
     @Test
     void testCancelNowFollowedByJoinEitherCatchesInterruptedExceptionWithWhichForkEnds() throws Exception {
-        assertThrows(ExecutionException.class, () -> Scopes.supervised(scope -> {
+        assertThrows(JoxScopeExecutionException.class, () -> Scopes.supervised(scope -> {
             var f = scope.forkCancellable(() -> {
                 Thread.sleep(200);
                 return null;

@@ -6,7 +6,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -33,7 +32,7 @@ public class FlowPublisherTckTest {
     };
 
     @Test
-    void verifyTckScenarios() throws ExecutionException, InterruptedException {
+    void verifyTckScenarios() throws InterruptedException {
         List<Throwable> errors = new ArrayList<>();
         // We are invoking tests manually as we need to set separate supervised scope for each test
         for (Method method : verification.getClass().getMethods()) {

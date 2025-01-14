@@ -15,11 +15,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
 import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.ChannelErrorException;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
@@ -63,7 +63,7 @@ class FlowTest {
     void shouldThrowExceptionThrownInFunctionF() {
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
             Flows.fromValues(1)
-                    .runFold(0, (acc, n) -> { throw new RuntimeException("Function `f` is broken"); });
+                    .runFold(0, (_, _) -> { throw new RuntimeException("Function `f` is broken"); });
         });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
@@ -132,13 +132,13 @@ class FlowTest {
 
     @Test
     void shouldPropagateErrorsWhenUsingBuffer() {
-        Exception exception = assertThrows(ExecutionException.class, () -> {
+        ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
             Flows.fromValues(1, 2, 3)
                     .map(_ -> { throw new IllegalStateException(); })
                     .buffer(5)
                     .runToList();
         });
-        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
     }
 
     @Test
@@ -462,10 +462,10 @@ class FlowTest {
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ExecutionException.class, s::runToList);
+        var exception = assertThrows(ChannelErrorException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
     }
 
     @Test
@@ -477,10 +477,10 @@ class FlowTest {
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ExecutionException.class, s::runToList);
+        var exception = assertThrows(ChannelErrorException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
     }
 
     @Test

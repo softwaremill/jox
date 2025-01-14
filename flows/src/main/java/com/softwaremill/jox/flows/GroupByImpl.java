@@ -7,13 +7,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.SelectClause;
 import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingFunction;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class GroupByImpl<T, V, U> {
@@ -48,10 +51,10 @@ class GroupByImpl<T, V, U> {
 
     private final Flow<T> parent;
     private final int parallelism;
-    private final Function<T, V> predicate;
+    private final ThrowingFunction<T, V> predicate;
     private final Flow.ChildFlowTransformer<T, V, U> childFlowTransform;
 
-    public GroupByImpl(Flow<T> parent, int parallelism, Function<T, V> predicate, Flow.ChildFlowTransformer<T, V, U> childFlowTransform) {
+    public GroupByImpl(Flow<T> parent, int parallelism, ThrowingFunction<T, V> predicate, Flow.ChildFlowTransformer<T, V, U> childFlowTransform) {
         this.parent = parent;
         this.parallelism = parallelism;
         this.predicate = predicate;

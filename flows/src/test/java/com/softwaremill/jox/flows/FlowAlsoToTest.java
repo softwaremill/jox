@@ -127,13 +127,7 @@ public class FlowAlsoToTest {
         Flow<Integer> flow = Flows
                 .fromValues(1, 2, 3)
                 .alsoToTap(other)
-                .tap(v -> {
-                    try {
-                        Thread.sleep(50);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                });
+                .tap(_ -> Thread.sleep(50));
 
         // when & then
         assertEquals(List.of(1, 2, 3), flow.runToList());
@@ -193,13 +187,7 @@ public class FlowAlsoToTest {
             List<Integer> result = Flows
                     .iterate(1, i -> i + 1)
                     .take(10)
-                    .tap(v -> {
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
+                    .tap(_ -> Thread.sleep(10))
                     .alsoToTap(other)
                     .runToList();
 
@@ -225,13 +213,7 @@ public class FlowAlsoToTest {
             List<Integer> result = Flows
                     .iterate(1, i -> i + 1)
                     .take(10)
-                    .tap(v -> {
-                        try {
-                            Thread.sleep(10);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
+                    .tap(_ -> Thread.sleep(10))
                     .alsoToTap(other)
                     .runToList();
 

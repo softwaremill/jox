@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-import scala.Int;
 
 public class FlowZipTest {
 

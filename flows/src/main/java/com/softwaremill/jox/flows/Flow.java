@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,7 +37,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 import java.util.function.BinaryOperator;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -47,12 +45,17 @@ import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.ChannelErrorException;
 import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.CancellableFork;
 import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingBiFunction;
+import com.softwaremill.jox.structured.ThrowingConsumer;
+import com.softwaremill.jox.structured.ThrowingFunction;
 import com.softwaremill.jox.structured.ThrowingRunnable;
 import com.softwaremill.jox.structured.UnsupervisedScope;
 
@@ -67,6 +70,9 @@ import com.softwaremill.jox.structured.UnsupervisedScope;
  * Each such method returns a new immutable {@link Flow} instance.
  * <p>
  * Running a flow is possible using one of the `run*` methods, such as {@link Flow#runToList}, {@link Flow#runToChannel} or {@link Flow#runFold}.
+ * <p>
+ * Some operations require async processing e.g. {@link Flow#buffer}, {@link Flow#groupBy}.
+ * In such case exceptions thrown by the upstream or parameter functions will be wrapped in {@link ChannelErrorException} (unless specified differently by the docs for specific method)
  */
 public class Flow<T> {
     final FlowStage<T> last;
@@ -78,20 +84,32 @@ public class Flow<T> {
     // region Run operations
 
     /** Invokes the given function for each emitted element. Blocks until the flow completes. */
-    public void runForeach(Consumer<T> sink) throws Exception {
-        last.run(sink::accept);
+    public void runForeach(ThrowingConsumer<T> sink) throws Exception {
+        try {
+            last.run(sink::accept);
+        } catch (JoxScopeExecutionException e) {
+            throw (Exception) e.getCause();
+        }
     }
 
     /** Invokes the provided {@link FlowEmit} for each emitted element. Blocks until the flow completes. */
     public void runToEmit(FlowEmit<T> emit) throws Exception {
-        last.run(emit);
+        try {
+            last.run(emit);
+        } catch (JoxScopeExecutionException e) {
+            throw (Exception) e.getCause();
+        }
     }
 
     /** Accumulates all elements emitted by this flow into a list. Blocks until the flow completes. */
     public List<T> runToList() throws Exception {
-        List<T> result = new ArrayList<>();
-        runForeach(result::add);
-        return result;
+        try {
+            List<T> result = new ArrayList<>();
+            runForeach(result::add);
+            return result;
+        } catch (JoxScopeExecutionException e) {
+            throw (Exception) e.getCause();
+        }
     }
 
     /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
@@ -100,6 +118,8 @@ public class Flow<T> {
      * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Method does not block until the flow completes.
+     * <p>
+     * Any exceptions thrown by the flow are propagated via the channel.
      *
      * @param scope
      *  Required for creating async forks responsible for writing to channel
@@ -112,6 +132,8 @@ public class Flow<T> {
      * of this method.
      * <p>
      * Method does not block until the flow completes.
+     * <p>
+     * Any exceptions thrown by the flow are propagated via the channel.
      *
      * @param scope
      *  Required for creating async forks responsible for writing to channel
@@ -145,7 +167,7 @@ public class Flow<T> {
      *   Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
      *   used as an input value to the next.
      */
-    public <U> U runFold(U zero, BiFunction<U, T, U> f) throws Exception {
+    public <U> U runFold(U zero, ThrowingBiFunction<U, T, U> f) throws Exception {
         AtomicReference<U> current = new AtomicReference<>(zero);
         last.run(t -> current.set(f.apply(current.get(), t)));
         return current.get();
@@ -290,7 +312,7 @@ public class Flow<T> {
     /**
      * Applies the given `mappingFunction` to each element emitted by this flow. The returned flow then emits the results.
      */
-    public <U> Flow<U> map(Function<T, U> mappingFunction) {
+    public <U> Flow<U> map(ThrowingFunction<T, U> mappingFunction) {
         return usingEmit(emit -> {
             last.run(t -> emit.apply(mappingFunction.apply(t)));
         });
@@ -462,7 +484,7 @@ public class Flow<T> {
     /** Remove subsequent, repeating elements
      */
     public Flow<T> debounce() {
-        return debounceBy(Function.identity());
+        return debounceBy(t -> t);
     }
 
     /**
@@ -470,7 +492,7 @@ public class Flow<T> {
      *
      * @param f The function used to compare the previous and current elements
      */
-    public <U> Flow<T> debounceBy(Function<T, U> f) {
+    public <U> Flow<T> debounceBy(ThrowingFunction<T, U> f) {
         return Flows.usingEmit(emit -> {
             AtomicReference<Optional<U>> previousElement = new AtomicReference<>(Optional.empty());
             last.run(t -> {
@@ -490,7 +512,7 @@ public class Flow<T> {
      * @param f
      *   The mapping function.
      */
-    public <U> Flow<U> collect(Function<T, Optional<U>> f) {
+    public <U> Flow<U> collect(ThrowingFunction<T, Optional<U>> f) {
         return Flows.usingEmit(emit ->
                 last.run(t -> {
                     Optional<U> result = f.apply(t);
@@ -509,12 +531,14 @@ public class Flow<T> {
      * @param f The accumulation function that is applied to each element of the flow.
      * @return A new Flow containing the accumulated values.
      */
-    public <V> Flow<V> scan(V initial, BiFunction<V, T, V> f) {
+    public <V> Flow<V> scan(V initial, ThrowingBiFunction<V, T, V> f) {
         return Flows.usingEmit(emit -> {
             emit.apply(initial);
             AtomicReference<V> accumulator = new AtomicReference<>(initial);
             last.run(t -> {
-                emit.apply(accumulator.updateAndGet(acc -> f.apply(acc, t)));
+                V newValue = f.apply(accumulator.get(), t);
+                accumulator.set(newValue);
+                emit.apply(newValue);
             });
         });
     }
@@ -727,12 +751,12 @@ public class Flow<T> {
 
     /**
      * Applies the given `mappingFunction` to each element emitted by this flow, in sequence.
-     * The given {@link Consumer<FlowEmit>} can be used to emit an arbitrary number of elements.
+     * The given {@link ThrowingConsumer<FlowEmit>} can be used to emit an arbitrary number of elements.
      * <p>
      * The {@link FlowEmit} instance provided to the `mappingFunction` callback should only be used on the calling thread.
      * That is, {@link FlowEmit} is thread-unsafe. Moreover, the instance should not be stored or captured in closures, which outlive the invocation of `mappingFunction`.
      */
-    public <U> Flow<U> mapUsingEmit(Function<T, Consumer<FlowEmit<U>>> mappingFunction) {
+    public <U> Flow<U> mapUsingEmit(ThrowingFunction<T, ThrowingConsumer<FlowEmit<U>>> mappingFunction) {
         return usingEmit(emit -> last.run(t -> mappingFunction.apply(t).accept(emit)));
     }
 
@@ -740,7 +764,7 @@ public class Flow<T> {
      * Applies the given effectful function `f` to each element emitted by this flow. The returned flow emits the elements unchanged.
      * If `f` throws an exceptions, the flow fails and propagates the exception.
      */
-    public Flow<T> tap(Consumer<T> f) {
+    public Flow<T> tap(ThrowingConsumer<T> f) {
         return map(t -> {
             f.accept(t);
             return t;
@@ -753,7 +777,7 @@ public class Flow<T> {
      * <p>
      * The nested flows are run in sequence, that is, the next nested flow is started only after the previous one completes.
      */
-    public <U> Flow<U> flatMap(Function<T, Flow<U>> mappingFunction) {
+    public <U> Flow<U> flatMap(ThrowingFunction<T, Flow<U>> mappingFunction) {
         return usingEmit(emit -> last.run(t -> mappingFunction.apply(t).runToEmit(emit)));
     }
 
@@ -772,7 +796,7 @@ public class Flow<T> {
                         throw new BreakException();
                     }
                 });
-            } catch (ExecutionException e) {
+            } catch (JoxScopeExecutionException e) {
                 if (!(e.getCause() instanceof BreakException)) {
                     throw e;
                 }
@@ -802,16 +826,20 @@ public class Flow<T> {
      * <p>
      * The size of the buffers for the elements emitted by this flow (which is also run in the background) and the child flows are determined
      * by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used. 
-     *
+     * <p>
+     * Wraps exceptions from `groupingFunction`, `childFlowTransform` and upstream in {@link ChannelErrorException} when flow is run.
+     * <p>
      * @param parallelism
      *   An upper bound on the number of child flows that run in parallel at any time.
      * @param groupingFunction
      *   Function used to determine the group for an element of type `T`. Each group is represented by a value of type `V`.
      * @param childFlowTransform
-     *   The function that is used to create a child flow, which is later in the background. The arguments are the group value, for which the
+     *   The function that is used to create a child flow, which is later run in the background. The arguments are the group value, for which the
      *   flow is created, and a flow of `T` elements in that group (each such element has the same group value `V` returned by `predicated`).
+     * @throws IllegalStateException
+     *   When `childFlowTransform` terminates the flow, before upstream passes all elements.
      */
-    public <V, U> Flow<U> groupBy(int parallelism, Function<T, V> groupingFunction, ChildFlowTransformer<T, V, U> childFlowTransform) {
+    public <V, U> Flow<U> groupBy(int parallelism, ThrowingFunction<T, V> groupingFunction, ChildFlowTransformer<T, V, U> childFlowTransform) {
         return new GroupByImpl<>(this, parallelism, groupingFunction, childFlowTransform)
                 .run();
     }
@@ -821,7 +849,7 @@ public class Flow<T> {
      */
     @FunctionalInterface
     public interface ChildFlowTransformer<T, V, U> {
-        Function<Flow<T>, Flow<U>> apply(V group);
+        ThrowingFunction<Flow<T>, Flow<U>> apply(V group);
     }
 
     /**
@@ -830,7 +858,9 @@ public class Flow<T> {
      * element is emitted, the flow will emit it as a single-element group and reset the timer.
      * <p>
      * The size of buffers used by this method is determined by {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
-     *
+     * <p>
+     * Wraps exceptions from upstream in {@link ChannelErrorException} when flow is run.
+     * <p>
      * @param n
      *   The maximum number of elements in a group.
      * @param duration
@@ -954,7 +984,7 @@ public class Flow<T> {
      * @param minWeight The minimum cumulative weight of elements in a group.
      * @param costFn The function that calculates the weight of an element.
      */
-    public Flow<List<T>> groupedWeighted(long minWeight, Function<T, Long> costFn) {
+    public Flow<List<T>> groupedWeighted(long minWeight, ThrowingFunction<T, Long> costFn) {
         if (minWeight <= 0) {
             throw new IllegalArgumentException("minWeight must be > 0");
         }
@@ -1011,7 +1041,7 @@ public class Flow<T> {
     /**
      * Runs `f` after the flow completes with an error. The error can't be recovered.
      */
-    public Flow<T> onError(Consumer<Throwable> f) {
+    public Flow<T> onError(ThrowingConsumer<Throwable> f) {
         return usingEmit(emit -> {
             try {
                 last.run(emit);
@@ -1153,7 +1183,9 @@ public class Flow<T> {
      * <p>
      * Both flows are run concurrently in the background.
      * The size of the buffers is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
-     *
+     * <p>
+     * Wraps exceptions from upstream and `other` in {@link ChannelErrorException} when flow is run.
+     * <p>
      * @param other
      *   The flow to be merged with this flow.
      * @param propagateDoneLeft
@@ -1267,7 +1299,7 @@ public class Flow<T> {
      *   A function that transforms the element from this flow into an `Iterable` of results which are emitted one by one by the
      *   returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
      */
-    public <U> Flow<U> mapConcat(Function<T, Iterable<U>> f) {
+    public <U> Flow<U> mapConcat(ThrowingFunction<T, Iterable<U>> f) {
         return usingEmit(emit -> {
             last.run(t -> {
                 for (U u : f.apply(t)) {
@@ -1284,13 +1316,15 @@ public class Flow<T> {
      * The mapped results are emitted in the same order, in which inputs are received. In other words, ordering is preserved.
      * <p>
      * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
-     *
+     * <p>
+     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} when flow is run.
+     * <p>
      * @param parallelism
      *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
      * @param f
      *   The mapping function.
      */
-    public <U> Flow<U> mapPar(int parallelism, Function<T, U> f) {
+    public <U> Flow<U> mapPar(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
             Semaphore semaphore = new Semaphore(parallelism);
             Channel<Fork<Optional<U>>> inProgress = new Channel<>(parallelism);
@@ -1352,13 +1386,15 @@ public class Flow<T> {
      * The mapped results **might** be emitted out-of-order, depending on the order in which the mapping function completes.
      * <p>
      * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
-     *
+     * <p>
+     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} when flow is run.
+     * <p>
      * @param parallelism
      *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
      * @param f
      *   The mapping function.
      */
-    public <U> Flow<U> mapParUnordered(int parallelism, Function<T, U> f) {
+    public <U> Flow<U> mapParUnordered(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
             Channel<U> results = Channel.withScopedBufferSize();
             Semaphore s = new Semaphore(parallelism);
@@ -1507,8 +1543,8 @@ public class Flow<T> {
     // endregion
 
     // region ByteFlow
-    public interface ByteChunkMapper<T> extends Function<T, ByteChunk> {}
-    public interface ByteArrayMapper<T> extends Function<T, byte[]> {}
+    public interface ByteChunkMapper<T> extends ThrowingFunction<T, ByteChunk> {}
+    public interface ByteArrayMapper<T> extends ThrowingFunction<T, byte[]> {}
 
     /**
      * Converts a flow of `byte[]` or {@link ByteChunk} into a dedicated Flow type {@link ByteFlow}.
@@ -1653,6 +1689,10 @@ public class Flow<T> {
             try {
                 last.run(t -> outputStream.write(t.toArray()));
                 close(outputStream, null);
+            } catch (JoxScopeExecutionException e) {
+                Exception cause = (Exception) e.getCause();
+                close(outputStream, cause);
+                throw cause;
             } catch (Exception e) {
                 close(outputStream, e);
                 throw e;
@@ -1678,6 +1718,10 @@ public class Flow<T> {
                     }
                 });
                 close(channel, null);
+            } catch (JoxScopeExecutionException e) {
+                Exception cause = (Exception) e.getCause();
+                close(channel, cause);
+                throw cause;
             } catch (Exception t) {
                 close(channel, t);
                 throw t;
@@ -1718,7 +1762,7 @@ public class Flow<T> {
         });
     }
 
-    private <U> Fork<Optional<U>> forkMapping(UnsupervisedScope scope, Function<T, U> f, Semaphore s, T value, Sink<U> results) {
+    private <U> Fork<Optional<U>> forkMapping(UnsupervisedScope scope, ThrowingFunction<T, U> f, Semaphore s, T value, Sink<U> results) {
         return scope.forkUnsupervised(() -> {
             try {
                 U u = f.apply(value);
@@ -1736,6 +1780,8 @@ public class Flow<T> {
             try {
                 last.run(channel::send);
                 channel.done();
+            } catch (JoxScopeExecutionException e) {
+                channel.error(e.getCause());
             } catch (Throwable e) {
                 channel.error(e);
             }

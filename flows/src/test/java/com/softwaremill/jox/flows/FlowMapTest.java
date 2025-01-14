@@ -20,14 +20,14 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.ChannelErrorException;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingFunction;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -58,11 +58,7 @@ public class FlowMapTest {
         // when
         Flow<Integer> mapped = flow.mapUsingEmit(i -> emit -> {
             for (int j = 0; j < 2; j++) {
-                try {
-                    emit.apply(i + j);
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
+                emit.apply(i + j);
             }
         });
 
@@ -171,14 +167,14 @@ public class FlowMapTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-    void shouldMapOverFlowWithParallelismLimit(int parallelism) throws ExecutionException, InterruptedException {
+    void shouldMapOverFlowWithParallelismLimit(int parallelism) throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1).take(10);
             AtomicInteger running = new AtomicInteger(0);
             AtomicInteger maxRunning = new AtomicInteger(0);
 
-            Function<Integer, Integer> f = i -> {
+            ThrowingFunction<Integer, Integer> f = i -> {
                 running.incrementAndGet();
                 try {
                     Thread.sleep(100);
@@ -222,12 +218,8 @@ public class FlowMapTest {
             // given
             Flow<Integer> flow = Flows.iterate(1, v -> v + 1).take(10);
 
-            Function<Integer, Integer> f = (Integer x) -> {
-                try {
-                    Thread.sleep(50);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+            ThrowingFunction<Integer, Integer> f = (Integer x) -> {
+                Thread.sleep(50);
                 return x * 2;
             };
 
@@ -240,7 +232,7 @@ public class FlowMapTest {
     }
 
     @Test
-    void mapPar_shouldCancelOtherRunningForksWhenThereIsAnError() throws ExecutionException, InterruptedException {
+    void mapPar_shouldCancelOtherRunningForksWhenThereIsAnError() throws InterruptedException {
         // given
         RuntimeException boom = new RuntimeException("boom");
         Scopes.supervised(scope -> {
@@ -249,25 +241,21 @@ public class FlowMapTest {
 
             // when
             Source<Integer> s2 = flow.mapPar(2, (Integer i) -> {
-                try {
-                    if (i == 4) {
-                        Thread.sleep(100);
-                        trail.add("exception");
-                        throw boom;
-                    } else {
-                        Thread.sleep(200);
-                        trail.add("done");
-                        return i * 2;
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                if (i == 4) {
+                    Thread.sleep(100);
+                    trail.add("exception");
+                    throw boom;
+                } else {
+                    Thread.sleep(200);
+                    trail.add("done");
+                    return i * 2;
                 }
             }).runToChannel(scope);
 
             // then
             assertEquals(2, s2.receive());
             assertEquals(4, s2.receive());
-            assertEquals(boom, ((ChannelError) s2.receiveOrClosed()).cause().getCause().getCause());
+            assertEquals(boom, ((ChannelError) s2.receiveOrClosed()).cause().getCause());
 
             // checking if the forks aren't left running
             Thread.sleep(200);
@@ -297,7 +285,7 @@ public class FlowMapTest {
             s2.runToList();
             Assertions.fail("should have thrown");
         } catch (Exception e) {
-            assertEquals(boom, e.getCause().getCause());
+            assertEquals(boom, e.getCause());
             assertThat(started.get(), allOf(
                     greaterThanOrEqualTo(4),
                     lessThanOrEqualTo(7) // 4 successful + at most 3 taking up all the permits
@@ -307,14 +295,14 @@ public class FlowMapTest {
 
     @ParameterizedTest
     @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
-    void testMapParUnorderedWithParallelism(int parallelism) throws ExecutionException, InterruptedException {
+    void testMapParUnorderedWithParallelism(int parallelism) throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1).take(10);
             AtomicInteger running = new AtomicInteger(0);
             AtomicInteger maxRunning = new AtomicInteger(0);
 
-            Function<Integer, Integer> f = i -> {
+            ThrowingFunction<Integer, Integer> f = i -> {
                 running.incrementAndGet();
                 try {
                     TimeUnit.MILLISECONDS.sleep(100);
@@ -354,13 +342,9 @@ public class FlowMapTest {
             // given
             Flow<Integer> flow = Flows.iterate(1, j -> j + 1).take(10);
 
-            Function<Integer, Integer> f = j -> {
-                try {
-                    TimeUnit.MILLISECONDS.sleep(50);
-                    return j * 2;
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+            ThrowingFunction<Integer, Integer> f = j -> {
+                TimeUnit.MILLISECONDS.sleep(50);
+                return j * 2;
             };
 
             // when
@@ -388,8 +372,8 @@ public class FlowMapTest {
         });
 
         // then
-        ExecutionException exception = assertThrows(ExecutionException.class, flow2::runToList);
-        assertEquals(boom, exception.getCause().getCause());
+        ChannelErrorException exception = assertThrows(ChannelErrorException.class, flow2::runToList);
+        assertEquals(boom, exception.getCause());
         assertThat(started.get(), allOf(
                 greaterThanOrEqualTo(2), // 1 needs to start & finish; 2 other need to start; and then the failing one has to start & proceed
                 lessThanOrEqualTo(7) // 4 successful + at most 3 taking up all the permits
@@ -397,7 +381,7 @@ public class FlowMapTest {
     }
 
     @Test
-    void mapParUnordered_testCompleteRunningForksAndNotStartNewOnesWhenMappingFunctionFails() throws InterruptedException, ExecutionException {
+    void mapParUnordered_testCompleteRunningForksAndNotStartNewOnesWhenMappingFunctionFails() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             Queue<String> trail = new ConcurrentLinkedQueue<>();
@@ -406,18 +390,14 @@ public class FlowMapTest {
 
             // when
             Flow<Integer> flow2 = flow.mapParUnordered(2, i -> {
-                try {
-                    if (i == 4) {
-                        TimeUnit.MILLISECONDS.sleep(100);
-                        trail.add("exception");
-                        throw boom;
-                    } else {
-                        TimeUnit.MILLISECONDS.sleep(200);
-                        trail.add("done");
-                        return i * 2;
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                if (i == 4) {
+                    TimeUnit.MILLISECONDS.sleep(100);
+                    trail.add("exception");
+                    throw boom;
+                } else {
+                    TimeUnit.MILLISECONDS.sleep(200);
+                    trail.add("done");
+                    return i * 2;
                 }
             });
 
@@ -427,7 +407,7 @@ public class FlowMapTest {
 
             // then
             assertEquals(Set.of(2, 4), received);
-            assertEquals(boom, channelError.cause().getCause().getCause());
+            assertEquals(boom, channelError.cause().getCause());
             assertTrue(s2.isClosedForReceive());
 
             // checking if the forks aren't left running
@@ -447,18 +427,14 @@ public class FlowMapTest {
 
         // when
         Flow<Integer> flow2 = flow.mapParUnordered(2, i -> {
-            try {
-                TimeUnit.MILLISECONDS.sleep(100);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            TimeUnit.MILLISECONDS.sleep(100);
             trail.add(Integer.toString(i));
             return i * 2;
         });
 
         // then
-        ExecutionException exception = assertThrows(ExecutionException.class, flow2::runToList);
-        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
+        ChannelErrorException exception = assertThrows(ChannelErrorException.class, flow2::runToList);
+        assertInstanceOf(IllegalStateException.class, exception.getCause());
 
         // checking if the forks aren't left running
         TimeUnit.MILLISECONDS.sleep(200);
@@ -471,7 +447,7 @@ public class FlowMapTest {
     }
 
     @Test
-    void mapParUnordered_testCancelRunningForksWhenSurroundingScopeClosesDueToError() throws InterruptedException, ExecutionException {
+    void mapParUnordered_testCancelRunningForksWhenSurroundingScopeClosesDueToError() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             RuntimeException boom = new RuntimeException("boom");
@@ -480,18 +456,14 @@ public class FlowMapTest {
 
             // when
             Flow<Integer> flow2 = flow.mapParUnordered(2, i -> {
-                try {
-                    if (i == 4) {
-                        TimeUnit.MILLISECONDS.sleep(100);
-                        trail.add("exception");
-                        throw boom;
-                    } else {
-                        TimeUnit.MILLISECONDS.sleep(200);
-                        trail.add("done");
-                        return i * 2;
-                    }
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
+                if (i == 4) {
+                    TimeUnit.MILLISECONDS.sleep(100);
+                    trail.add("exception");
+                    throw boom;
+                } else {
+                    TimeUnit.MILLISECONDS.sleep(200);
+                    trail.add("done");
+                    return i * 2;
                 }
             });
 
@@ -501,7 +473,7 @@ public class FlowMapTest {
 
             // then
             assertEquals(Set.of(2, 4), received);
-            assertEquals(boom, errorOrClosed.cause().getCause().getCause());
+            assertEquals(boom, errorOrClosed.cause().getCause());
             assertTrue(s2.isClosedForReceive());
 
             // wait for all threads to finish
@@ -525,11 +497,7 @@ public class FlowMapTest {
 
         // when
         Flow<Integer> flow2 = flow.mapParUnordered(5, i -> {
-            try {
-                TimeUnit.MILLISECONDS.sleep(delays.get(i));
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            TimeUnit.MILLISECONDS.sleep(delays.get(i));
             return i;
         });
         List<Integer> result = flow2.runToList();

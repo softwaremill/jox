@@ -1,12 +1,17 @@
 package com.softwaremill.jox.structured;
 
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class SupervisedTest {
     @Test
@@ -63,7 +68,7 @@ public class SupervisedTest {
     void testSupervisedInterruptsOnceAnyForkEndsWithException() {
         Trail trail = new Trail();
 
-        var exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Scopes.supervised(scope -> {
                 scope.forkUser(() -> {
                     Thread.sleep(300);
@@ -95,7 +100,7 @@ public class SupervisedTest {
     void testSupervisedInterruptsMainBodyOnceForkEndsWithException() {
         Trail trail = new Trail();
 
-        var exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Scopes.supervised(scope -> {
                 scope.forkUser(() -> {
                     Thread.sleep(200);
@@ -141,5 +146,91 @@ public class SupervisedTest {
         assertEquals(2, result);
         trail.add("done");
         assertIterableEquals(Arrays.asList("b", "a", "done"), trail.get());
+    }
+
+    @Test
+    void shouldBeAbleToRethrowOriginalException() {
+        class TestException extends Exception {
+            public TestException(String message) {
+                super(message);
+            }
+        }
+
+        assertThrows(TestException.class, () -> {
+            try {
+                Scopes.supervised(scope -> {
+                    throw new TestException("x");
+                });
+            } catch (JoxScopeExecutionException e) {
+                e.unwrapAndThrow(TestException.class);
+                throw e;
+            }
+        });
+    }
+
+    @Test
+    void shouldThrowNothingWhenExceptionIsNotPassed() {
+        class TestException extends Exception {
+            public TestException(String message) {
+                super(message);
+            }
+        }
+
+        assertDoesNotThrow(() -> {
+            try {
+                Scopes.supervised(scope -> {
+                    throw new RuntimeException("x"); // different exception
+                });
+            } catch (JoxScopeExecutionException e) {
+                e.unwrapAndThrow(TestException.class); // we expect test exception
+                // no rethrow of e
+            }
+        });
+    }
+
+    @Test
+    void shouldThrowJoxScopeExecutionExceptionWhenExceptionIsNotPassedAndRethrowIsUsed() {
+        class TestException extends Exception {
+            public TestException(String message) {
+                super(message);
+            }
+        }
+
+        assertThrows(JoxScopeExecutionException.class, () -> {
+            try {
+                Scopes.supervised(scope -> {
+                    throw new RuntimeException("x"); // different exception
+                });
+            } catch (JoxScopeExecutionException e) {
+                e.unwrapAndThrow(TestException.class); // we expect test exception
+                throw e; // e is rethrown
+            }
+        });
+    }
+
+    @Test
+    void shouldPassSuppressedExceptions() {
+        class TestException extends Exception {
+            public TestException(String message) {
+                super(message);
+            }
+        }
+
+        TestException testException = assertThrows(TestException.class, () -> {
+            try {
+                Scopes.supervised(scope -> {
+                    scope.fork(() -> {
+                        throw new TestException("y");
+                    });
+                    throw new TestException("x"); // different exception
+                });
+            } catch (JoxScopeExecutionException e) {
+                e.unwrapAndThrow(TestException.class); // we expect test exception
+                throw e; // e is rethrown
+            }
+        });
+
+        assertThat(Arrays.asList(testException.getSuppressed()), hasSize(1));
+        assertInstanceOf(TestException.class, testException.getSuppressed()[0]);
     }
 }

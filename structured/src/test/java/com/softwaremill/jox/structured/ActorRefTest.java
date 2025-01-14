@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
@@ -18,7 +17,7 @@ class ActorRefTest {
     }
 
     @Test
-    void shouldInvokeMethodsOnTheActor() throws ExecutionException, InterruptedException {
+    void shouldInvokeMethodsOnTheActor() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var state = new AtomicLong(0);
@@ -37,7 +36,7 @@ class ActorRefTest {
     }
 
     @Test
-    void shouldProtectTheInternalStateOfTheActor() throws ExecutionException, InterruptedException {
+    void shouldProtectTheInternalStateOfTheActor() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var state = new AtomicLong(0);
@@ -54,15 +53,14 @@ class ActorRefTest {
 
             // when & then
             var forks = IntStream.rangeClosed(1, outer)
-                    .mapToObj(i -> CompletableFuture.runAsync(() -> {
-                        IntStream.rangeClosed(1, inner).forEach(j -> {
-                            try {
-                                ref.ask(l -> l.f(1));
-                            } catch (Exception e) {
-                                throw new RuntimeException(e);
-                            }
-                        });
-                    }))
+                    .mapToObj(_ -> CompletableFuture.runAsync(() ->
+                            IntStream.rangeClosed(1, inner).forEach(_ -> {
+                                try {
+                                    ref.ask(l -> l.f(1));
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
+                                }
+                            })))
                     .toList();
 
             forks.forEach(CompletableFuture::join);
@@ -73,7 +71,7 @@ class ActorRefTest {
     }
 
     @Test
-    void shouldRunTheCloseCallbackBeforeRethrowingTheException() throws ExecutionException, InterruptedException {
+    void shouldRunTheCloseCallbackBeforeRethrowingTheException() throws InterruptedException {
         // given
         var isClosed = new AtomicBoolean(false);
 
@@ -87,7 +85,7 @@ class ActorRefTest {
                     return state.get();
                 };
 
-                var ref = ActorRef.create(scope, logic, l -> isClosed.set(true));
+                var ref = ActorRef.create(scope, logic, _ -> isClosed.set(true));
 
                 ref.ask(l -> l.f(5));
             })
@@ -101,9 +99,9 @@ class ActorRefTest {
     @Test
     void shouldEndTheScopeWhenAnExceptionIsThrownWhenHandlingTell() {
         // when
-        var thrown = assertThrows(ExecutionException.class, () ->
+        var thrown = assertThrows(JoxScopeExecutionException.class, () ->
                 Scopes.supervised(scope -> {
-                    ITest logic = x -> {
+                    ITest logic = _ -> {
                         throw new RuntimeException("boom");
                     };
 
