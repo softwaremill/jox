@@ -887,7 +887,7 @@ public class Flow<T> {
                                 if (!buffer.isEmpty()) outputChannel.send(buffer);
                                 outputChannel.done();
                                 yield false;
-                            case ChannelError(Throwable cause):
+                            case ChannelError(Throwable cause, Channel<?> _):
                                 // source returned error, propagate it and finish
                                 if (timeoutFork != null) timeoutFork.cancelNow();
                                 outputChannel.error(cause);
@@ -1323,7 +1323,7 @@ public class Flow<T> {
                                 results.done();
                                 return null;
                             }
-                            case ChannelError(Throwable e) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
+                            case ChannelError(Throwable e, Channel<?> _) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
                             case Object fork -> {
                                 //noinspection unchecked
                                 Optional<U> result = ((Fork<Optional<U>>) fork).join();

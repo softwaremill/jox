@@ -463,7 +463,7 @@ public final class Flows {
                                     currentSourceIndex = (currentSourceIndex + 1) % availableSources.size();
                                     elementsRead = 0;
                                 }
-                            } else if (received instanceof ChannelError(Throwable cause)) {
+                            } else if (received instanceof ChannelError(Throwable cause, Channel<?> _)) {
                                 // if any source fails, propagate the error
                                 results.errorOrClosed(cause);
                                 break;

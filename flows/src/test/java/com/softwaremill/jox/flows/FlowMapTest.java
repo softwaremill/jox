@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Scopes;
@@ -162,7 +163,7 @@ public class FlowMapTest {
             assertEquals("b", s.receive());
             assertEquals("c", s.receive());
             var result = s.receiveOrClosed();
-            if (result instanceof ChannelError(Throwable error)) {
+            if (result instanceof ChannelError(Throwable error, Channel<?> _)) {
                 assertEquals(boom, error);
             }
             return null;
