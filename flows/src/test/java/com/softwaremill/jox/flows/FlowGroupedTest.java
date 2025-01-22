@@ -1,33 +1,22 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.structured.Race.timeout;
-import static java.lang.Thread.sleep;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.time.Duration;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.IntStream;
-
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.ChannelErrorException;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.*;
+import java.util.stream.IntStream;
+
+import static com.softwaremill.jox.structured.Race.timeout;
+import static java.lang.Thread.sleep;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowGroupedTest {
 
@@ -268,7 +257,7 @@ public class FlowGroupedTest {
             ChannelError result = (ChannelError) flow.runToChannel(scope).receiveOrClosed();
 
             // then
-            assertEquals(failure, result.cause().getCause());
+            assertEquals(failure, result.cause().getCause().getCause());
             return null;
         });
     }
@@ -314,7 +303,7 @@ public class FlowGroupedTest {
                     .forEach(_ -> {}));
 
             // then
-            assertInstanceOf(ArithmeticException.class, exception.getCause().getCause());
+            assertInstanceOf(ArithmeticException.class, exception.getCause().getCause().getCause());
             return null;
         });
     }
@@ -333,7 +322,7 @@ public class FlowGroupedTest {
 
             // then
             assertEquals(ChannelError.class, result.getClass());
-            assertEquals(failure, ((ChannelError) result).cause().getCause());
+            assertEquals(failure, ((ChannelError) result).cause().getCause().getCause());
             return null;
         });
     }
@@ -508,19 +497,19 @@ public class FlowGroupedTest {
 
     @Test
     void groupBy_shouldPropagateErrorsFromChildFlows() {
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
                     .groupBy(10, i -> i % 10, _ -> f -> f.tap(i -> {
                         if (i == 13) throw new RuntimeException("boom!");
                     }))
                     .runToList();
         });
-        assertEquals("boom!", exception.getCause().getMessage());
+        assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
 
     @Test
     void groupBy_shouldPropagateErrorsFromChildFlowsWhenParentIsBlockedOnSending() {
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(IntStream.rangeClosed(1, 100).boxed().toArray(Integer[]::new))
                     .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
                         sleep(Duration.ofMillis(100));
@@ -528,23 +517,23 @@ public class FlowGroupedTest {
                     }))
                     .runToList();
         });
-        assertEquals("boom!", exception.getCause().getMessage());
+        assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
 
     @Test
     void groupBy_shouldPropagateRuntimeExceptionErrorsFromParentFlows() {
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
                     .concat(Flows.failed(new RuntimeException("boom!")))
                     .groupBy(10, i -> i % 10, _ -> f -> f)
                     .runToList();
         });
-        assertEquals("boom!", exception.getCause().getMessage());
+        assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
 
     @Test
     void groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(JoxScopeExecutionException.class, () ->
                 Flows.fromValues(10, 20, 30)
                         .tap(_ -> sleep(Duration.ofMillis(100)))
                         .groupBy(10, i -> i % 10, _ -> f -> f.take(1))

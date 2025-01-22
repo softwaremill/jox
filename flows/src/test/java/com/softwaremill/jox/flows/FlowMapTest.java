@@ -1,37 +1,23 @@
 package com.softwaremill.jox.flows;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.anyOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.ChannelErrorException;
 import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.ThrowingFunction;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowMapTest {
 
@@ -255,7 +241,7 @@ public class FlowMapTest {
             // then
             assertEquals(2, s2.receive());
             assertEquals(4, s2.receive());
-            assertEquals(boom, ((ChannelError) s2.receiveOrClosed()).cause().getCause());
+            assertEquals(boom, ((ChannelError) s2.receiveOrClosed()).cause().getCause().getCause());
 
             // checking if the forks aren't left running
             Thread.sleep(200);
@@ -285,7 +271,7 @@ public class FlowMapTest {
             s2.runToList();
             Assertions.fail("should have thrown");
         } catch (Exception e) {
-            assertEquals(boom, e.getCause());
+            assertEquals(boom, e.getCause().getCause());
             assertThat(started.get(), allOf(
                     greaterThanOrEqualTo(4),
                     lessThanOrEqualTo(7) // 4 successful + at most 3 taking up all the permits
@@ -372,8 +358,8 @@ public class FlowMapTest {
         });
 
         // then
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, flow2::runToList);
-        assertEquals(boom, exception.getCause());
+        var exception = assertThrows(JoxScopeExecutionException.class, flow2::runToList);
+        assertEquals(boom, exception.getCause().getCause());
         assertThat(started.get(), allOf(
                 greaterThanOrEqualTo(2), // 1 needs to start & finish; 2 other need to start; and then the failing one has to start & proceed
                 lessThanOrEqualTo(7) // 4 successful + at most 3 taking up all the permits
@@ -407,7 +393,7 @@ public class FlowMapTest {
 
             // then
             assertEquals(Set.of(2, 4), received);
-            assertEquals(boom, channelError.cause().getCause());
+            assertEquals(boom, channelError.cause().getCause().getCause());
             assertTrue(s2.isClosedForReceive());
 
             // checking if the forks aren't left running
@@ -433,8 +419,8 @@ public class FlowMapTest {
         });
 
         // then
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, flow2::runToList);
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        var exception = assertThrows(JoxScopeExecutionException.class, flow2::runToList);
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
 
         // checking if the forks aren't left running
         TimeUnit.MILLISECONDS.sleep(200);
@@ -473,7 +459,7 @@ public class FlowMapTest {
 
             // then
             assertEquals(Set.of(2, 4), received);
-            assertEquals(boom, errorOrClosed.cause().getCause());
+            assertEquals(boom, errorOrClosed.cause().getCause().getCause());
             assertTrue(s2.isClosedForReceive());
 
             // wait for all threads to finish

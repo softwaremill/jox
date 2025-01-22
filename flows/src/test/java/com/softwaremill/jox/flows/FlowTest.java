@@ -1,28 +1,19 @@
 package com.softwaremill.jox.flows;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.ChannelErrorException;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.junit.jupiter.api.Assertions.*;
 
 class FlowTest {
 
@@ -132,13 +123,13 @@ class FlowTest {
 
     @Test
     void shouldPropagateErrorsWhenUsingBuffer() {
-        ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(1, 2, 3)
                     .map(_ -> { throw new IllegalStateException(); })
                     .buffer(5)
                     .runToList();
         });
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test
@@ -462,10 +453,10 @@ class FlowTest {
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ChannelErrorException.class, s::runToList);
+        var exception = assertThrows(JoxScopeExecutionException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test
@@ -477,10 +468,10 @@ class FlowTest {
         var s = c1.merge(c2, false, false);
 
         // when
-        var exception = assertThrows(ChannelErrorException.class, s::runToList);
+        var exception = assertThrows(JoxScopeExecutionException.class, s::runToList);
 
         // then
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+        assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
     @Test

@@ -1,12 +1,8 @@
 package com.softwaremill.jox.flows;
 
 
-import static com.softwaremill.jox.Select.defaultClause;
-import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.flows.Flows.usingEmit;
-import static com.softwaremill.jox.structured.Scopes.supervised;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
-import static java.lang.Thread.sleep;
+import com.softwaremill.jox.*;
+import com.softwaremill.jox.structured.*;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,14 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Semaphore;
@@ -35,29 +24,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiFunction;
-import java.util.function.BinaryOperator;
-import java.util.function.Function;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelClosedException;
-import com.softwaremill.jox.ChannelDone;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.ChannelErrorException;
-import com.softwaremill.jox.Sink;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.CancellableFork;
-import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scope;
-import com.softwaremill.jox.structured.Scopes;
-import com.softwaremill.jox.structured.ThrowingBiFunction;
-import com.softwaremill.jox.structured.ThrowingConsumer;
-import com.softwaremill.jox.structured.ThrowingFunction;
-import com.softwaremill.jox.structured.ThrowingRunnable;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import static com.softwaremill.jox.Select.defaultClause;
+import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.flows.Flows.usingEmit;
+import static com.softwaremill.jox.structured.Scopes.supervised;
+import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static java.lang.Thread.sleep;
 
 /**
  * Describes an asynchronous transformation pipeline. When run, emits elements of type `T`.
@@ -72,7 +46,7 @@ import com.softwaremill.jox.structured.UnsupervisedScope;
  * Running a flow is possible using one of the `run*` methods, such as {@link Flow#runToList}, {@link Flow#runToChannel} or {@link Flow#runFold}.
  * <p>
  * Some operations require async processing e.g. {@link Flow#buffer}, {@link Flow#groupBy}.
- * In such case exceptions thrown by the upstream or parameter functions will be wrapped in {@link ChannelErrorException} (unless specified differently by the docs for specific method)
+ * In such case exceptions thrown by the upstream or parameter functions will be wrapped in {@link ChannelErrorException} and in {@link JoxScopeExecutionException} (unless specified differently by the docs for specific method)
  */
 public class Flow<T> {
     final FlowStage<T> last;
@@ -85,31 +59,19 @@ public class Flow<T> {
 
     /** Invokes the given function for each emitted element. Blocks until the flow completes. */
     public void runForeach(ThrowingConsumer<T> sink) throws Exception {
-        try {
-            last.run(sink::accept);
-        } catch (JoxScopeExecutionException e) {
-            throw (Exception) e.getCause();
-        }
+        last.run(sink::accept);
     }
 
     /** Invokes the provided {@link FlowEmit} for each emitted element. Blocks until the flow completes. */
     public void runToEmit(FlowEmit<T> emit) throws Exception {
-        try {
-            last.run(emit);
-        } catch (JoxScopeExecutionException e) {
-            throw (Exception) e.getCause();
-        }
+        last.run(emit);
     }
 
     /** Accumulates all elements emitted by this flow into a list. Blocks until the flow completes. */
     public List<T> runToList() throws Exception {
-        try {
-            List<T> result = new ArrayList<>();
-            runForeach(result::add);
-            return result;
-        } catch (JoxScopeExecutionException e) {
-            throw (Exception) e.getCause();
-        }
+        List<T> result = new ArrayList<>();
+        runForeach(result::add);
+        return result;
     }
 
     /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
@@ -827,7 +789,7 @@ public class Flow<T> {
      * The size of the buffers for the elements emitted by this flow (which is also run in the background) and the child flows are determined
      * by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used. 
      * <p>
-     * Wraps exceptions from `groupingFunction`, `childFlowTransform` and upstream in {@link ChannelErrorException} when flow is run.
+     * Wraps exceptions from `groupingFunction`, `childFlowTransform` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
      * @param parallelism
      *   An upper bound on the number of child flows that run in parallel at any time.
@@ -836,7 +798,7 @@ public class Flow<T> {
      * @param childFlowTransform
      *   The function that is used to create a child flow, which is later run in the background. The arguments are the group value, for which the
      *   flow is created, and a flow of `T` elements in that group (each such element has the same group value `V` returned by `predicated`).
-     * @throws IllegalStateException
+     * @throws JoxScopeExecutionException with cause {@link IllegalStateException}
      *   When `childFlowTransform` terminates the flow, before upstream passes all elements.
      */
     public <V, U> Flow<U> groupBy(int parallelism, ThrowingFunction<T, V> groupingFunction, ChildFlowTransformer<T, V, U> childFlowTransform) {
@@ -859,7 +821,7 @@ public class Flow<T> {
      * <p>
      * The size of buffers used by this method is determined by {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
-     * Wraps exceptions from upstream in {@link ChannelErrorException} when flow is run.
+     * Wraps exceptions from upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
      * @param n
      *   The maximum number of elements in a group.
@@ -1184,7 +1146,7 @@ public class Flow<T> {
      * Both flows are run concurrently in the background.
      * The size of the buffers is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
-     * Wraps exceptions from upstream and `other` in {@link ChannelErrorException} when flow is run.
+     * Wraps exceptions from upstream and `other` in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
      * @param other
      *   The flow to be merged with this flow.
@@ -1317,7 +1279,7 @@ public class Flow<T> {
      * <p>
      * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
-     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} when flow is run.
+     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
      * @param parallelism
      *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
@@ -1387,7 +1349,7 @@ public class Flow<T> {
      * <p>
      * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
-     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} when flow is run.
+     * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
      * @param parallelism
      *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
@@ -1689,10 +1651,6 @@ public class Flow<T> {
             try {
                 last.run(t -> outputStream.write(t.toArray()));
                 close(outputStream, null);
-            } catch (JoxScopeExecutionException e) {
-                Exception cause = (Exception) e.getCause();
-                close(outputStream, cause);
-                throw cause;
             } catch (Exception e) {
                 close(outputStream, e);
                 throw e;
@@ -1780,8 +1738,6 @@ public class Flow<T> {
             try {
                 last.run(channel::send);
                 channel.done();
-            } catch (JoxScopeExecutionException e) {
-                channel.error(e.getCause());
             } catch (Throwable e) {
                 channel.error(e);
             }
