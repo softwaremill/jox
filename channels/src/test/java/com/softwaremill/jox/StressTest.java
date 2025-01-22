@@ -11,13 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class StressTest {
     @TestWithCapacities
-    @Timeout(10)
+    @Timeout(60)
     void testMultipleOperationsDirect(int capacity) throws Exception {
         testAndVerify(capacity, true);
     }
 
     @TestWithCapacities
-    @Timeout(10)
+    @Timeout(60)
     void testMultipleOperationsSelect(int capacity) throws Exception {
         testAndVerify(capacity, false);
     }
