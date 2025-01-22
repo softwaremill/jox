@@ -1,5 +1,7 @@
 package com.softwaremill.jox;
 
+import org.junit.jupiter.api.Timeout;
+
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -9,11 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class StressTest {
     @TestWithCapacities
+    @Timeout(10)
     void testMultipleOperationsDirect(int capacity) throws Exception {
         testAndVerify(capacity, true);
     }
 
     @TestWithCapacities
+    @Timeout(10)
     void testMultipleOperationsSelect(int capacity) throws Exception {
         testAndVerify(capacity, false);
     }
@@ -27,7 +31,7 @@ public class StressTest {
      */
     private void testAndVerify(int capacity, boolean direct) throws Exception {
         boolean ci = System.getenv("CI") != null;
-        System.out.println("Running in ci: " + ci);
+        System.out.println("Running in ci: " + ci + "; capacity: " + capacity + "; direct: " + direct);
 
         int numberOfRepetitions = ci ? 20 : 5;
         int numberOfThreads = 8;
