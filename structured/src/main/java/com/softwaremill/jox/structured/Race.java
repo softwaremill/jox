@@ -88,7 +88,7 @@ public class Race {
                 // if we get here, there must be an exception
                 throw exceptions.pollFirst();
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             while (!exceptions.isEmpty()) {
                 e.addSuppressed(exceptions.pollFirst());
             }

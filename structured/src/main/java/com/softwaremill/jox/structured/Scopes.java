@@ -22,12 +22,12 @@ public class Scopes {
      * </ul>
      * <p>
      * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, that is an exception
-     * thrown by {@code f}, it is re-thrown, wrapped with an {@link ExecutionException}.
+     * thrown by {@code f}, it is re-thrown, wrapped with an {@link JoxScopeExecutionException}.
      *
-     * @throws ExecutionException When the scope's body throws an exception
+     * @throws JoxScopeExecutionException When the scope's body throws an exception
      * @see #supervised(Scoped) Starts a scope in supervised mode
      */
-    public static <T> T unsupervised(ScopedUnsupervised<T> f) throws ExecutionException, InterruptedException {
+    public static <T> T unsupervised(ScopedUnsupervised<T> f) throws InterruptedException {
         return scopedWithCapability(new Scope(new NoOpSupervisor()), f::run);
     }
 
@@ -50,14 +50,14 @@ public class Scopes {
      * </ul>
      * <p>
      * Upon successful completion, returns the result of evaluating {@code f}. Upon failure, the exception that
-     * caused the scope to end is re-thrown, wrapped in an {@link ExecutionException} (regardless if the exception was
+     * caused the scope to end is re-thrown, wrapped in an {@link JoxScopeExecutionException} (regardless if the exception was
      * thrown from the main body, or from a fork). Any other exceptions that occur when completing the scope are added
      * as suppressed.
      *
-     * @throws ExecutionException When the main body, or any of the forks, throw an exception
+     * @throws JoxScopeExecutionException When the main body, or any of the forks, throw an exception
      * @see #unsupervised(ScopedUnsupervised) Starts a scope in unsupervised mode
      */
-    public static <T> T supervised(Scoped<T> f) throws ExecutionException, InterruptedException {
+    public static <T> T supervised(Scoped<T> f) throws InterruptedException {
         var s = new DefaultSupervisor();
         var capability = new Scope(s);
         try {
@@ -77,22 +77,28 @@ public class Scopes {
             } finally {
                 rawScope.close();
             }
+
+        // all forks are guaranteed to have finished: some might have ended up throwing exceptions (InterruptedException or
+        // others), but only the first one is propagated below. That's why we add all the other exceptions as suppressed.
+        } catch (ExecutionException e) {
+            // unwrapping execution exception from CompletableFutures to custom exception
+            JoxScopeExecutionException joxScopeExecutionException = new JoxScopeExecutionException(e.getCause());
+            s.addSuppressedErrors(joxScopeExecutionException);
+            throw joxScopeExecutionException;
         } catch (Throwable e) {
-            // all forks are guaranteed to have finished: some might have ended up throwing exceptions (InterruptedException or
-            // others), but only the first one is propagated below. That's why we add all the other exceptions as suppressed.
             s.addSuppressedErrors(e);
             throw e;
         }
     }
 
-    static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws ExecutionException, InterruptedException {
+    static <T> T scopedWithCapability(Scope capability, Scoped<T> f) throws InterruptedException {
         var scope = capability.getScope();
 
         try {
             try {
                 return f.run(capability);
             } catch (Exception e) {
-                throw new ExecutionException(e);
+                throw new JoxScopeExecutionException(e);
             } finally {
                 scope.shutdown();
                 scope.join();

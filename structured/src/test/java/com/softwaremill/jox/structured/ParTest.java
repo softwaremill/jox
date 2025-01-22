@@ -47,7 +47,7 @@ public class ParTest {
                 trail.add("exception");
                 throw new Exception("boom");
             }));
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             if (e.getCause().getMessage().equals("boom")) {
                 trail.add("catch");
             }
@@ -92,7 +92,7 @@ public class ParTest {
                     return null;
                 }
             }).toList());
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             if (e.getCause().getMessage().equals("boom")) {
                 trail.add("catch");
             }

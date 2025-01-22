@@ -422,14 +422,40 @@ public class Demo {
 
 * an exception thrown from the scope's body, or from any of the forks, causes the scope to end
 * any forks that are still running are then interrupted
-* once all forks complete, an `ExecutionException` is thrown by the `supervised` method
-* the cause of the `ExecutionException` is the original exception
+* once all forks complete, an `JoxScopeExecutionException` is thrown by the `supervised` method
+* the cause of the `JoxScopeExecutionException` is the original exception
 * any other exceptions (e.g. `InterruptedExceptions`) that have been thrown while ending the scope, are added as
   suppressed
 
 Jox implements the "let it crash" model. When an error occurs, the entire scope ends, propagating the exception higher,
 so that it can be properly handled. Moreover, no detail is lost: all exceptions are preserved, either as causes, or
 suppressed exceptions.
+
+As `JoxScopeExecutionException` is unchecked, we introduced utility method called `JoxScopeExecutionException#unwrapAndThrow`. 
+If the wrapped exception is instance of any of passed classes, this method unwraps original exception and throws it as checked exception, `throws` signature forces exception handling.
+If the wrapped exception is not instance of any of passed classes, **nothing happens**.
+All suppressed exceptions are rewritten from `JoxScopeExecutionException`
+
+**Note** `throws` signature points to the closest super class of passed arguments.
+Method does **not** rethrow `JoxScopeExecutionException` by default.
+So it is advised to manually rethrow it after calling `unwrapAndThrow` method.
+
+e.g.
+```java
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
+import com.softwaremill.jox.structured.Scopes;
+
+...
+try {
+    Scopes.supervised(scope -> {
+        throw new TestException("x");
+    });
+} catch (JoxScopeExecutionException e) {
+    e.unwrapAndThrow(OtherException.class, TestException.class, YetAnotherException.class);
+    throw e;
+}
+...
+```
 
 #### Other types of scopes & forks
 

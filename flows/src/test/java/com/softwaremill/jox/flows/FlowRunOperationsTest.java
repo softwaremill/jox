@@ -1,18 +1,17 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
 
 public class FlowRunOperationsTest {
 
@@ -146,7 +145,7 @@ public class FlowRunOperationsTest {
         // when & then
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
             flow
-                    .runFold(0, (acc, n) -> { throw new RuntimeException("Function `f` is broken"); });
+                    .runFold(0, (_, _) -> { throw new RuntimeException("Function `f` is broken"); });
         });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
@@ -244,7 +243,7 @@ public class FlowRunOperationsTest {
 
         // when & then
         RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                flow.runReduce((a, b) -> {throw new RuntimeException("Function `f` is broken");}));
+                flow.runReduce((_, _) -> {throw new RuntimeException("Function `f` is broken");}));
         assertEquals("Function `f` is broken", exception.getMessage());
     }
 
@@ -272,7 +271,7 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.empty();
 
         // when & then
-        NoSuchElementException exception = assertThrows(NoSuchElementException.class, () -> flow.runLast());
+        NoSuchElementException exception = assertThrows(NoSuchElementException.class, flow::runLast);
         assertEquals("cannot obtain last element from an empty source", exception.getMessage());
     }
 
@@ -282,7 +281,7 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.failed(new RuntimeException("source is broken"));
 
         // when & then
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> flow.runLast());
+        RuntimeException exception = assertThrows(RuntimeException.class, flow::runLast);
         assertEquals("source is broken", exception.getMessage());
     }
 
@@ -319,12 +318,12 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.failed(new RuntimeException("source is broken"));
 
         // when & then
-        RuntimeException exception = assertThrows(RuntimeException.class, () -> flow.runLastOptional());
+        RuntimeException exception = assertThrows(RuntimeException.class, flow::runLastOptional);
         assertEquals("source is broken", exception.getMessage());
     }
 
     @Test
-    void runPipeToSink_pipeOneSourceToAnother() throws ExecutionException, InterruptedException {
+    void runPipeToSink_pipeOneSourceToAnother() throws InterruptedException {
         Scopes.supervised(scope -> {
             Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
             Channel<Integer> c2 = new Channel<>();
@@ -341,7 +340,7 @@ public class FlowRunOperationsTest {
     }
 
     @Test
-    void runPipeToSink_pipeOneSourceToAnotherWithDonePropagation() throws ExecutionException, InterruptedException {
+    void runPipeToSink_pipeOneSourceToAnotherWithDonePropagation() throws InterruptedException {
         Scopes.supervised(scope -> {
             Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
             Channel<Integer> c2 = new Channel<>();

@@ -1,34 +1,22 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.structured.Race.timeout;
-import static java.lang.Thread.sleep;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.time.Duration;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.IntStream;
-
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.ChannelErrorException;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.util.*;
+import java.util.stream.IntStream;
+
+import static com.softwaremill.jox.structured.Race.timeout;
+import static java.lang.Thread.sleep;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowGroupedTest {
 
@@ -55,7 +43,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void shouldReturnFailedFlowWhenTheOriginalFlowIsFailed() throws InterruptedException, ExecutionException {
+    void shouldReturnFailedFlowWhenTheOriginalFlowIsFailed() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             // given
             RuntimeException failure = new RuntimeException();
@@ -85,7 +73,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void shouldReturnFailedFlowWhenCostFunctionThrowsException() throws ExecutionException, InterruptedException {
+    void shouldReturnFailedFlowWhenCostFunctionThrowsException() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             // when
             ChannelClosedException exception = assertThrows(ChannelClosedException.class, () ->
@@ -101,7 +89,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWeighted_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws InterruptedException, ExecutionException {
+    void groupedWeighted_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             // given
             RuntimeException failure = new RuntimeException();
@@ -120,7 +108,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWithin_shouldGroupFirstBatchOfElementsDueToLimitAndSecondBatchDueToTimeout() throws ExecutionException, InterruptedException {
+    void groupedWithin_shouldGroupFirstBatchOfElementsDueToLimitAndSecondBatchDueToTimeout() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var c = Channel.<Integer>newUnlimitedChannel();
@@ -139,7 +127,7 @@ public class FlowGroupedTest {
             // when
             var elementsWithEmittedTimeOffset = Flows.fromSource(c)
                     .groupedWithin(3, Duration.ofMillis(100))
-                    .map(s -> new AbstractMap.SimpleEntry<>(s, Duration.ofNanos(System.nanoTime() - start)))
+                    .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
                     .runToList();
 
             // then
@@ -156,7 +144,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWithin_shouldGroupFirstBatchOfElementsDueToTimeoutAndSecondBatchDueToLimit() throws ExecutionException, InterruptedException {
+    void groupedWithin_shouldGroupFirstBatchOfElementsDueToTimeoutAndSecondBatchDueToLimit() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var c = Channel.<Integer>newUnlimitedChannel();
@@ -196,7 +184,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode() throws ExecutionException, InterruptedException {
+    void groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var c = Channel.<Integer>newUnlimitedChannel();
@@ -236,7 +224,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWithin_shouldSendTheGroupOnlyOnceWhenTheChannelIsClosed() throws ExecutionException, InterruptedException {
+    void groupedWithin_shouldSendTheGroupOnlyOnceWhenTheChannelIsClosed() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var c = Channel.<Integer>newUnlimitedChannel();
@@ -258,7 +246,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWithin_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws ExecutionException, InterruptedException {
+    void groupedWithin_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var failure = new RuntimeException();
@@ -275,7 +263,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches() throws ExecutionException, InterruptedException {
+    void groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var c = Channel.<Integer>withScopedBufferSize();
@@ -304,7 +292,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWeightedWithin_shouldReturnFailedSourceWhenCostFunctionThrowsException() throws ExecutionException, InterruptedException {
+    void groupedWeightedWithin_shouldReturnFailedSourceWhenCostFunctionThrowsException() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             Flow<List<Integer>> flow = Flows.fromValues(1, 2, 3, 0, 4, 5, 6, 7)
@@ -321,7 +309,7 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupedWeightedWithin_shouldReturnFailedSourceWhenOriginalSourceIsFailed() throws ExecutionException, InterruptedException {
+    void groupedWeightedWithin_shouldReturnFailedSourceWhenOriginalSourceIsFailed() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var failure = new RuntimeException();
@@ -498,12 +486,8 @@ public class FlowGroupedTest {
         // when
         List<Integer> result = Flows.fromIterable(input)
                 .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
-                    try {
-                        // the number of elements exceeds the buffer, the parent will get blocked
-                        sleep(Duration.ofMillis(10));
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
+                    // the number of elements exceeds the buffer, the parent will get blocked
+                    sleep(Duration.ofMillis(10));
                 }))
                 .runToList();
 
@@ -513,7 +497,7 @@ public class FlowGroupedTest {
 
     @Test
     void groupBy_shouldPropagateErrorsFromChildFlows() {
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
                     .groupBy(10, i -> i % 10, _ -> f -> f.tap(i -> {
                         if (i == 13) throw new RuntimeException("boom!");
@@ -525,14 +509,10 @@ public class FlowGroupedTest {
 
     @Test
     void groupBy_shouldPropagateErrorsFromChildFlowsWhenParentIsBlockedOnSending() {
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(IntStream.rangeClosed(1, 100).boxed().toArray(Integer[]::new))
                     .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
-                        try {
-                            sleep(Duration.ofMillis(100));
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
+                        sleep(Duration.ofMillis(100));
                         throw new RuntimeException("boom!");
                     }))
                     .runToList();
@@ -542,7 +522,7 @@ public class FlowGroupedTest {
 
     @Test
     void groupBy_shouldPropagateRuntimeExceptionErrorsFromParentFlows() {
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
                     .concat(Flows.failed(new RuntimeException("boom!")))
                     .groupBy(10, i -> i % 10, _ -> f -> f)
@@ -552,20 +532,13 @@ public class FlowGroupedTest {
     }
 
     @Test
-    void groupBy_shouldThrowExecutionExceptionWithIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
-        ExecutionException exception = assertThrows(ExecutionException.class, () -> {
-            Flows.fromValues(10, 20, 30)
-                    .tap(_ -> {
-                        try {
-                            sleep(Duration.ofMillis(100));
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
-                    })
-                    .groupBy(10, i -> i % 10, _ -> f -> f.take(1))
-                    .runToList();
-        });
-        assertInstanceOf(IllegalStateException.class, exception.getCause());
+    void groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
+        assertThrows(JoxScopeExecutionException.class, () ->
+                Flows.fromValues(10, 20, 30)
+                        .tap(_ -> sleep(Duration.ofMillis(100)))
+                        .groupBy(10, i -> i % 10, _ -> f -> f.take(1))
+                        .runToList()
+        );
     }
 
 }

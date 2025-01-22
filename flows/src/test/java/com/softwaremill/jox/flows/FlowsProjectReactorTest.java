@@ -15,7 +15,7 @@ import reactor.core.publisher.Flux;
 public class FlowsProjectReactorTest {
 
     @Test
-    void simpleFlowShouldEmitElementsToBeProcessedByFlux() throws ExecutionException, InterruptedException {
+    void simpleFlowShouldEmitElementsToBeProcessedByFlux() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var flow = Flows.range(1, 4, 1);
@@ -33,7 +33,7 @@ public class FlowsProjectReactorTest {
     }
 
     @Test
-    void concurrentFlowShouldEmitElementsToBeProcessedByFlux() throws ExecutionException, InterruptedException {
+    void concurrentFlowShouldEmitElementsToBeProcessedByFlux() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
             var flow = Flows.tick(Duration.ofMillis(100), "x")

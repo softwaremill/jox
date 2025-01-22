@@ -15,7 +15,6 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -27,7 +26,7 @@ import org.junit.jupiter.api.Test;
 public class FlowIOTest {
 
     @Test
-    void returnEmptyInputStreamForEmptySource() throws ExecutionException, InterruptedException {
+    void returnEmptyInputStreamForEmptySource() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             Flow.ByteFlow source = Flows.<byte[]>empty().toByteFlow();
             try (InputStream stream = source.runToInputStream(scope)) {
@@ -38,7 +37,7 @@ public class FlowIOTest {
     }
 
     @Test
-    void returnInputStreamForSimpleSource() throws ExecutionException, InterruptedException {
+    void returnInputStreamForSimpleSource() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
             try (InputStream stream = source.runToInputStream(scope)) {
@@ -49,7 +48,7 @@ public class FlowIOTest {
     }
 
     @Test
-    void correctlyTrackAvailableBytes() throws ExecutionException, InterruptedException {
+    void correctlyTrackAvailableBytes() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
             try (InputStream stream = source.runToInputStream(scope)) {

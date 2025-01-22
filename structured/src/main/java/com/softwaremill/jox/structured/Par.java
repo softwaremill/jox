@@ -13,7 +13,7 @@ public class Par {
      * Runs the given computations in parallel. If any fails because of an exception, or if any returns an application
      * error, other computations are interrupted. Then, the exception is re-thrown, or the error value returned.
      */
-    public static <T> List<T> par(List<Callable<T>> fs) throws ExecutionException, InterruptedException {
+    public static <T> List<T> par(List<Callable<T>> fs) throws InterruptedException {
         return supervised(scope -> {
             var forks = fs.stream().map(f -> scope.fork(f)).toList();
             var results = new ArrayList<T>();
@@ -29,7 +29,7 @@ public class Par {
      * time. If any computation fails because of an exception, or if any returns an application error, other
      * computations are interrupted. Then, the exception is re-thrown, or the error value returned.
      */
-    public static <T> List<T> parLimit(int parallelism, List<Callable<T>> fs) throws ExecutionException, InterruptedException {
+    public static <T> List<T> parLimit(int parallelism, List<Callable<T>> fs) throws InterruptedException {
         return supervised(scope -> {
             var s = new Semaphore(parallelism);
             var forks = fs.stream().map(f -> scope.fork(() -> {
