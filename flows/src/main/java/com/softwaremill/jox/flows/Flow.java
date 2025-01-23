@@ -1676,10 +1676,6 @@ public class Flow<T> {
                     }
                 });
                 close(channel, null);
-            } catch (JoxScopeExecutionException e) {
-                Exception cause = (Exception) e.getCause();
-                close(channel, cause);
-                throw cause;
             } catch (Exception t) {
                 close(channel, t);
                 throw t;
