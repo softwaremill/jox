@@ -50,7 +50,7 @@ public class FlowPekkoStreamTest {
     }
 
     @Test
-    public void testSimpleFlow() throws ExecutionException, InterruptedException {
+    public void testSimpleFlow() throws InterruptedException {
         Scopes.supervised(scope -> {
             var flow = Flows.fromIterable(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
                     .map(i -> i * 2)
@@ -68,7 +68,7 @@ public class FlowPekkoStreamTest {
     }
 
     @Test
-    public void testConcurrentFlow() throws ExecutionException, InterruptedException {
+    public void testConcurrentFlow() throws InterruptedException {
         Scopes.supervised(scope -> {
             var flow = Flows.tick(Duration.ofMillis(100), "x")
                     .merge(Flows.tick(Duration.ofMillis(200), "y"), false, false)

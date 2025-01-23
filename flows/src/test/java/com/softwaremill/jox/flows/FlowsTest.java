@@ -177,7 +177,7 @@ class FlowsTest {
 
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
-    void shouldTickRegularly() throws InterruptedException, ExecutionException {
+    void shouldTickRegularly() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var c = Flows.tick(Duration.ofMillis(100), 1L)
                     .runToChannel(scope);
@@ -200,7 +200,7 @@ class FlowsTest {
 
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
-    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal() throws InterruptedException, ExecutionException {
+    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var c = Flows.tick(Duration.ofMillis(100), 1L)
                     .runToChannel(scope);

@@ -120,7 +120,7 @@ public class RaceTest {
 
     @Test
     void testRaceShouldAddOtherExceptionsAsSuppressed() {
-        var exception = assertThrows(ExecutionException.class, () -> {
+        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             race(() -> {
                 throw new RuntimeException("boom1!");
             }, () -> {

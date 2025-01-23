@@ -1,10 +1,12 @@
 package com.softwaremill.jox.flows;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class FlowCompleteCallbacksTest {
     @Test
@@ -27,7 +29,7 @@ public class FlowCompleteCallbacksTest {
         //given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(i -> {throw new RuntimeException();})
+                .tap(_ -> {throw new RuntimeException();})
                 .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
         
@@ -57,7 +59,7 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(i -> {throw new RuntimeException();})
+                .tap(_ -> {throw new RuntimeException();})
                 .onDone(() -> didRun.set(true));
         assertFalse(didRun.get());
         
@@ -73,7 +75,7 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .onError(e -> didRun.set(true));
+                .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
         
         // when
@@ -88,8 +90,8 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(i -> {throw new RuntimeException();})
-                .onError(e -> didRun.set(true));
+                .tap(_ -> {throw new RuntimeException();})
+                .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
         
         // when

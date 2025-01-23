@@ -1,13 +1,12 @@
 package com.softwaremill.jox.structured;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Semaphore;
-
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import java.util.concurrent.Semaphore;
+
+import org.junit.jupiter.api.Test;
 
 public class ExceptionTest {
     static class CustomException extends RuntimeException {}
@@ -30,7 +29,7 @@ public class ExceptionTest {
                 }).join();
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             // the first EE, wraps CE, and is thrown by the join(); the second - wraps the first and is thrown by unsupervised
             trail.add(e.getCause().getCause().getClass().getSimpleName());
         }
@@ -45,7 +44,7 @@ public class ExceptionTest {
             Scopes.supervised(scope -> {
                 throw new CustomException();
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             trail.add(e.getCause().getClass().getSimpleName());
         }
 
@@ -62,7 +61,7 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             trail.add(e.getCause().getClass().getSimpleName());
         }
 
@@ -90,12 +89,12 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=InterruptedException,InterruptedException)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "JoxScopeExecutionException(suppressed=InterruptedException,InterruptedException)"), trail.get());
     }
 
     @Test
@@ -118,12 +117,12 @@ public class ExceptionTest {
                 });
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=CustomException2)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "JoxScopeExecutionException(suppressed=CustomException2)"), trail.get());
     }
 
     @Test
@@ -138,14 +137,14 @@ public class ExceptionTest {
                 f.join();
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             addExceptionWithSuppressedTo(trail, e);
         }
 
         // either join() might throw the original exception (shouldn't be suppressed), or it might be interrupted before
         // throwing (should be suppressed then)
-        List<String> expected1 = List.of("ExecutionException(suppressed=)");
-        List<String> expected2 = List.of("ExecutionException(suppressed=InterruptedException)");
+        List<String> expected1 = List.of("JoxScopeExecutionException(suppressed=)");
+        List<String> expected2 = List.of("JoxScopeExecutionException(suppressed=InterruptedException)");
 
         assertTrue(trail.get().equals(expected1) || trail.get().equals(expected2));
     }
@@ -166,12 +165,12 @@ public class ExceptionTest {
                 }
                 return null;
             });
-        } catch (ExecutionException e) {
+        } catch (JoxScopeExecutionException e) {
             trail.add(e.getCause().getClass().getSimpleName());
             addExceptionWithSuppressedTo(trail, e);
         }
 
-        assertIterableEquals(List.of("CustomException", "ExecutionException(suppressed=CustomException3)"), trail.get());
+        assertIterableEquals(List.of("CustomException", "JoxScopeExecutionException(suppressed=CustomException3)"), trail.get());
     }
 
     private void addExceptionWithSuppressedTo(Trail trail, Throwable e) {
