@@ -10,6 +10,7 @@ import static com.softwaremill.jox.Select.select;
 import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SelectReceiveTest {
     @Test
@@ -139,7 +140,7 @@ public class SelectReceiveTest {
         Object received = selectOrClosed(ch1.receiveClause(), ch2.receiveClause());
 
         // then
-        assertEquals(new ChannelDone(), received);
+        assertEquals(new ChannelDone(ch1), received);
     }
 
     @TestWithCapacities
@@ -219,12 +220,24 @@ public class SelectReceiveTest {
     }
 
     @Test
-    void testSelectFromNone() throws InterruptedException {
-        assertEquals(new ChannelDone(), selectOrClosed());
+    void testSelectFromNone() {
+        assertThrows(IllegalArgumentException.class, Select::selectOrClosed);
     }
 
     @Test
-    public void testSelect_immediate_withError() throws InterruptedException {
+    void testSelectFromNullableList() throws InterruptedException {
+        // given
+        Channel<String> ch1 = new Channel<>(1);
+        Channel<String> ch2 = new Channel<>(1);
+        ch1.send("v");
+
+        // when
+        assertThrows(IllegalArgumentException.class,
+                () -> select(ch1.receiveClause(), null, ch2.receiveClause()));
+    }
+
+    @Test
+    void testSelect_immediate_withError() throws InterruptedException {
         // given
         Channel<String> ch1 = new Channel<>(2);
         ch1.send("x");
@@ -237,6 +250,6 @@ public class SelectReceiveTest {
         var result = selectOrClosed(ch1.receiveClause(), ch2.receiveClause());
 
         // then
-        assertEquals(new ChannelError(e), result);
+        assertEquals(new ChannelError(e, ch2), result);
     }
 }

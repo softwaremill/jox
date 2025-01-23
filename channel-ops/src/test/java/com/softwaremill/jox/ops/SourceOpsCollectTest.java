@@ -7,6 +7,7 @@ import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class SourceOpsCollectTest {
     @Test
@@ -26,7 +27,7 @@ public class SourceOpsCollectTest {
             assertEquals(10, s.receive());
             assertEquals(20, s.receive());
             assertEquals(30, s.receive());
-            assertEquals(new ChannelDone(), s.receiveOrClosed());
+            assertInstanceOf(ChannelDone.class, s.receiveOrClosed());
             return null;
         });
     }
@@ -52,7 +53,7 @@ public class SourceOpsCollectTest {
 
             assertEquals(20, s.receive());
             assertEquals(40, s.receive());
-            assertEquals(new ChannelDone(), s.receiveOrClosed());
+            assertInstanceOf(ChannelDone.class, s.receiveOrClosed());
             return null;
         });
     }
@@ -71,7 +72,7 @@ public class SourceOpsCollectTest {
                 Source<Integer> s = SourceOps.forSource(scope, c).collect(x -> x * 10).toSource();
 
                 assertEquals(10, s.receive());
-                assertEquals(new ChannelDone(), s.receiveOrClosed());
+                assertInstanceOf(ChannelDone.class, s.receiveOrClosed());
                 return null;
             });
         }
@@ -94,7 +95,7 @@ public class SourceOpsCollectTest {
             assertEquals(2, s.receive());
             assertEquals(4, s.receive());
             assertEquals(6, s.receive());
-            assertEquals(new ChannelDone(), s.receiveOrClosed());
+            assertInstanceOf(ChannelDone.class, s.receiveOrClosed());
             return null;
         });
     }

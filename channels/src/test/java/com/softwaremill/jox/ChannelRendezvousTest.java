@@ -121,10 +121,10 @@ public class ChannelRendezvousTest {
             c.done();
 
             // then
-            assertEquals(new ChannelDone(), f.get());
+            assertEquals(new ChannelDone(c), f.get());
 
             // should be rejected immediately
-            assertEquals(new ChannelDone(), c.receiveOrClosed());
+            assertEquals(new ChannelDone(c), c.receiveOrClosed());
         });
     }
 

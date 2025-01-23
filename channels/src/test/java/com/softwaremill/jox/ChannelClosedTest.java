@@ -3,28 +3,29 @@ package com.softwaremill.jox;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.Semaphore;
 
-import static com.softwaremill.jox.TestUtil.*;
+import static com.softwaremill.jox.TestUtil.forkCancelable;
+import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class ChannelClosedTest {
     @Test
-    void testClosed_noValues_whenError() {
+    void testClosed_noValues_whenError() throws InterruptedException {
         // given
         Channel<Integer> c = new Channel<>();
+        RuntimeException reason = new RuntimeException();
 
         // when
-        c.error(new RuntimeException());
+        c.error(reason);
 
         // then
         assertTrue(c.isClosedForReceive());
         assertTrue(c.isClosedForSend());
+        assertEquals(new ChannelError(reason, c), c.receiveOrClosed());
     }
 
     @Test
-    void testClosed_noValues_whenDone() {
+    void testClosed_noValues_whenDone() throws InterruptedException {
         // given
         Channel<Integer> c = new Channel<>();
 
@@ -34,6 +35,7 @@ public class ChannelClosedTest {
         // then
         assertTrue(c.isClosedForReceive());
         assertTrue(c.isClosedForSend());
+        assertEquals(new ChannelDone(c), c.receiveOrClosed());
     }
 
     @Test

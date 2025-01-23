@@ -706,7 +706,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public Object doneOrClosed() {
-        return closeOrClosed(new ChannelDone());
+        return closeOrClosed(new ChannelDone(this));
     }
 
     @Override
@@ -722,7 +722,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     @Override
     public Object errorOrClosed(Throwable reason) {
-        return closeOrClosed(new ChannelError(reason));
+        return closeOrClosed(new ChannelError(reason, this));
     }
 
     private Object closeOrClosed(ChannelClosed channelClosed) {

@@ -107,7 +107,7 @@ public class SelectSendTest {
         Object received = selectOrClosed(ch1.sendClause("v1"), ch2.sendClause("v2"));
 
         // then
-        assertEquals(new ChannelDone(), received);
+        assertEquals(new ChannelDone(ch2), received);
     }
 
     @TestWithCapacities

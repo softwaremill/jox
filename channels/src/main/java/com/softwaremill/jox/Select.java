@@ -48,7 +48,8 @@ public class Select {
      * <p>
      * If no clauses are given, throws {@link ChannelDoneException}.
      *
-     * @param clauses The clauses, from which one will be selected. Not {@code null}.
+     * @param clauses The clauses, from which one will be selected. Array must not be empty or {@code null} and
+     *                can't contain {@code null} values.
      * @return The value returned by the selected clause.
      * @throws ChannelClosedException When any of the channels is closed (done or in error).
      */
@@ -72,16 +73,21 @@ public class Select {
      * <p>
      * If no clauses are given, returns {@link ChannelDone}.
      *
-     * @param clauses The clauses, from which one will be selected. Not {@code null}.
+     * @param clauses The clauses, from which one will be selected. Array must not be empty or {@code null} and
+     *                can't contain {@code null} values.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any of the channels
      * is closed (done or in error).
      */
     @SafeVarargs
     public static <U> Object selectOrClosed(SelectClause<? extends U>... clauses) throws InterruptedException {
         while (true) {
-            if (clauses.length == 0) {
+            if (clauses == null || clauses.length == 0) {
                 // no clauses given
-                return new ChannelDone();
+                throw new IllegalArgumentException("No clauses given");
+            }
+            if (Arrays.stream(clauses).anyMatch(Objects::isNull)){
+                // null clauses given
+                throw new IllegalArgumentException("Null clauses are not supported");
             }
 
             var r = doSelectOrClosed(clauses);
