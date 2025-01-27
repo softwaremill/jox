@@ -30,6 +30,7 @@ import com.softwaremill.jox.ChannelClosed;
 import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
+import com.softwaremill.jox.flows.Flow.ByteFlow;
 import com.softwaremill.jox.structured.Fork;
 import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.ThrowingConsumer;
@@ -86,7 +87,7 @@ public final class Flows {
      * Creates a ByteFlow from given {@link ByteChunk}s. Each ByteChunk is emitted in order.
      * Flow can be run multiple times.
      */
-    public static Flow.ByteFlow fromByteChunks(ByteChunk... chunks) {
+    public static ByteFlow fromByteChunks(ByteChunk... chunks) {
         return fromValues(chunks).toByteFlow();
     }
 
@@ -94,7 +95,7 @@ public final class Flows {
      * Creates a ByteFlow from given byte[]. Each byte[] is emitted in order.
      * Flow can be run multiple times.
      */
-    public static Flow.ByteFlow fromByteArrays(byte[]... byteArrays) {
+    public static ByteFlow fromByteArrays(byte[]... byteArrays) {
         return fromValues(byteArrays).toByteFlow();
     }
 
@@ -492,15 +493,15 @@ public final class Flows {
     }
 
     /**
-     * Converts a {@link java.io.InputStream} into a `Flow<ByteChunk>`.
+     * Converts a {@link java.io.InputStream} into {@link ByteFlow}.
      *
      * @param is
      *   an `InputStream` to read bytes from.
      * @param chunkSize
      *   maximum number of bytes to read from the underlying `InputStream` before emitting a new chunk.
      */
-    public static Flow<ByteChunk> fromInputStream(InputStream is, int chunkSize) {
-        return usingEmit(emit -> {
+    public static ByteFlow fromInputStream(InputStream is, int chunkSize) {
+        return Flows.<ByteChunk>usingEmit(emit -> {
             try (is) {
                 while (true) {
                     byte[] buf = new byte[chunkSize];
@@ -514,19 +515,19 @@ public final class Flows {
                     }
                 }
             }
-        });
+        }).toByteFlow();
     }
 
     /**
-     * Creates a flow that emits {@link ByteChunk} read from a file.
+     * Creates a {@link ByteFlow} read from a file.
      *
      * @param path
      *   path the file to read from.
      * @param chunkSize
      *   maximum number of bytes to read from the file before emitting a new chunk.
      */
-    public static Flow<ByteChunk> fromFile(Path path, int chunkSize) {
-        return usingEmit(emit -> {
+    public static ByteFlow fromFile(Path path, int chunkSize) {
+        return Flows.<ByteChunk>usingEmit(emit -> {
             if (Files.isDirectory(path)) {
                 throw new IOException("Path %s is a directory".formatted(path));
             }
@@ -553,6 +554,6 @@ public final class Flows {
             } finally {
                 fileChannel.close();
             }
-        });
+        }).toByteFlow();
     }
 }
