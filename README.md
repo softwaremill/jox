@@ -36,6 +36,7 @@ For a Scala version, see the [Ox project](https://github.com/softwaremill/ox).
 * [Channels](#channels)
 * [Structured concurrency](#structured-concurrency)
 * [Streaming](#streaming)
+* [Flows](#lazy-streaming---flows)
 
 ## Channels
 
