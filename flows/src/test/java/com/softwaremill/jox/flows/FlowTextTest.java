@@ -1,10 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.flows.ByteChunk.empty;
-import static com.softwaremill.jox.flows.ByteChunk.fromArray;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +12,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.Test;
+import static com.softwaremill.jox.flows.ByteChunk.empty;
+import static com.softwaremill.jox.flows.ByteChunk.fromArray;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowTextTest {
 
@@ -30,7 +28,7 @@ public class FlowTextTest {
 
         // when & then
         assertEquals(List.of("zażółć", "gęślą", "jaźń"), Flows.fromByteChunks(fromArray(inputBytes))
-                .lines(Charset.forName("ISO-8859-2")).runToList());
+                                                              .lines(Charset.forName("ISO-8859-2")).runToList());
     }
 
     @Test
@@ -40,20 +38,20 @@ public class FlowTextTest {
         byte[] inputBytes = String.join("\n", lines).getBytes(StandardCharsets.UTF_8);
 
         Collection<byte[]> values = IntStream.range(0, inputBytes.length)
-                .mapToObj(i -> inputBytes[i])
-                .collect(Collectors.groupingBy(equalSizeChunks(5))).values().stream()
-                .map(list -> {
-                    byte[] bytes = new byte[list.size()];
-                    IntStream.range(0, list.size()).forEach(i -> bytes[i] = list.get(i));
-                    return bytes;
-                })
-                .toList();
+                                             .mapToObj(i -> inputBytes[i])
+                                             .collect(Collectors.groupingBy(equalSizeChunks(5))).values().stream()
+                                             .map(list -> {
+                                                 byte[] bytes = new byte[list.size()];
+                                                 IntStream.range(0, list.size()).forEach(i -> bytes[i] = list.get(i));
+                                                 return bytes;
+                                             })
+                                             .toList();
 
         // when & then
         Flow<String> flow = Flows.fromIterable(values)
-                .map(ByteChunk::fromArray)
-                .toByteFlow()
-                .lines(StandardCharsets.UTF_8);
+                                 .map(ByteChunk::fromArray)
+                                 .toByteFlow()
+                                 .lines(StandardCharsets.UTF_8);
 
         assertEquals(lines, flow.runToList());
     }
@@ -63,8 +61,8 @@ public class FlowTextTest {
         String inputText = "line1\nline2\nline3";
         byte[] chunk = inputText.getBytes();
         List<String> result = Flows.fromByteChunks(fromArray(chunk))
-                .linesUtf8()
-                .runToList();
+                                   .linesUtf8()
+                                   .runToList();
         assertEquals(List.of("line1", "line2", "line3"), result);
     }
 
@@ -73,8 +71,8 @@ public class FlowTextTest {
         String inputText = "line1\n\nline2\nline3";
         byte[] chunk = inputText.getBytes();
         List<String> result = Flows.fromByteChunks(fromArray(chunk))
-                .linesUtf8()
-                .runToList();
+                                   .linesUtf8()
+                                   .runToList();
         assertEquals(List.of("line1", "", "line2", "line3"), result);
     }
 
@@ -83,8 +81,8 @@ public class FlowTextTest {
         String inputText = "\nline1\nline2";
         byte[] chunk = inputText.getBytes();
         List<String> result = Flows.fromByteChunks(fromArray(chunk))
-                .linesUtf8()
-                .runToList();
+                                   .linesUtf8()
+                                   .runToList();
         assertEquals(List.of("", "line1", "line2"), result);
     }
 
@@ -93,7 +91,7 @@ public class FlowTextTest {
         String inputText = "line1\nline2\n";
         byte[] bytes = inputText.getBytes();
         List<String> result = Flows.fromByteChunks(fromArray(bytes))
-                .linesUtf8().runToList();
+                                   .linesUtf8().runToList();
         assertEquals(List.of("line1", "line2", ""), result);
     }
 
@@ -102,7 +100,7 @@ public class FlowTextTest {
         String inputText = "";
         byte[] chunk = inputText.getBytes();
         List<String> result = Flows.fromByteChunks(fromArray(chunk))
-                .linesUtf8().runToList();
+                                   .linesUtf8().runToList();
         assertEquals(List.of(), result);
     }
 
@@ -166,14 +164,14 @@ public class FlowTextTest {
         byte[] allBytes = inputString.getBytes(StandardCharsets.UTF_8);
         for (int chunkSize = 2; chunkSize <= inputString.length() + 1; chunkSize++) {
             Collection<List<Byte>> values = IntStream.range(0, allBytes.length)
-                    .mapToObj(i -> allBytes[i])
-                    .collect(Collectors.groupingBy(equalSizeChunks(chunkSize)))
-                    .values();
+                                                     .mapToObj(i -> allBytes[i])
+                                                     .collect(Collectors.groupingBy(equalSizeChunks(chunkSize)))
+                                                     .values();
             String result = Flows.fromIterable(values)
-                    .toByteFlow(FlowTextTest::convertToByteArray)
-                    .decodeStringUtf8()
-                    .runToList().stream()
-                    .collect(Collectors.joining());
+                                 .toByteFlow(FlowTextTest::convertToByteArray)
+                                 .decodeStringUtf8()
+                                 .runToList().stream()
+                                 .collect(Collectors.joining());
             assertEquals(inputString, result);
         }
     }

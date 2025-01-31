@@ -108,7 +108,7 @@ public class FlowMapTest {
 
         // when
         var result = flow.mapConcat(str -> str.chars().mapToObj(c -> (char) c).toList())
-                .runToList();
+                         .runToList();
 
         // then
         assertEquals(List.of('a', 'b', 'c', 'd'), result);
@@ -121,7 +121,7 @@ public class FlowMapTest {
 
         // when
         var result = c.mapConcat(a -> a)
-                .runToList();
+                      .runToList();
 
         // then
         assertEquals(List.of("a", "b", "c"), result);
@@ -527,7 +527,7 @@ public class FlowMapTest {
                         return Map.entry(Map.entry(Optional.of(e), 1), List.of(Map.entry(previous.get(), count)));
                     }
                 },
-                 state1 -> state1.getKey().map(v -> Map.entry(v, state1.getValue())));
+                state1 -> state1.getKey().map(v -> Map.entry(v, state1.getValue())));
 
         // then
         assertEquals(List.of(
@@ -590,7 +590,7 @@ public class FlowMapTest {
     void mapStateful_shouldZipWithIndex() throws Exception {
         // given
         var flow = Flows.fromValues("a", "b", "c")
-                .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, Map.entry(element, index)));
+                        .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, Map.entry(element, index)));
 
         // when & then
         assertEquals(List.of(Map.entry("a", 0), Map.entry("b", 1), Map.entry("c", 2)), flow.runToList());
@@ -600,7 +600,7 @@ public class FlowMapTest {
     void mapStateful_shouldCalculateRunningTotal() throws Exception {
         // given
         var flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, sum), Optional::of);
+                        .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, sum), Optional::of);
 
         // when & then
         assertEquals(List.of(0, 1, 3, 6, 10, 15), flow.runToList());
@@ -610,7 +610,7 @@ public class FlowMapTest {
     void mapStateful_shouldEmitDifferentValuesThanIncomingOnes() throws Exception {
         // given
         var flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, Integer.toString(sum)), n -> Optional.of(Integer.toString(n)));
+                        .mapStateful(() -> 0, (sum, element) -> Map.entry(sum + element, Integer.toString(sum)), n -> Optional.of(Integer.toString(n)));
 
         // when & then
         assertEquals(List.of("0", "1", "3", "6", "10", "15"), flow.runToList());
@@ -620,10 +620,10 @@ public class FlowMapTest {
     void mapStateful_shouldPropagateErrorsInMappingFunction() throws Exception {
         // given
         var flow = Flows.fromValues("a", "b", "c")
-                .mapStateful(() -> 0, (index, element) -> {
-                    if (index < 2) return Map.entry(index + 1, element);
-                    else throw new RuntimeException("boom");
-                });
+                        .mapStateful(() -> 0, (index, element) -> {
+                            if (index < 2) return Map.entry(index + 1, element);
+                            else throw new RuntimeException("boom");
+                        });
 
         // when & then
         Scopes.supervised(scope -> {
@@ -640,9 +640,9 @@ public class FlowMapTest {
     void mapStateful_shouldPropagateErrorsInCompletionCallback() throws Exception {
         // given
         var flow = Flows.fromValues("a", "b", "c")
-                .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, element), _ -> {
-                    throw new RuntimeException("boom");
-                });
+                        .mapStateful(() -> 0, (index, element) -> Map.entry(index + 1, element), _ -> {
+                            throw new RuntimeException("boom");
+                        });
 
         // when & then
         Scopes.supervised(scope -> {

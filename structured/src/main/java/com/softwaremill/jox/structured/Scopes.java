@@ -78,8 +78,8 @@ public class Scopes {
                 rawScope.close();
             }
 
-        // all forks are guaranteed to have finished: some might have ended up throwing exceptions (InterruptedException or
-        // others), but only the first one is propagated below. That's why we add all the other exceptions as suppressed.
+            // all forks are guaranteed to have finished: some might have ended up throwing exceptions (InterruptedException or
+            // others), but only the first one is propagated below. That's why we add all the other exceptions as suppressed.
         } catch (ExecutionException e) {
             // unwrapping execution exception from CompletableFutures to custom exception
             JoxScopeExecutionException joxScopeExecutionException = new JoxScopeExecutionException(e.getCause());

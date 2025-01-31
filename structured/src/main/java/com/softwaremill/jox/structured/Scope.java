@@ -104,7 +104,8 @@ public class Scope extends UnsupervisedScope {
         return new ForkUsingResult(result);
     }
 
-    /** Returns a concurrency-scope-specific runner, which allows scheduling of functions to be run within the current concurrency scope, from
+    /**
+     * Returns a concurrency-scope-specific runner, which allows scheduling of functions to be run within the current concurrency scope, from
      * the context of arbitrary threads (not necessarily threads that are part of the current concurrency scope).
      * <p>
      * Usage: obtain a runner from within a concurrency scope, while on a fork/thread that is managed by the concurrency scope. Then, pass that
@@ -119,8 +120,7 @@ public class Scope extends UnsupervisedScope {
      * <p>
      * Use with care!
      *
-     * @see
-     *  ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
+     * @see ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
      */
     public ExternalRunner externalRunner() {
         if (externalSchedulerActor == null) {

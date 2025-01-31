@@ -1,23 +1,16 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.Select.selectOrClosed;
+import com.softwaremill.jox.*;
+import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingFunction;
+import com.softwaremill.jox.structured.UnsupervisedScope;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Stream;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelDone;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.SelectClause;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scopes;
-import com.softwaremill.jox.structured.ThrowingFunction;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import static com.softwaremill.jox.Select.selectOrClosed;
 
 class GroupByImpl<T, V, U> {
 
@@ -154,8 +147,8 @@ class GroupByImpl<T, V, U> {
                 // creation (see below). As the receive is conditional, the errors that occur on this channel are also
                 // propagated to `childOutput`, which is always the first (priority) clause in the main `select`.
                 Source<FromParent> parentChannel = parent.map(FromParent::new)
-                        .onError(childOutput::errorOrClosed)
-                        .runToChannel(scope);
+                                                         .onError(childOutput::errorOrClosed)
+                                                         .runToChannel(scope);
 
                 GroupByState state = new GroupByState();
 
@@ -239,19 +232,19 @@ class GroupByImpl<T, V, U> {
 
             scope.forkUnsupervised(() -> {
                 childFlowTransform.apply(v).apply(Flows.fromSource(childChannel))
-                        .onDone(() -> {
-                            try {
-                                childDone.sendOrClosed(new ChildDone(v));
-                            } catch (InterruptedException e) {
-                                throw new RuntimeException(e);
-                            }
-                        })
-                        // When the child flow is done, making sure that the source channel becomes closed as well
-                        // otherwise, we'd be risking a deadlock, if there are `childChannel.send`-s pending, and the
-                        // buffer is full; if the channel is already closed, this is a no-op.
-                        .onDone(childChannel::doneOrClosed)
-                        .onError(childChannel::errorOrClosed)
-                        .runPipeToSink(childOutput, false);
+                                  .onDone(() -> {
+                                      try {
+                                          childDone.sendOrClosed(new ChildDone(v));
+                                      } catch (InterruptedException e) {
+                                          throw new RuntimeException(e);
+                                      }
+                                  })
+                                  // When the child flow is done, making sure that the source channel becomes closed as well
+                                  // otherwise, we'd be risking a deadlock, if there are `childChannel.send`-s pending, and the
+                                  // buffer is full; if the channel is already closed, this is a no-op.
+                                  .onDone(childChannel::doneOrClosed)
+                                  .onError(childChannel::errorOrClosed)
+                                  .runPipeToSink(childOutput, false);
                 return null;
             });
 

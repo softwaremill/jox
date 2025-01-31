@@ -1,12 +1,12 @@
 package com.softwaremill.jox.structured;
 
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.concurrent.Semaphore;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertIterableEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ExceptionTest {
     static class CustomException extends RuntimeException {}

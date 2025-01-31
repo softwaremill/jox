@@ -1,17 +1,17 @@
 package com.softwaremill.jox.flows;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FlowFlattenTest {
 
@@ -99,14 +99,14 @@ public class FlowFlattenTest {
 
         // when & then
         var result = flow.flattenPar(10)
-                .runToList().stream().flatMap(f -> {
+                         .runToList().stream().flatMap(f -> {
                     try {
                         return f.runToList().stream();
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 })
-                .toList();
+                         .toList();
 
         assertThat(result, containsInAnyOrder(10, 20));
     }

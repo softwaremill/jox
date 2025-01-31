@@ -1,7 +1,12 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.ChannelDone;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Sink;
+import com.softwaremill.jox.structured.ExternalRunner;
+import com.softwaremill.jox.structured.Scope;
+import com.softwaremill.jox.structured.UnsupervisedScope;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -10,13 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelDone;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Sink;
-import com.softwaremill.jox.structured.ExternalRunner;
-import com.softwaremill.jox.structured.Scope;
-import com.softwaremill.jox.structured.UnsupervisedScope;
+import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
@@ -84,7 +84,8 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                 };
 
                 Consumer<Long> increaseDemand = d -> {
-                    if (d <= 0) signalErrorAndCancel.accept(new IllegalArgumentException("3.9: demand must be positive"));
+                    if (d <= 0)
+                        signalErrorAndCancel.accept(new IllegalArgumentException("3.9: demand must be positive"));
                     else {
                         demand.addAndGet(d);
                         // 3.17: when demand overflows `Long.MaxValue`, this is treated as the signalled demand to be "effectively unbounded"
@@ -98,14 +99,14 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                         switch (selectOrClosed(errors.receiveClause(), signals.receiveClause())) {
                             case Request r -> increaseDemand.accept(r.n());
                             case Cancel _ -> cancel.run();
-                            case DummyError _, ChannelDone _ -> {} // impossible as channel done should be received only from `data`, and error from `errors` is handled in the next branch
+                            case DummyError _,
+                                 ChannelDone _ -> {} // impossible as channel done should be received only from `data`, and error from `errors` is handled in the next branch
                             case ChannelError e -> { // only `errors` can be closed due to an error
                                 cancel.run();
                                 errorSent.set(true);
                                 subscriber.onError(e.toException());
                             }
-                            default ->
-                                    throw new IllegalStateException("unexpected clause result");
+                            default -> throw new IllegalStateException("unexpected clause result");
                         }
                     } else {
                         switch (selectOrClosed(errors.receiveClause(), data.receiveClause(), signals.receiveClause())) {
@@ -150,39 +151,43 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
     private interface DummyError {}
 
-    /** Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}. */
+    /**
+     * Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}.
+     */
     private interface Signal {}
+
     private record Request(long n) implements Signal {}
+
     private record Cancel() implements Signal {}
 
 
     private record FlowSubscription(Sink<Signal> signals) implements Flow.Subscription {
 
         // 3.2, 3.4: request/cancel can be called anytime, in a thread-safe way
-            // 3.3: there's no recursion between request & onNext
-            // 3.6: after a cancel, more requests can be sent to the channel, but they won't be processed (the cancel will be processed first)
-            // 3.15: the signals channel is never closed
-            @Override
-            public void request(long n) {
-                try {
-                    signals.send(new Request(n));
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
+        // 3.3: there's no recursion between request & onNext
+        // 3.6: after a cancel, more requests can be sent to the channel, but they won't be processed (the cancel will be processed first)
+        // 3.15: the signals channel is never closed
+        @Override
+        public void request(long n) {
+            try {
+                signals.send(new Request(n));
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-
-            // 3.5: as above for 3.2
-            // 3.7: as above for 3.6
-            // 3.16: as above for 3.15
-            @Override
-            public void cancel() {
-                try {
-                    signals.send(new Cancel());
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            // 3.10, 3.11: no synchronous calls in this implementation
         }
+
+        // 3.5: as above for 3.2
+        // 3.7: as above for 3.6
+        // 3.16: as above for 3.15
+        @Override
+        public void cancel() {
+            try {
+                signals.send(new Cancel());
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // 3.10, 3.11: no synchronous calls in this implementation
+    }
 }

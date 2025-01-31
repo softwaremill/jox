@@ -85,7 +85,7 @@ public class Select {
                 // no clauses given
                 throw new IllegalArgumentException("No clauses given");
             }
-            if (Arrays.stream(clauses).anyMatch(Objects::isNull)){
+            if (Arrays.stream(clauses).anyMatch(Objects::isNull)) {
                 // null clauses given
                 throw new IllegalArgumentException("Null clauses are not supported");
             }

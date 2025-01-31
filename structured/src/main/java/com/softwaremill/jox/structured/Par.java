@@ -3,7 +3,6 @@ package com.softwaremill.jox.structured;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 
 import static com.softwaremill.jox.structured.Scopes.supervised;

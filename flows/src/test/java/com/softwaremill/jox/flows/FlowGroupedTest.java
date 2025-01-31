@@ -24,8 +24,8 @@ public class FlowGroupedTest {
     void shouldEmitGroupedElements() throws Exception {
         // when
         List<List<Integer>> result = Flows.fromValues(1, 2, 3, 4, 5, 6)
-                .grouped(3)
-                .runToList();
+                                          .grouped(3)
+                                          .runToList();
 
         // then
         assertEquals(List.of(List.of(1, 2, 3), List.of(4, 5, 6)), result);
@@ -35,8 +35,8 @@ public class FlowGroupedTest {
     void shouldEmitGroupedElementsAndIncludeRemainingValuesWhenFlowCloses() throws Exception {
         // given
         List<List<Integer>> result = Flows.fromValues(1, 2, 3, 4, 5, 6, 7)
-                .grouped(3)
-                .runToList();
+                                          .grouped(3)
+                                          .runToList();
 
         // then
         assertEquals(List.of(List.of(1, 2, 3), List.of(4, 5, 6), List.of(7)), result);
@@ -50,9 +50,9 @@ public class FlowGroupedTest {
 
             // when
             Object result = Flows.failed(failure)
-                    .grouped(3)
-                    .runToChannel(scope)
-                    .receiveOrClosed();
+                                 .grouped(3)
+                                 .runToChannel(scope)
+                                 .receiveOrClosed();
 
             // then
             assertInstanceOf(ChannelError.class, result);
@@ -65,8 +65,8 @@ public class FlowGroupedTest {
     void shouldEmitGroupedElementsWithCustomCostFunction() throws Exception {
         // when
         List<List<Integer>> result = Flows.fromValues(1, 2, 3, 4, 5, 6, 5, 3, 1)
-                .groupedWeighted(10, n -> (long) (n * 2))
-                .runToList();
+                                          .groupedWeighted(10, n -> (long) (n * 2))
+                                          .runToList();
 
         // then
         assertEquals(List.of(List.of(1, 2, 3), List.of(4, 5), List.of(6), List.of(5), List.of(3, 1)), result);
@@ -78,9 +78,9 @@ public class FlowGroupedTest {
             // when
             ChannelClosedException exception = assertThrows(ChannelClosedException.class, () ->
                     Flows.fromValues(1, 2, 3, 0, 4, 5, 6, 7)
-                            .groupedWeighted(150, n -> (long) (100 / n))
-                            .runToChannel(scope)
-                            .forEach(_ -> {}));
+                         .groupedWeighted(150, n -> (long) (100 / n))
+                         .runToChannel(scope)
+                         .forEach(_ -> {}));
 
             // then
             assertInstanceOf(ArithmeticException.class, exception.getCause());
@@ -96,9 +96,9 @@ public class FlowGroupedTest {
 
             // when
             Object result = Flows.failed(failure)
-                    .groupedWeighted(10, n -> Long.parseLong(n.toString()) * 2)
-                    .runToChannel(scope)
-                    .receiveOrClosed();
+                                 .groupedWeighted(10, n -> Long.parseLong(n.toString()) * 2)
+                                 .runToChannel(scope)
+                                 .receiveOrClosed();
 
             // then
             assertInstanceOf(ChannelError.class, result);
@@ -126,9 +126,9 @@ public class FlowGroupedTest {
 
             // when
             var elementsWithEmittedTimeOffset = Flows.fromSource(c)
-                    .groupedWithin(3, Duration.ofMillis(100))
-                    .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
-                    .runToList();
+                                                     .groupedWithin(3, Duration.ofMillis(100))
+                                                     .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
+                                                     .runToList();
 
             // then
             assertEquals(List.of(List.of(1, 2, 3), List.of(4)), elementsWithEmittedTimeOffset.stream().map(Map.Entry::getKey).toList());
@@ -162,9 +162,9 @@ public class FlowGroupedTest {
 
             // when
             var elementsWithEmittedTimeOffset = Flows.fromSource(c)
-                    .groupedWithin(3, Duration.ofMillis(100))
-                    .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
-                    .runToList();
+                                                     .groupedWithin(3, Duration.ofMillis(100))
+                                                     .map(s -> Map.entry(s, Duration.ofNanos(System.nanoTime() - start)))
+                                                     .runToList();
 
             // then
             assertEquals(List.of(List.of(1, 2), List.of(3, 4, 5)), elementsWithEmittedTimeOffset.stream().map(Map.Entry::getKey).toList());
@@ -202,9 +202,9 @@ public class FlowGroupedTest {
 
             // when
             var elementsWithEmittedTimeOffset = Flows.fromSource(c)
-                    .groupedWithin(3, Duration.ofMillis(100))
-                    .map(s -> new AbstractMap.SimpleEntry<>(s, Duration.ofNanos(System.nanoTime() - start)))
-                    .runToList();
+                                                     .groupedWithin(3, Duration.ofMillis(100))
+                                                     .map(s -> new AbstractMap.SimpleEntry<>(s, Duration.ofNanos(System.nanoTime() - start)))
+                                                     .runToList();
 
             // then
             assertEquals(List.of(List.of(1, 2, 3), List.of(3)), elementsWithEmittedTimeOffset.stream().map(Map.Entry::getKey).toList());
@@ -251,7 +251,7 @@ public class FlowGroupedTest {
             // given
             var failure = new RuntimeException();
             Flow<List<Object>> flow = Flows.failed(failure)
-                    .groupedWithin(3, Duration.ofSeconds(10));
+                                           .groupedWithin(3, Duration.ofSeconds(10));
 
             // when
             ChannelError result = (ChannelError) flow.runToChannel(scope).receiveOrClosed();
@@ -280,7 +280,7 @@ public class FlowGroupedTest {
             });
 
             Flow<List<Integer>> flow = Flows.fromSource(c)
-                    .groupedWeightedWithin(10, Duration.ofMillis(100), n -> (long) (n * 2));
+                                            .groupedWeightedWithin(10, Duration.ofMillis(100), n -> (long) (n * 2));
 
             // when
             var result = flow.runToList();
@@ -296,11 +296,11 @@ public class FlowGroupedTest {
         Scopes.supervised(scope -> {
             // given
             Flow<List<Integer>> flow = Flows.fromValues(1, 2, 3, 0, 4, 5, 6, 7)
-                    .groupedWeightedWithin(150, Duration.ofMillis(100), n -> (long) (100 / n));
+                                            .groupedWeightedWithin(150, Duration.ofMillis(100), n -> (long) (100 / n));
 
             // when
             ChannelErrorException exception = assertThrows(ChannelErrorException.class, () -> flow.runToChannel(scope)
-                    .forEach(_ -> {}));
+                                                                                                  .forEach(_ -> {}));
 
             // then
             assertInstanceOf(ArithmeticException.class, exception.getCause().getCause().getCause());
@@ -316,9 +316,9 @@ public class FlowGroupedTest {
 
             // when
             var result = Flows.<Integer>failed(failure)
-                    .groupedWeightedWithin(10, Duration.ofMillis(100), n -> (long) (n * 2))
-                    .runToChannel(scope)
-                    .receiveOrClosed();
+                              .groupedWeightedWithin(10, Duration.ofMillis(100), n -> (long) (n * 2))
+                              .runToChannel(scope)
+                              .receiveOrClosed();
 
             // then
             assertEquals(ChannelError.class, result.getClass());
@@ -343,8 +343,8 @@ public class FlowGroupedTest {
     void groupBy_shouldHandleSingleElementFlow() throws Exception {
         // when
         List<Integer> result = Flows.fromValues(42)
-                .groupBy(10, i -> i % 10, _ -> f -> f)
-                .runToList();
+                                    .groupBy(10, i -> i % 10, _ -> f -> f)
+                                    .runToList();
 
         // then
         assertEquals(List.of(42), result);
@@ -363,9 +363,9 @@ public class FlowGroupedTest {
 
         // when
         var result = new HashSet<>(Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                .groupBy(10, i -> i % 10, v ->
-                        f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
-                .runToList());
+                                        .groupBy(10, i -> i % 10, v ->
+                                                f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
+                                        .runToList());
 
         // then
         assertEquals(Set.of(
@@ -389,11 +389,11 @@ public class FlowGroupedTest {
 
         // when
         List<Group> result = Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                .groupBy(1, i -> i % 10, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
-                .runToList()
-                .stream()
-                .map(g -> new Group(g.v, g.values.stream().sorted().toList()))
-                .toList();
+                                  .groupBy(1, i -> i % 10, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
+                                  .runToList()
+                                  .stream()
+                                  .map(g -> new Group(g.v, g.values.stream().sorted().toList()))
+                                  .toList();
 
         // then
         assertEquals(List.of(
@@ -420,8 +420,8 @@ public class FlowGroupedTest {
 
         // when
         Set<Group> result = new HashSet<>(Flows.fromValues(10, 11, 12, 22, 21, 20, 32, 13, 42, 30, 23, 31)
-                .groupBy(3, i -> i % 10, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
-                .runToList());
+                                               .groupBy(3, i -> i % 10, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
+                                               .runToList());
 
         // then
         assertEquals(Set.of(
@@ -447,8 +447,8 @@ public class FlowGroupedTest {
         // when
         var input = IntStream.rangeClosed(1, 100000).boxed().toList();
         List<Group> result = Flows.fromIterable(input)
-                .groupBy(100, i -> i % 100, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
-                .runToList();
+                                  .groupBy(100, i -> i % 100, v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
+                                  .runToList();
 
         // then
         assertEquals(100, result.size());
@@ -468,8 +468,8 @@ public class FlowGroupedTest {
 
         // when
         Set<Group> result = new HashSet<>(Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                .groupBy(10, i -> i % 2 == 0 ? "even" : "odd", v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
-                .runToList());
+                                               .groupBy(10, i -> i % 2 == 0 ? "even" : "odd", v -> f -> f.mapStatefulConcat(() -> new Group(v, List.of()), mapper, Optional::of))
+                                               .runToList());
 
         // then
         assertEquals(Set.of(
@@ -485,11 +485,11 @@ public class FlowGroupedTest {
 
         // when
         List<Integer> result = Flows.fromIterable(input)
-                .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
-                    // the number of elements exceeds the buffer, the parent will get blocked
-                    sleep(Duration.ofMillis(10));
-                }))
-                .runToList();
+                                    .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
+                                        // the number of elements exceeds the buffer, the parent will get blocked
+                                        sleep(Duration.ofMillis(10));
+                                    }))
+                                    .runToList();
 
         // then
         assertEquals(input, result);
@@ -499,10 +499,10 @@ public class FlowGroupedTest {
     void groupBy_shouldPropagateErrorsFromChildFlows() {
         var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                    .groupBy(10, i -> i % 10, _ -> f -> f.tap(i -> {
-                        if (i == 13) throw new RuntimeException("boom!");
-                    }))
-                    .runToList();
+                 .groupBy(10, i -> i % 10, _ -> f -> f.tap(i -> {
+                     if (i == 13) throw new RuntimeException("boom!");
+                 }))
+                 .runToList();
         });
         assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
@@ -511,11 +511,11 @@ public class FlowGroupedTest {
     void groupBy_shouldPropagateErrorsFromChildFlowsWhenParentIsBlockedOnSending() {
         var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(IntStream.rangeClosed(1, 100).boxed().toArray(Integer[]::new))
-                    .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
-                        sleep(Duration.ofMillis(100));
-                        throw new RuntimeException("boom!");
-                    }))
-                    .runToList();
+                 .groupBy(1, _ -> 0, _ -> f -> f.tap(_ -> {
+                     sleep(Duration.ofMillis(100));
+                     throw new RuntimeException("boom!");
+                 }))
+                 .runToList();
         });
         assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
@@ -524,9 +524,9 @@ public class FlowGroupedTest {
     void groupBy_shouldPropagateRuntimeExceptionErrorsFromParentFlows() {
         var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                    .concat(Flows.failed(new RuntimeException("boom!")))
-                    .groupBy(10, i -> i % 10, _ -> f -> f)
-                    .runToList();
+                 .concat(Flows.failed(new RuntimeException("boom!")))
+                 .groupBy(10, i -> i % 10, _ -> f -> f)
+                 .runToList();
         });
         assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
@@ -535,9 +535,9 @@ public class FlowGroupedTest {
     void groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
         assertThrows(JoxScopeExecutionException.class, () ->
                 Flows.fromValues(10, 20, 30)
-                        .tap(_ -> sleep(Duration.ofMillis(100)))
-                        .groupBy(10, i -> i % 10, _ -> f -> f.take(1))
-                        .runToList()
+                     .tap(_ -> sleep(Duration.ofMillis(100)))
+                     .groupBy(10, i -> i % 10, _ -> f -> f.take(1))
+                     .runToList()
         );
     }
 

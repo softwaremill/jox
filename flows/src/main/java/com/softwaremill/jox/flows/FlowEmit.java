@@ -10,7 +10,9 @@ import com.softwaremill.jox.Source;
  */
 public interface FlowEmit<T> {
 
-    /** Emit a value to be processed downstream. Blocks until the value is fully processed, or throws an exception if an error occurred. */
+    /**
+     * Emit a value to be processed downstream. Blocks until the value is fully processed, or throws an exception if an error occurred.
+     */
     void apply(T t) throws Exception;
 
     /**

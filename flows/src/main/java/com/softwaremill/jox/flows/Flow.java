@@ -57,24 +57,31 @@ public class Flow<T> {
 
     // region Run operations
 
-    /** Invokes the given function for each emitted element. Blocks until the flow completes. */
+    /**
+     * Invokes the given function for each emitted element. Blocks until the flow completes.
+     */
     public void runForeach(ThrowingConsumer<T> sink) throws Exception {
         last.run(sink::accept);
     }
 
-    /** Invokes the provided {@link FlowEmit} for each emitted element. Blocks until the flow completes. */
+    /**
+     * Invokes the provided {@link FlowEmit} for each emitted element. Blocks until the flow completes.
+     */
     public void runToEmit(FlowEmit<T> emit) throws Exception {
         last.run(emit);
     }
 
-    /** Accumulates all elements emitted by this flow into a list. Blocks until the flow completes. */
+    /**
+     * Accumulates all elements emitted by this flow into a list. Blocks until the flow completes.
+     */
     public List<T> runToList() throws Exception {
         List<T> result = new ArrayList<>();
         runForeach(result::add);
         return result;
     }
 
-    /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
+    /**
+     * The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
      * of this method.
      * <p>
      * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
@@ -83,24 +90,22 @@ public class Flow<T> {
      * <p>
      * Any exceptions thrown by the flow are propagated via the channel.
      *
-     * @param scope
-     *  Required for creating async forks responsible for writing to channel
+     * @param scope Required for creating async forks responsible for writing to channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope) {
         return runToChannelInternal(scope, Channel::withScopedBufferSize);
     }
 
-    /** The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
+    /**
+     * The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
      * of this method.
      * <p>
      * Method does not block until the flow completes.
      * <p>
      * Any exceptions thrown by the flow are propagated via the channel.
      *
-     * @param scope
-     *  Required for creating async forks responsible for writing to channel
-     * @param bufferCapacity
-     *  Specifies buffer capacity of created channel
+     * @param scope          Required for creating async forks responsible for writing to channel
+     * @param bufferCapacity Specifies buffer capacity of created channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope, int bufferCapacity) {
         return runToChannelInternal(scope, () -> new Channel<>(bufferCapacity));
@@ -121,13 +126,10 @@ public class Flow<T> {
      * next current value and `f` is applied again with the next value emitted by the flow. The operation is repeated until the flow emits
      * all elements.
      *
-     * @param zero
-     *   An initial value to be used as the first argument to function `f` call.
-     * @param f
-     *   A {@link BiFunction} that is applied to the current value and value emitted by the flow.
-     * @return
-     *   Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
-     *   used as an input value to the next.
+     * @param zero An initial value to be used as the first argument to function `f` call.
+     * @param f    A {@link BiFunction} that is applied to the current value and value emitted by the flow.
+     * @return Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
+     * used as an input value to the next.
      */
     public <U> U runFold(U zero, ThrowingBiFunction<U, T, U> f) throws Exception {
         AtomicReference<U> current = new AtomicReference<>(zero);
@@ -163,17 +165,19 @@ public class Flow<T> {
         }
     }
 
-    /** Returns the last element emitted by this flow, wrapped in {@link Optional#of}, or {@link Optional#empty()} when this source is empty. */
+    /**
+     * Returns the last element emitted by this flow, wrapped in {@link Optional#of}, or {@link Optional#empty()} when this source is empty.
+     */
     public Optional<T> runLastOptional() throws Exception {
         AtomicReference<Optional<T>> value = new AtomicReference<>(Optional.empty());
         last.run(t -> value.set(Optional.of(t)));
         return value.get();
     }
 
-    /** Returns the last element emitted by this flow, or throws {@link NoSuchElementException} when the flow emits no elements (is empty).
+    /**
+     * Returns the last element emitted by this flow, or throws {@link NoSuchElementException} when the flow emits no elements (is empty).
      *
-     * @throws NoSuchElementException
-     *   When this flow is empty.
+     * @throws NoSuchElementException When this flow is empty.
      */
     public T runLast() throws Exception {
         return runLastOptional()
@@ -185,13 +189,10 @@ public class Flow<T> {
      * next current value and `f` is applied again with the next value emitted by this source. The operation is repeated until this flow
      * emits all elements. This is similar operation to {@link Flow#runFold} but it uses the first emitted element as `zero`.
      *
-     * @param f
-     *   A binary function (a function that takes two arguments) that is applied to the current and next values emitted by this flow.
-     * @return
-     *   Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
-     *   used as an input value to the next.
-     * @throws NoSuchElementException
-     *   When this flow is empty.
+     * @param f A binary function (a function that takes two arguments) that is applied to the current and next values emitted by this flow.
+     * @return Combined value retrieved from running function `f` on all flow elements in a cumulative manner where result of the previous call is
+     * used as an input value to the next.
+     * @throws NoSuchElementException When this flow is empty.
      */
     public T runReduce(BinaryOperator<T> f) throws Exception {
         AtomicReference<Optional<T>> current = new AtomicReference<>(Optional.empty());
@@ -208,10 +209,8 @@ public class Flow<T> {
      * Returns the list of up to `n` last elements emitted by this flow. Less than `n` elements is returned when this flow emits less
      * elements than requested. Empty list is returned when called on an empty flow.
      *
-     * @param n
-     *   Number of elements to be taken from the end of this flow. It is expected that `n >= 0`.
-     * @return
-     *   A list of up to `n` last elements from this flow.
+     * @param n Number of elements to be taken from the end of this flow. It is expected that `n >= 0`.
+     * @return A list of up to `n` last elements from this flow.
      */
     public List<T> runTakeLast(int n) throws Exception {
         if (n < 0) {
@@ -242,12 +241,13 @@ public class Flow<T> {
 
     // region Flow operations
 
-    /** When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
-     *  The elements of the buffer are then emitted by the returned flow.
+    /**
+     * When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
+     * The elements of the buffer are then emitted by the returned flow.
      *
      * @param bufferCapacity determines size of a buffer.
-     *
-     * Any exceptions are propagated by the returned flow.
+     *                       <p>
+     *                       Any exceptions are propagated by the returned flow.
      */
     public Flow<T> buffer(int bufferCapacity) {
         return usingEmit(emit -> {
@@ -260,8 +260,9 @@ public class Flow<T> {
         });
     }
 
-    /** When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
-     *  The elements of the buffer are then emitted by the returned flow.
+    /**
+     * When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
+     * The elements of the buffer are then emitted by the returned flow.
      * <p>
      * Buffer capacity is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
@@ -291,7 +292,7 @@ public class Flow<T> {
     @FunctionalInterface
     public interface StatefulMapper<T, S, U> {
         /**
-         * @param state current state
+         * @param state   current state
          * @param element current input flow element
          * @return pair of new state and `element` mapped to new type `U`
          */
@@ -300,6 +301,7 @@ public class Flow<T> {
 
     /**
      * Functional interface used for {@link Flow#mapStateful(Supplier, StatefulMapper, OnComplete)} and {@link Flow#mapStatefulConcat(Supplier, StatefulMapper, OnComplete)}
+     *
      * @param <S> State Type
      * @param <U> Output Flow Type
      */
@@ -321,13 +323,10 @@ public class Flow<T> {
      * The `onComplete` function is called once when this flow is done. If it returns a non-empty {@link Optional}, the value will be emitted by the
      * flow, while an empty value will be ignored.
      *
-     * @param initializeState
-     *   A function that initializes the state.
-     * @param f
-     *   A function that transforms the element from this flow and the state into a pair of the next state and the result which is emitted by
-     *   the returned flow.
-     * @param onComplete
-     *   A function that transforms the final state into an optional element emitted by the returned flow.
+     * @param initializeState A function that initializes the state.
+     * @param f               A function that transforms the element from this flow and the state into a pair of the next state and the result which is emitted by
+     *                        the returned flow.
+     * @param onComplete      A function that transforms the final state into an optional element emitted by the returned flow.
      */
     public <S, U> Flow<U> mapStateful(Supplier<S> initializeState, StatefulMapper<T, S, U> f, OnComplete<S, U> onComplete) {
         StatefulMapper<T, S, Iterable<U>> resultToSome = (state, element) -> {
@@ -346,11 +345,9 @@ public class Flow<T> {
      * <p>
      * If you want to send additional element after the flow is done, use {@link Flow#mapStateful(Supplier, StatefulMapper, OnComplete)}
      *
-     * @param initializeState
-     *   A function that initializes the state.
-     * @param f
-     *   A function that transforms the element from this flow and the state into a pair of the next state and the result which is emitted by
-     *   the returned flow.
+     * @param initializeState A function that initializes the state.
+     * @param f               A function that transforms the element from this flow and the state into a pair of the next state and the result which is emitted by
+     *                        the returned flow.
      */
     public <S, U> Flow<U> mapStateful(Supplier<S> initializeState, StatefulMapper<T, S, U> f) {
         return mapStateful(initializeState, f, _ -> Optional.empty());
@@ -366,14 +363,11 @@ public class Flow<T> {
      * The `onComplete` function is called once when this flow is done. If it returns a non-empty value, the value will be emitted by the
      * returned flow, while an empty value will be ignored.
      *
-     * @param initializeState
-     *   A function that initializes the state.
-     * @param f
-     *   A function that transforms the element from this flow and the state into a pair of the next state and a
-     *   {@code Iterable} of results which are emitted one by one by the returned flow. If the result of `f` is empty,
-     *   nothing is emitted by the returned flow.
-     * @param onComplete
-     *   A function that transforms the final state into an optional element emitted by the returned flow.
+     * @param initializeState A function that initializes the state.
+     * @param f               A function that transforms the element from this flow and the state into a pair of the next state and a
+     *                        {@code Iterable} of results which are emitted one by one by the returned flow. If the result of `f` is empty,
+     *                        nothing is emitted by the returned flow.
+     * @param onComplete      A function that transforms the final state into an optional element emitted by the returned flow.
      */
     public <S, U> Flow<U> mapStatefulConcat(Supplier<S> initializeState, StatefulMapper<T, S, Iterable<U>> f, OnComplete<S, U> onComplete) {
         AtomicReference<S> state = new AtomicReference<>(initializeState.get());
@@ -401,12 +395,10 @@ public class Flow<T> {
      * <p>
      * If you want to send additional element after the flow is done, use {@link Flow#mapStatefulConcat(Supplier, StatefulMapper, OnComplete)}.
      *
-     * @param initializeState
-     *   A function that initializes the state.
-     * @param f
-     *   A function that transforms the element from this flow and the state into a pair of the next state and a
-     *   {@code Iterable} of results which are emitted one by one by the returned flow. If the result of `f` is empty,
-     *   nothing is emitted by the returned flow.
+     * @param initializeState A function that initializes the state.
+     * @param f               A function that transforms the element from this flow and the state into a pair of the next state and a
+     *                        {@code Iterable} of results which are emitted one by one by the returned flow. If the result of `f` is empty,
+     *                        nothing is emitted by the returned flow.
      */
     public <S, U> Flow<U> mapStatefulConcat(Supplier<S> initializeState, StatefulMapper<T, S, Iterable<U>> f) {
         return mapStatefulConcat(initializeState, f, _ -> Optional.empty());
@@ -428,8 +420,7 @@ public class Flow<T> {
     /**
      * Emits only every nth element emitted by this flow.
      *
-     * @param n
-     *   The interval between two emitted elements.
+     * @param n The interval between two emitted elements.
      */
     public Flow<T> sample(int n) {
         return Flows.usingEmit(emit -> {
@@ -443,7 +434,8 @@ public class Flow<T> {
         });
     }
 
-    /** Remove subsequent, repeating elements
+    /**
+     * Remove subsequent, repeating elements
      */
     public Flow<T> debounce() {
         return debounceBy(t -> t);
@@ -471,8 +463,7 @@ public class Flow<T> {
      * Applies the given mapping function `f` to each element emitted by this flow, for which the function returns a non-empty Optional, and emits the result.
      * If `f` returns an empty Optional at an element, the element will be skipped.
      *
-     * @param f
-     *   The mapping function.
+     * @param f The mapping function.
      */
     public <U> Flow<U> collect(ThrowingFunction<T, Optional<U>> f) {
         return Flows.usingEmit(emit ->
@@ -490,7 +481,7 @@ public class Flow<T> {
      * resulting flow contains the accumulated values at each point in the original flow.
      *
      * @param initial The initial value to start the accumulation.
-     * @param f The accumulation function that is applied to each element of the flow.
+     * @param f       The accumulation function that is applied to each element of the flow.
      * @return A new Flow containing the accumulated values.
      */
     public <V> Flow<V> scan(V initial, ThrowingBiFunction<V, T, V> f) {
@@ -505,13 +496,13 @@ public class Flow<T> {
         });
     }
 
-    /** Combines elements from this and the other flow into Map.Entry. Completion of either flow completes the returned flow as well. The flows
+    /**
+     * Combines elements from this and the other flow into Map.Entry. Completion of either flow completes the returned flow as well. The flows
      * are run concurrently.
      * <p>
      * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
-     * 
-     * @see
-     *   Flow#zipAll 
+     *
+     * @see Flow#zipAll
      */
     public <U> Flow<Map.Entry<T, U>> zip(Flow<U> other) {
         return Flows.usingEmit(emit -> {
@@ -549,13 +540,10 @@ public class Flow<T> {
      * concurrently.
      * <p>
      * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
-     * 
-     * @param other
-     *   A flow of elements to be combined with.
-     * @param thisDefault
-     *   A default element to be used in the result tuple when the other flow is longer.
-     * @param otherDefault
-     *   A default element to be used in the result tuple when the current flow is longer.
+     *
+     * @param other        A flow of elements to be combined with.
+     * @param thisDefault  A default element to be used in the result tuple when the other flow is longer.
+     * @param otherDefault A default element to be used in the result tuple when the current flow is longer.
      */
     public <U> Flow<Map.Entry<T, U>> zipAll(Flow<U> other, T thisDefault, U otherDefault) {
         return Flows.usingEmit(emit -> {
@@ -609,15 +597,14 @@ public class Flow<T> {
         });
     }
 
-    /** Given that this flow emits other flows, flattens the nested flows into a single flow. The resulting flow emits elements from the
+    /**
+     * Given that this flow emits other flows, flattens the nested flows into a single flow. The resulting flow emits elements from the
      * nested flows in the order they are emitted.
      * <p>
      * The nested flows are run in sequence, that is, the next nested flow is started only after the previous one completes.
      *
-     * @param args
-     *   This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
-     * @throws IllegalArgumentException
-     *   when flow does not contain nested flows, or when `args` are not empty
+     * @param args This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
+     * @throws IllegalArgumentException when flow does not contain nested flows, or when `args` are not empty
      */
     @SafeVarargs
     public final T flatten(T... args) {
@@ -628,7 +615,8 @@ public class Flow<T> {
         return (T) this.flatMap(t -> (Flow) t);
     }
 
-    /** Pipes the elements of child flows into the returned flow.
+    /**
+     * Pipes the elements of child flows into the returned flow.
      * <p>
      * If this flow or any of the child flows emit an error, the pulling stops and the output flow propagates the error.
      * <p>
@@ -637,12 +625,9 @@ public class Flow<T> {
      * <p>
      * The size of the buffers for the elements emitted by the child flows is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
-     * @param parallelism
-     *   An upper bound on the number of child flows that run in parallel.
-     * @param args
-     *   This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
-     * @throws IllegalArgumentException
-     *   when flow does not contain nested flows, or when `args` are not empty
+     * @param parallelism An upper bound on the number of child flows that run in parallel.
+     * @param args        This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
+     * @throws IllegalArgumentException when flow does not contain nested flows, or when `args` are not empty
      */
     @SuppressWarnings("unchecked")
     @SafeVarargs
@@ -653,6 +638,7 @@ public class Flow<T> {
         return (T) Flows.usingEmit(emit -> {
             class Nested {
                 final Flow<U> child;
+
                 Nested(Flow<U> child) {
                     this.child = child;
                 }
@@ -698,7 +684,7 @@ public class Flow<T> {
                         Nested t = (Nested) result;
                         scope.forkUnsupervised(() -> {
                             t.child.onDone(() -> childDoneChannel.send(new ChildDone()))
-                                    .runPipeToSink(childOutputChannel, false);
+                                   .runPipeToSink(childOutputChannel, false);
                             return null;
                         });
                         runningChannelCount++;
@@ -769,7 +755,8 @@ public class Flow<T> {
         });
     }
 
-    /** Groups elements emitted by this flow into child flows. Elements for which `groupingFunction` returns the same value (of type `V`) end up in
+    /**
+     * Groups elements emitted by this flow into child flows. Elements for which `groupingFunction` returns the same value (of type `V`) end up in
      * the same child flow. `childFlowTransform` is applied to each created child flow, and the resulting flow is run in the background.
      * Finally, the child flows are merged back, that is any elements that they emit are emitted by the returned flow.
      * <p>
@@ -787,19 +774,17 @@ public class Flow<T> {
      * {@link ChannelClosedException}.
      * <p>
      * The size of the buffers for the elements emitted by this flow (which is also run in the background) and the child flows are determined
-     * by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used. 
+     * by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Wraps exceptions from `groupingFunction`, `childFlowTransform` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
-     * @param parallelism
-     *   An upper bound on the number of child flows that run in parallel at any time.
-     * @param groupingFunction
-     *   Function used to determine the group for an element of type `T`. Each group is represented by a value of type `V`.
-     * @param childFlowTransform
-     *   The function that is used to create a child flow, which is later run in the background. The arguments are the group value, for which the
-     *   flow is created, and a flow of `T` elements in that group (each such element has the same group value `V` returned by `predicated`).
+     *
+     * @param parallelism        An upper bound on the number of child flows that run in parallel at any time.
+     * @param groupingFunction   Function used to determine the group for an element of type `T`. Each group is represented by a value of type `V`.
+     * @param childFlowTransform The function that is used to create a child flow, which is later run in the background. The arguments are the group value, for which the
+     *                           flow is created, and a flow of `T` elements in that group (each such element has the same group value `V` returned by `predicated`).
      * @throws JoxScopeExecutionException with cause {@link IllegalStateException}
-     *   When `childFlowTransform` terminates the flow, before upstream passes all elements.
+     *                                    When `childFlowTransform` terminates the flow, before upstream passes all elements.
      */
     public <V, U> Flow<U> groupBy(int parallelism, ThrowingFunction<T, V> groupingFunction, ChildFlowTransformer<T, V, U> childFlowTransform) {
         return new GroupByImpl<>(this, parallelism, groupingFunction, childFlowTransform)
@@ -807,7 +792,7 @@ public class Flow<T> {
     }
 
     /**
-     * Functional interface used in {@link Flow#groupBy} for transforming the child flows. 
+     * Functional interface used in {@link Flow#groupBy} for transforming the child flows.
      */
     @FunctionalInterface
     public interface ChildFlowTransformer<T, V, U> {
@@ -823,10 +808,9 @@ public class Flow<T> {
      * <p>
      * Wraps exceptions from upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
-     * @param n
-     *   The maximum number of elements in a group.
-     * @param duration
-     *   The time window in which the elements are grouped.
+     *
+     * @param n        The maximum number of elements in a group.
+     * @param duration The time window in which the elements are grouped.
      */
     public Flow<List<T>> groupedWithin(int n, Duration duration) {
         return groupedWeightedWithin(n, duration, _ -> 1L);
@@ -839,12 +823,9 @@ public class Flow<T> {
      * <p>
      * The size of buffer used by this method is determined by {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
-     * @param minWeight
-     *   The minimum cumulative weight of elements in a group if no timeout happens.
-     * @param duration
-     *   The time window in which the elements are grouped.
-     * @param costFn
-     *   The function that calculates the weight of an element.
+     * @param minWeight The minimum cumulative weight of elements in a group if no timeout happens.
+     * @param duration  The time window in which the elements are grouped.
+     * @param costFn    The function that calculates the weight of an element.
      */
     @SuppressWarnings("unchecked")
     public Flow<List<T>> groupedWeightedWithin(long minWeight, Duration duration, Function<T, Long> costFn) {
@@ -944,7 +925,7 @@ public class Flow<T> {
      * due to the flow being complete.
      *
      * @param minWeight The minimum cumulative weight of elements in a group.
-     * @param costFn The function that calculates the weight of an element.
+     * @param costFn    The function that calculates the weight of an element.
      */
     public Flow<List<T>> groupedWeighted(long minWeight, ThrowingFunction<T, Long> costFn) {
         if (minWeight <= 0) {
@@ -1014,20 +995,20 @@ public class Flow<T> {
         });
     }
 
-    /** Intersperses elements emitted by this flow with `inject` elements. The `inject` element is emitted between each pair of elements. */
+    /**
+     * Intersperses elements emitted by this flow with `inject` elements. The `inject` element is emitted between each pair of elements.
+     */
     public Flow<T> intersperse(T inject) {
         return intersperse(Optional.empty(), inject, Optional.empty());
     }
 
-    /** Intersperses elements emitted by this flow with `inject` elements. The `start` element is emitted at the beginning; `end` is emitted
+    /**
+     * Intersperses elements emitted by this flow with `inject` elements. The `start` element is emitted at the beginning; `end` is emitted
      * after the current flow emits the last element.
      *
-     * @param start
-     *   An element to be emitted at the beginning.
-     * @param inject
-     *   An element to be injected between the flow elements.
-     * @param end
-     *   An element to be emitted at the end.
+     * @param start  An element to be emitted at the beginning.
+     * @param inject An element to be injected between the flow elements.
+     * @param end    An element to be emitted at the end.
      */
     public Flow<T> intersperse(T start, T inject, T end) {
         return intersperse(Optional.of(start), inject, Optional.of(end));
@@ -1056,12 +1037,9 @@ public class Flow<T> {
      * element taking `Xms` means that the resulting flow will emit elements every `1s + Xms` time. Throttling is not applied to the empty
      * source.
      *
-     * @param elements
-     *   Number of elements to be emitted. Must be greater than 0.
-     * @param per
-     *   Per time unit. Must be greater or equal to 1 ms.
-     * @return
-     *   A flow that emits at most `elements` `per` time unit.
+     * @param elements Number of elements to be emitted. Must be greater than 0.
+     * @param per      Per time unit. Must be greater or equal to 1 ms.
+     * @return A flow that emits at most `elements` `per` time unit.
      */
     public Flow<T> throttle(int elements, Duration per) {
         if (elements <= 0) {
@@ -1084,10 +1062,8 @@ public class Flow<T> {
      * Transform the flow so that it emits elements as long as predicate `f` is satisfied (returns `true`). If `includeFirstFailing` is
      * `true`, the flow will additionally emit the first element that failed the predicate. After that, the flow will complete as done.
      *
-     * @param f
-     *   A predicate function called on incoming elements.
-     * @param includeFirstFailing
-     *   Whether the flow should also emit the first element that failed the predicate (`false` by default).
+     * @param f                   A predicate function called on incoming elements.
+     * @param includeFirstFailing Whether the flow should also emit the first element that failed the predicate (`false` by default).
      */
     public Flow<T> takeWhile(Predicate<T> f, boolean includeFirstFailing) {
         return usingEmit(emit -> {
@@ -1112,8 +1088,7 @@ public class Flow<T> {
      * Concatenates this flow with the `other` flow. The resulting flow will emit elements from this flow first, and then from the `other`
      * flow.
      *
-     * @param other
-     *   The flow to be appended to this flow.
+     * @param other The flow to be appended to this flow.
      */
     public Flow<T> concat(Flow<T> other) {
         return Flows.concat(this, other);
@@ -1122,8 +1097,7 @@ public class Flow<T> {
     /**
      * Drops `n` elements from this flow and emits subsequent elements.
      *
-     * @param n
-     *   Number of elements to be dropped.
+     * @param n Number of elements to be dropped.
      */
     public Flow<T> drop(int n) {
         return usingEmit(emit -> {
@@ -1148,12 +1122,10 @@ public class Flow<T> {
      * <p>
      * Wraps exceptions from upstream and `other` in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
-     * @param other
-     *   The flow to be merged with this flow.
-     * @param propagateDoneLeft
-     *   Should the resulting flow complete when the left flow (`this`) completes, before the `other` flow.
-     * @param propagateDoneRight
-     *   Should the resulting flow complete when the right flow (`outer`) completes, before `this` flow.
+     *
+     * @param other              The flow to be merged with this flow.
+     * @param propagateDoneLeft  Should the resulting flow complete when the left flow (`this`) completes, before the `other` flow.
+     * @param propagateDoneRight Should the resulting flow complete when the right flow (`outer`) completes, before `this` flow.
      */
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
         return usingEmit(emit -> {
@@ -1180,10 +1152,10 @@ public class Flow<T> {
         });
     }
 
-    /** Prepends `other` flow to this source. The resulting flow will emit elements from `other` flow first, and then from this flow.
+    /**
+     * Prepends `other` flow to this source. The resulting flow will emit elements from `other` flow first, and then from this flow.
      *
-     * @param other
-     *   The flow to be prepended to this flow.
+     * @param other The flow to be prepended to this flow.
      */
     public Flow<T> prepend(Flow<T> other) {
         return other.concat(this);
@@ -1193,8 +1165,7 @@ public class Flow<T> {
      * If this flow has no elements then elements from an `alternative` flow are emitted by the returned flow. If this flow is failed then
      * the returned flow is failed as well.
      *
-     * @param alternative
-     *   An alternative flow to be used when this flow is empty.
+     * @param alternative An alternative flow to be used when this flow is empty.
      */
     public Flow<T> orElse(Flow<T> alternative) {
         return usingEmit(emit -> {
@@ -1218,13 +1189,10 @@ public class Flow<T> {
      * <p>
      * Both flows are run concurrently and asynchronously.
      *
-     * @param other
-     *   The flow whose elements will be interleaved with the elements of this flow.
-     * @param segmentSize
-     *   The number of elements sent from each flow before switching to the other one.
-     * @param eagerComplete
-     *   If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
-     *   non-completed flow are sent downstream.
+     * @param other         The flow whose elements will be interleaved with the elements of this flow.
+     * @param segmentSize   The number of elements sent from each flow before switching to the other one.
+     * @param eagerComplete If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
+     *                      non-completed flow are sent downstream.
      */
     public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete, int bufferCapacity) {
         //noinspection unchecked
@@ -1240,13 +1208,10 @@ public class Flow<T> {
      * <p>
      * Both flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
-     * @param other
-     *   The flow whose elements will be interleaved with the elements of this flow.
-     * @param segmentSize
-     *   The number of elements sent from each flow before switching to the other one.
-     * @param eagerComplete
-     *   If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
-     *   non-completed flow are sent downstream.
+     * @param other         The flow whose elements will be interleaved with the elements of this flow.
+     * @param segmentSize   The number of elements sent from each flow before switching to the other one.
+     * @param eagerComplete If `true`, the returned flow is completed as soon as either of the flow completes. If `false`, the remaining elements of the
+     *                      non-completed flow are sent downstream.
      */
     public <U> Flow<U> interleave(Flow<U> other, int segmentSize, boolean eagerComplete) {
         //noinspection unchecked
@@ -1257,9 +1222,8 @@ public class Flow<T> {
      * Applies the given mapping function `f`, to each element emitted by this source, transforming it into an `Iterable` of results,
      * then the returned flow emits the results one by one. Can be used to unfold incoming sequences of elements into single elements.
      *
-     * @param f
-     *   A function that transforms the element from this flow into an `Iterable` of results which are emitted one by one by the
-     *   returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
+     * @param f A function that transforms the element from this flow into an `Iterable` of results which are emitted one by one by the
+     *          returned flow. If the result of `f` is empty, nothing is emitted by the returned channel.
      */
     public <U> Flow<U> mapConcat(ThrowingFunction<T, Iterable<U>> f) {
         return usingEmit(emit -> {
@@ -1281,10 +1245,9 @@ public class Flow<T> {
      * <p>
      * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
-     * @param parallelism
-     *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
-     * @param f
-     *   The mapping function.
+     *
+     * @param parallelism An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
+     * @param f           The mapping function.
      */
     public <U> Flow<U> mapPar(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
@@ -1319,7 +1282,8 @@ public class Flow<T> {
                                 results.done();
                                 return null;
                             }
-                            case ChannelError(Throwable e, Channel<?> _) -> throw new IllegalStateException("inProgress should never be closed with an error", e);
+                            case ChannelError(Throwable e, Channel<?> _) ->
+                                    throw new IllegalStateException("inProgress should never be closed with an error", e);
                             case Object fork -> {
                                 //noinspection unchecked
                                 Optional<U> result = ((Fork<Optional<U>>) fork).join();
@@ -1351,10 +1315,9 @@ public class Flow<T> {
      * <p>
      * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
-     * @param parallelism
-     *   An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
-     * @param f
-     *   The mapping function.
+     *
+     * @param parallelism An upper bound on the number of forks that run in parallel. Each fork runs the function `f` on a single element from the flow.
+     * @param f           The mapping function.
      */
     public <U> Flow<U> mapParUnordered(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
@@ -1394,10 +1357,8 @@ public class Flow<T> {
      * Creates sliding windows of elements from this flow. The window slides by `step` elements. The last window may be smaller due to flow
      * being completed.
      *
-     * @param n
-     *   The number of elements in a window.
-     * @param step
-     *   The number of elements the window slides by.
+     * @param n    The number of elements in a window.
+     * @param step The number of elements the window slides by.
      */
     public Flow<List<T>> sliding(int n, int step) {
         if (n <= 0) throw new IllegalArgumentException("n must be > 0");
@@ -1436,8 +1397,7 @@ public class Flow<T> {
      * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink is failed or complete, this becomes a
      * failure of the returned flow (contrary to {@link #alsoToTap} where it's ignored).
      *
-     * @param other
-     *   The sink to which elements from this flow will be sent.
+     * @param other The sink to which elements from this flow will be sent.
      * @see #alsoToTap for a version that drops elements when the `other` sink is not available for receive.
      */
     public Flow<T> alsoTo(Sink<T> other) {
@@ -1467,8 +1427,7 @@ public class Flow<T> {
      * If this flow fails, then failure is passed to the `other` sink as well. If the `other` sink fails or closes, then failure or closure
      * is ignored and it doesn't affect the resulting flow (contrary to {@link #alsoTo} where it's propagated).
      *
-     * @param other
-     *   The sink to which elements from this source will be sent.
+     * @param other The sink to which elements from this source will be sent.
      * @see #alsoTo for a version that ensures that elements are emitted both by the returned flow and sent to the `other` sink.
      */
     public Flow<T> alsoToTap(Sink<T> other) {
@@ -1488,8 +1447,9 @@ public class Flow<T> {
             }
         });
     }
-  
-    /** Converts this {@link Flow} into a {@link Publisher}. The flow is run every time the publisher is subscribed to.
+
+    /**
+     * Converts this {@link Flow} into a {@link Publisher}. The flow is run every time the publisher is subscribed to.
      * <p>
      * Must be run within a concurrency scope, as upon subscribing, a fork is created to run the publishing process. Hence, the scope should
      * remain active as long as the publisher is used.
@@ -1506,15 +1466,14 @@ public class Flow<T> {
 
     // region ByteFlow
     public interface ByteChunkMapper<T> extends ThrowingFunction<T, ByteChunk> {}
+
     public interface ByteArrayMapper<T> extends ThrowingFunction<T, byte[]> {}
 
     /**
      * Converts a flow of `byte[]` or {@link ByteChunk} into a dedicated Flow type {@link ByteFlow}.
      *
-     * @param args
-     *   This param should *NOT* be passed. It's only used to verify that this flow contains byte[] or {@link ByteChunk}.
-     * @throws IllegalArgumentException
-     *   if the flow does not contain `byte[]` or {@link ByteChunk} elements.
+     * @param args This param should *NOT* be passed. It's only used to verify that this flow contains byte[] or {@link ByteChunk}.
+     * @throws IllegalArgumentException if the flow does not contain `byte[]` or {@link ByteChunk} elements.
      */
     @SafeVarargs
     public final ByteFlow toByteFlow(T... args) {
@@ -1581,19 +1540,18 @@ public class Flow<T> {
         /**
          * Transforms a ByteFlow such that each emitted `String` is a text line from the input decoded using UTF-8 charset.
          *
-         * @return
-         *   a flow emitting lines read from the input byte chunks, assuming they represent text.
+         * @return a flow emitting lines read from the input byte chunks, assuming they represent text.
          */
         public Flow<String> linesUtf8() {
             return lines(StandardCharsets.UTF_8);
         }
 
 
-        /** Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
+        /**
+         * Decodes a stream of chunks of bytes into UTF-8 Strings. This function is able to handle UTF-8 characters encoded on multiple bytes
          * that are split across chunks.
          *
-         * @return
-         *   a flow of Strings decoded from incoming bytes.
+         * @return a flow of Strings decoded from incoming bytes.
          */
         public Flow<String> decodeStringUtf8() {
             return ChunksUtf8Decoder.decodeStringUtf8(last);
@@ -1644,8 +1602,7 @@ public class Flow<T> {
         /**
          * Writes content of this flow to an {@link java.io.OutputStream}.
          *
-         * @param outputStream
-         *   Target `OutputStream` to write to. Will be closed after finishing the process or on error.
+         * @param outputStream Target `OutputStream` to write to. Will be closed after finishing the process or on error.
          */
         public void runToOutputStream(OutputStream outputStream) throws Exception {
             try {
@@ -1657,10 +1614,10 @@ public class Flow<T> {
             }
         }
 
-        /** Writes content of this flow to a file.
+        /**
+         * Writes content of this flow to a file.
          *
-         * @param path
-         *   Path to the target file. If not exists, it will be created.s
+         * @param path Path to the target file. If not exists, it will be created.s
          */
         public void runToFile(Path path) throws Exception {
             if (Files.isDirectory(path)) {
