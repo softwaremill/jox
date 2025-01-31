@@ -46,7 +46,7 @@ class FlowTest {
     void shouldThrowExceptionForFailedFlow() {
         assertThrows(IllegalStateException.class, () -> {
             Flows.failed(new IllegalStateException())
-                    .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
+                 .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
         });
     }
 
@@ -54,7 +54,7 @@ class FlowTest {
     void shouldThrowExceptionThrownInFunctionF() {
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
             Flows.fromValues(1)
-                    .runFold(0, (_, _) -> { throw new RuntimeException("Function `f` is broken"); });
+                 .runFold(0, (_, _) -> {throw new RuntimeException("Function `f` is broken");});
         });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
@@ -79,7 +79,7 @@ class FlowTest {
     @Test
     void shouldTakeFromAsyncFlow() throws Exception {
         Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-                .buffer(16);
+                               .buffer(16);
         List<Integer> result = f.take(5).runToList();
         assertEquals(List.of(1, 2, 3, 4, 5), result);
     }
@@ -95,7 +95,7 @@ class FlowTest {
     void shouldWorkWithASingleAsyncBoundary() throws Throwable {
         // given
         Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .buffer(3);
+                                  .buffer(3);
 
         // when
         List<Integer> integers = flow.runToList();
@@ -108,11 +108,11 @@ class FlowTest {
     void shouldWorkWithMultipleAsyncBoundaries() throws Throwable {
         // given
         Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .buffer(3)
-                .map(i -> i * 2)
-                .buffer(2)
-                .map(i -> i + 1)
-                .buffer(5);
+                                  .buffer(3)
+                                  .map(i -> i * 2)
+                                  .buffer(2)
+                                  .map(i -> i + 1)
+                                  .buffer(5);
 
         // when
         List<Integer> integers = flow.runToList();
@@ -125,9 +125,9 @@ class FlowTest {
     void shouldPropagateErrorsWhenUsingBuffer() {
         var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(1, 2, 3)
-                    .map(_ -> { throw new IllegalStateException(); })
-                    .buffer(5)
-                    .runToList();
+                 .map(_ -> {throw new IllegalStateException();})
+                 .buffer(5)
+                 .runToList();
         });
         assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
@@ -140,7 +140,7 @@ class FlowTest {
 
         // when
         flow.filter(i -> i % 2 == 0)
-                .runForeach(results::add);
+            .runForeach(results::add);
 
         // then
         assertEquals(List.of(2, 4), results);
@@ -232,7 +232,7 @@ class FlowTest {
     void shouldTakeAsLongAsPredicateIsSatisfied() throws Exception {
         // given
         Flow<Integer> flow = Flows.fromValues(1, 2, 3)
-                .takeWhile(x -> x < 3, false);
+                                  .takeWhile(x -> x < 3, false);
 
         // when & then
         assertEquals(List.of(1, 2), flow.runToList());
@@ -326,10 +326,10 @@ class FlowTest {
         // given
         AtomicBoolean evaluated = new AtomicBoolean(false);
         Flow<Integer> f = Flows.<Integer>failed(new IllegalStateException())
-                .concat(Flows.usingEmit(emit -> {
-                    evaluated.set(true);
-                    emit.apply(1);
-                }));
+                               .concat(Flows.usingEmit(emit -> {
+                                   evaluated.set(true);
+                                   emit.apply(1);
+                               }));
 
         // when & then
         assertThrows(IllegalStateException.class, f::runToList);
@@ -406,9 +406,9 @@ class FlowTest {
 
         // when
         List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+                                 .stream()
+                                 .sorted()
+                                 .toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -422,9 +422,9 @@ class FlowTest {
 
         // when
         List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+                                 .stream()
+                                 .sorted()
+                                 .toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -482,9 +482,9 @@ class FlowTest {
 
         // when
         List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+                                 .stream()
+                                 .sorted()
+                                 .toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -498,9 +498,9 @@ class FlowTest {
 
         // when
         List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+                                 .stream()
+                                 .sorted()
+                                 .toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -514,9 +514,9 @@ class FlowTest {
 
         // when
         var result = c1.merge(c2, true, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+                       .stream()
+                       .sorted()
+                       .toList();
 
         // then
         assertTrue(result.equals(List.of(1, 2, 3, 4)) || result.equals(List.of(1, 2, 3)));
@@ -530,10 +530,10 @@ class FlowTest {
 
         // when
         var result = c1.merge(c2, false, true)
-                .runToList()
-                .stream()
-                .sorted()
-                .toList();
+                       .runToList()
+                       .stream()
+                       .sorted()
+                       .toList();
 
         // then
         assertTrue(new HashSet<>(result).containsAll(List.of(5, 6)));
@@ -544,7 +544,7 @@ class FlowTest {
     void shouldEmitElementsOnlyFromOriginalSourceWhenNotEmpty() throws Exception {
         // given
         Flow<Integer> flow = Flows.fromValues(1)
-                .orElse(Flows.fromValues(2, 3));
+                                  .orElse(Flows.fromValues(2, 3));
 
         // when & then
         assertEquals(List.of(1), flow.runToList());

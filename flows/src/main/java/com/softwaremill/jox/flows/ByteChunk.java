@@ -50,8 +50,8 @@ public class ByteChunk {
      */
     public Iterator<Byte> iterator() {
         return IntStream.range(0, array.length)
-                .mapToObj(i -> array[i])
-                .iterator();
+                        .mapToObj(i -> array[i])
+                        .iterator();
     }
 
     /**

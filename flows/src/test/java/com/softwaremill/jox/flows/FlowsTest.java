@@ -1,10 +1,11 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -15,24 +16,14 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.*;
 
 class FlowsTest {
 
@@ -138,8 +129,8 @@ class FlowsTest {
 
         // when
         List<Integer> actual = Flows.repeatEval(i::incrementAndGet)
-                .take(3)
-                .runToList();
+                                    .take(3)
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), actual);
@@ -153,11 +144,11 @@ class FlowsTest {
 
         // when
         List<Integer> result = Flows.repeatEvalWhileDefined(() -> {
-                    int value = i.incrementAndGet();
-                    evaluated.add(value);
-                    return value < 5 ? Optional.of(value) : Optional.empty();
-                })
-                .runToList();
+                                        int value = i.incrementAndGet();
+                                        evaluated.add(value);
+                                        return value < 5 ? Optional.of(value) : Optional.empty();
+                                    })
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4), result);
@@ -168,8 +159,8 @@ class FlowsTest {
     void shouldRepeatTheSameElement() throws Exception {
         // when
         List<Integer> result = Flows.repeat(2137)
-                .take(3)
-                .runToList();
+                                    .take(3)
+                                    .runToList();
 
         // then
         assertEquals(List.of(2137, 2137, 2137), result);
@@ -180,7 +171,7 @@ class FlowsTest {
     void shouldTickRegularly() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var c = Flows.tick(Duration.ofMillis(100), 1L)
-                    .runToChannel(scope);
+                         .runToChannel(scope);
             var start = System.currentTimeMillis();
 
             c.receive();
@@ -203,7 +194,7 @@ class FlowsTest {
     void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal() throws InterruptedException {
         Scopes.unsupervised(scope -> {
             var c = Flows.tick(Duration.ofMillis(100), 1L)
-                    .runToChannel(scope);
+                         .runToChannel(scope);
             var start = System.currentTimeMillis();
 
             Thread.sleep(200);
@@ -256,7 +247,7 @@ class FlowsTest {
     void shouldInterleaveNoSources() throws Exception {
         // when
         List<Integer> actual = Flows.<Integer>interleaveAll(Collections.emptyList(), 1, false, 10)
-                .runToList();
+                                    .runToList();
 
         // then
         assertEquals(Collections.emptyList(), actual);
@@ -269,7 +260,7 @@ class FlowsTest {
 
         // when
         List<Integer> result = Flows.interleaveAll(List.of(c), 1, false, 10)
-                .runToList();
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -284,7 +275,7 @@ class FlowsTest {
 
         // when
         List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 1, false, 10)
-                .runToList();
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 10, 100, 2, 20, 200, 3, 30, 300, 4, 400, 5, 500, 6, 7, 8), result);
@@ -299,7 +290,7 @@ class FlowsTest {
 
         // when
         List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 2, false, 10)
-                .runToList();
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 100, 200, 3, 4, 30, 300, 400, 5, 6, 500, 7, 8), result);
@@ -424,8 +415,8 @@ class FlowsTest {
 
     private List<String> toStrings(Flow<ByteChunk> source) throws Exception {
         return source.runToList().stream()
-                .map(chunk -> chunk.convertToString(StandardCharsets.UTF_8))
-                .toList();
+                     .map(chunk -> chunk.convertToString(StandardCharsets.UTF_8))
+                     .toList();
     }
 
     private TestInputStream emptyInputStream() {

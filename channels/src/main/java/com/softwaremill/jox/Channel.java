@@ -90,7 +90,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     /**
      * Can be used with {@link Channel#withScopedBufferSize()} to pass buffer size value from scope.
      * e.g. `ScopedValues.where(BUFFER_SIZE, 8).run(() -> Channel.withScopedBufferSize())` will create a channel with buffer size = 8
-     * **/
+     **/
     public static final ScopedValue<Integer> BUFFER_SIZE = ScopedValue.newInstance();
     public static final int DEFAULT_BUFFER_SIZE = 16;
 
@@ -1055,8 +1055,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     public String toString() {
         //noinspection OptionalGetWithoutIsPresent
         var smallestSegment = Stream.of(sendSegment, receiveSegment, bufferEndSegment)
-                .filter(s -> s != Segment.NULL_SEGMENT)
-                .min(Comparator.comparingLong(Segment::getId)).get();
+                                    .filter(s -> s != Segment.NULL_SEGMENT)
+                                    .min(Comparator.comparingLong(Segment::getId)).get();
 
         var scf = sendersAndClosedFlag;
         var sendersCounter = getSendersCounter(scf);
@@ -1064,11 +1064,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
         var sb = new StringBuilder();
         sb.append("Channel(capacity=").append(capacity)
-                .append(", closed=").append(isClosed)
-                .append(", sendSegment=").append(sendSegment.getId()).append(", sendCounter=").append(sendersCounter)
-                .append(", receiveSegment=").append(receiveSegment.getId()).append(", receiveCounter=").append(receivers)
-                .append(", bufferEndSegment=").append(bufferEndSegment.getId()).append(", bufferEndCounter=").append(bufferEnd)
-                .append("): \n");
+          .append(", closed=").append(isClosed)
+          .append(", sendSegment=").append(sendSegment.getId()).append(", sendCounter=").append(sendersCounter)
+          .append(", receiveSegment=").append(receiveSegment.getId()).append(", receiveCounter=").append(receivers)
+          .append(", bufferEndSegment=").append(bufferEndSegment.getId()).append(", bufferEndCounter=").append(bufferEnd)
+          .append("): \n");
         var s = smallestSegment;
         while (s != null) {
             sb.append("  ").append(s).append(": ");

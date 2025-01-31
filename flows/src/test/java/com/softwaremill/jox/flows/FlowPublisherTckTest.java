@@ -1,6 +1,10 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.softwaremill.jox.structured.Scope;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
+import org.reactivestreams.tck.TestEnvironment;
+import org.reactivestreams.tck.flow.FlowPublisherVerification;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -9,11 +13,7 @@ import java.util.List;
 import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.softwaremill.jox.structured.Scope;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
-import org.reactivestreams.tck.TestEnvironment;
-import org.reactivestreams.tck.flow.FlowPublisherVerification;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FlowPublisherTckTest {
 

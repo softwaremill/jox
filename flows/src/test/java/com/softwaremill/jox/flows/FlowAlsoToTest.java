@@ -1,22 +1,22 @@
 package com.softwaremill.jox.flows;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.IntStream;
-
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelDone;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
+
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.IntStream;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FlowAlsoToTest {
 
@@ -27,8 +27,8 @@ public class FlowAlsoToTest {
 
         // when
         List<Integer> result = Flows.fromValues(1, 2, 3)
-                .alsoTo(c)
-                .runToList();
+                                    .alsoTo(c)
+                                    .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -44,8 +44,8 @@ public class FlowAlsoToTest {
 
             // when
             List<Integer> result = Flows.fromValues(1, 2, 3, 4, 5)
-                    .alsoTo(c)
-                    .runToList();
+                                        .alsoTo(c)
+                                        .runToList();
 
             // then
             assertEquals(List.of(1, 2, 3, 4, 5), result);
@@ -68,8 +68,8 @@ public class FlowAlsoToTest {
                 return list;
             });
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .alsoTo(c);
+                                      .take(100)
+                                      .alsoTo(c);
 
             // when & then
             assertThrows(ChannelClosedException.class, flow::runToList);
@@ -91,8 +91,8 @@ public class FlowAlsoToTest {
             });
 
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .alsoTo(c);
+                                      .take(100)
+                                      .alsoTo(c);
 
             // when & then
             assertThrows(ChannelClosedException.class, flow::runToList);
@@ -109,9 +109,9 @@ public class FlowAlsoToTest {
             var forkOther = scope.forkUnsupervised(other::toList);
 
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .concat(Flows.failed(new IllegalStateException()))
-                    .alsoTo(other);
+                                      .take(100)
+                                      .concat(Flows.failed(new IllegalStateException()))
+                                      .alsoTo(other);
 
             // when & then
             assertThrows(IllegalStateException.class, flow::runToList);

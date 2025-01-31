@@ -2,7 +2,6 @@ package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.concurrent.atomic.AtomicInteger;
 
 final class Segment {
     static final int SEGMENT_SIZE = 32; // 2^5
