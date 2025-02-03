@@ -527,7 +527,7 @@ public class FlowMapTest {
                         return Map.entry(Map.entry(Optional.of(e), 1), List.of(Map.entry(previous.get(), count)));
                     }
                 },
-                 state1 -> state1.getKey().map(v -> Map.entry(v, state1.getValue())));
+                state1 -> state1.getKey().map(v -> Map.entry(v, state1.getValue())));
 
         // then
         assertEquals(List.of(

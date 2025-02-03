@@ -1,9 +1,7 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -20,8 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowIOTest {
 
@@ -168,9 +165,9 @@ public class FlowIOTest {
         try {
             String sourceContent = "source.toFile test2 content";
             var source = Flows.fromIterable(
-                    sourceContent.chars().mapToObj(c -> (byte) c)
-                            .collect(Collectors.groupingBy(equalSizeChunks(4)))
-                            .values())
+                            sourceContent.chars().mapToObj(c -> (byte) c)
+                                    .collect(Collectors.groupingBy(equalSizeChunks(4)))
+                                    .values())
                     .toByteFlow(FlowIOTest::convertToByteArray);
 
             // when

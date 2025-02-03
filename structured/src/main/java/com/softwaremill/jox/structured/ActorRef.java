@@ -1,14 +1,14 @@
 package com.softwaremill.jox.structured;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Sink;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.Sink;
+import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 public class ActorRef<T> {
 

@@ -1,12 +1,12 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.util.List;
-
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FlowSlidingTest {
 

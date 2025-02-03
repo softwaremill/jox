@@ -1,12 +1,10 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowCompleteCallbacksTest {
     @Test
@@ -16,10 +14,10 @@ public class FlowCompleteCallbacksTest {
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
                 .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         f.runDrain();
-        
+
         // then
         assertTrue(didRun.get());
     }
@@ -32,10 +30,10 @@ public class FlowCompleteCallbacksTest {
                 .tap(_ -> {throw new RuntimeException();})
                 .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         assertThrows(RuntimeException.class, f::runDrain);
-        
+
         // then
         assertTrue(didRun.get());
     }
@@ -46,10 +44,10 @@ public class FlowCompleteCallbacksTest {
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3).onDone(() -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         f.runDrain();
-        
+
         // then
         assertTrue(didRun.get());
     }
@@ -62,10 +60,10 @@ public class FlowCompleteCallbacksTest {
                 .tap(_ -> {throw new RuntimeException();})
                 .onDone(() -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         assertThrows(RuntimeException.class, f::runDrain);
-        
+
         // then
         assertFalse(didRun.get());
     }
@@ -77,10 +75,10 @@ public class FlowCompleteCallbacksTest {
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
                 .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         f.runDrain();
-        
+
         // then
         assertFalse(didRun.get());
     }
@@ -93,10 +91,10 @@ public class FlowCompleteCallbacksTest {
                 .tap(_ -> {throw new RuntimeException();})
                 .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
-        
+
         // when
         assertThrows(RuntimeException.class, f::runDrain);
-        
+
         // then
         assertTrue(didRun.get());
     }

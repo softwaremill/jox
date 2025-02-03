@@ -90,7 +90,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     /**
      * Can be used with {@link Channel#withScopedBufferSize()} to pass buffer size value from scope.
      * e.g. `ScopedValues.where(BUFFER_SIZE, 8).run(() -> Channel.withScopedBufferSize())` will create a channel with buffer size = 8
-     * **/
+     **/
     public static final ScopedValue<Integer> BUFFER_SIZE = ScopedValue.newInstance();
     public static final int DEFAULT_BUFFER_SIZE = 16;
 

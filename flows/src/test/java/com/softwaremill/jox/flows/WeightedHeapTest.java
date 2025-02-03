@@ -1,25 +1,14 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.softwaremill.jox.flows.WeightedHeap.HeapNode;
+import org.junit.jupiter.api.Test;
 
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import com.softwaremill.jox.flows.WeightedHeap.HeapNode;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 class WeightedHeapTest {
 
@@ -276,7 +265,7 @@ class WeightedHeapTest {
                 .boxed()
                 .map(_ -> Map.entry(random.nextInt(1000), random.nextLong()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, _) -> a));
-        
+
         var elements = initialValues.entrySet().stream()
                 .map(e -> new HeapNode<>(e.getKey(), e.getValue()))
                 .sorted(Comparator.comparingLong(HeapNode::weight))
@@ -302,7 +291,7 @@ class WeightedHeapTest {
         Random random = new Random();
         WeightedHeap<Integer> heap = new WeightedHeap<>();
         List<Integer> elements = new ArrayList<>();
-       
+
         for (int i = 1; i <= 100; i++) {
             int value = random.nextInt(1000);
             elements.add(value);
@@ -319,7 +308,7 @@ class WeightedHeapTest {
             updatedElements.add(new HeapNode<>(element, newWeight));
         }
         updatedElements.sort(Comparator.comparingLong(HeapNode::weight));
-        
+
         // then
         for (HeapNode<Integer> element : updatedElements) {
             var newHeap = heap.extractMin();

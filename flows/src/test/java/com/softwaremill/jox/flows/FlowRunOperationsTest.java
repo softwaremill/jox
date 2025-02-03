@@ -1,17 +1,17 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Scopes;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class FlowRunOperationsTest {
 
@@ -145,7 +145,7 @@ public class FlowRunOperationsTest {
         // when & then
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
             flow
-                    .runFold(0, (_, _) -> { throw new RuntimeException("Function `f` is broken"); });
+                    .runFold(0, (_, _) -> {throw new RuntimeException("Function `f` is broken");});
         });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }

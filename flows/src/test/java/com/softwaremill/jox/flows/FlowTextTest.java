@@ -1,10 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.flows.ByteChunk.empty;
-import static com.softwaremill.jox.flows.ByteChunk.fromArray;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -16,7 +12,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.Test;
+import static com.softwaremill.jox.flows.ByteChunk.empty;
+import static com.softwaremill.jox.flows.ByteChunk.fromArray;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class FlowTextTest {
 

@@ -54,7 +54,7 @@ class FlowTest {
     void shouldThrowExceptionThrownInFunctionF() {
         RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
             Flows.fromValues(1)
-                    .runFold(0, (_, _) -> { throw new RuntimeException("Function `f` is broken"); });
+                    .runFold(0, (_, _) -> {throw new RuntimeException("Function `f` is broken");});
         });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
@@ -125,7 +125,7 @@ class FlowTest {
     void shouldPropagateErrorsWhenUsingBuffer() {
         var exception = assertThrows(JoxScopeExecutionException.class, () -> {
             Flows.fromValues(1, 2, 3)
-                    .map(_ -> { throw new IllegalStateException(); })
+                    .map(_ -> {throw new IllegalStateException();})
                     .buffer(5)
                     .runToList();
         });

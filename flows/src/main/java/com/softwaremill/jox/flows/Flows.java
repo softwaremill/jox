@@ -1,6 +1,10 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import com.softwaremill.jox.*;
+import com.softwaremill.jox.flows.Flow.ByteFlow;
+import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.ThrowingConsumer;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,11 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Flow.Publisher;
 import java.util.concurrent.Flow.Subscriber;
@@ -25,15 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelClosed;
-import com.softwaremill.jox.ChannelDone;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.flows.Flow.ByteFlow;
-import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
-import com.softwaremill.jox.structured.ThrowingConsumer;
+import static com.softwaremill.jox.structured.Scopes.unsupervised;
 
 public final class Flows {
 
@@ -166,10 +158,8 @@ public final class Flows {
      * However, ticks do not accumulate; for example, if processing is slow enough that multiple intervals pass between send invocations,
      * only one tick will be sent.
      *
-     * @param interval
-     *   The temporal spacing between subsequent ticks.
-     * @param value
-     *   The element to emitted on every tick.
+     * @param interval The temporal spacing between subsequent ticks.
+     * @param value    The element to emitted on every tick.
      */
     public static <T> Flow<T> tick(Duration interval, T value) {
         return usingEmit(emit -> {
@@ -187,16 +177,18 @@ public final class Flows {
         });
     }
 
-    /** Creates a flow, which emits the given `element` repeatedly. */
+    /**
+     * Creates a flow, which emits the given `element` repeatedly.
+     */
     public static <T> Flow<T> repeat(T element) {
         return repeatEval(() -> element);
     }
 
-    /** Creates a flow, which emits the result of evaluating `supplierFunction` repeatedly. As the parameter is passed by-name, the evaluation is deferred
+    /**
+     * Creates a flow, which emits the result of evaluating `supplierFunction` repeatedly. As the parameter is passed by-name, the evaluation is deferred
      * until the element is emitted, and happens multiple times.
      *
-     * @param supplierFunction
-     *   The code block, computing the element to emit.
+     * @param supplierFunction The code block, computing the element to emit.
      */
     public static <T> Flow<T> repeatEval(Supplier<T> supplierFunction) {
         return usingEmit(emit -> {
@@ -207,13 +199,13 @@ public final class Flows {
         });
     }
 
-    /** Creates a flow, which emits the value contained in the result of evaluating `supplierFunction` repeatedly.
-     *  When the evaluation of `supplierFunction` returns a {@link Optional#empty()}, the flow is completed as "done", and no more values are evaluated or emitted.
+    /**
+     * Creates a flow, which emits the value contained in the result of evaluating `supplierFunction` repeatedly.
+     * When the evaluation of `supplierFunction` returns a {@link Optional#empty()}, the flow is completed as "done", and no more values are evaluated or emitted.
      * <p>
      * As the `supplierFunction` parameter is passed by-name, the evaluation is deferred until the element is emitted, and happens multiple times.
      *
-     * @param supplierFunction
-     *   The code block, computing the optional element to emit.
+     * @param supplierFunction The code block, computing the optional element to emit.
      */
     public static <T> Flow<T> repeatEvalWhileDefined(Supplier<Optional<T>> supplierFunction) {
         // do nothing
@@ -230,7 +222,9 @@ public final class Flows {
         });
     }
 
-    /** Create a flow which sleeps for the given `timeout` and then completes as done. */
+    /**
+     * Create a flow which sleeps for the given `timeout` and then completes as done.
+     */
     public static <T> Flow<T> timeout(Duration timeout) {
         return usingEmit(_ -> Thread.sleep(timeout.toMillis()));
     }
@@ -248,12 +242,16 @@ public final class Flows {
         });
     }
 
-    /** Creates an empty flow, which emits no elements and completes immediately. */
+    /**
+     * Creates an empty flow, which emits no elements and completes immediately.
+     */
     public static <T> Flow<T> empty() {
         return usingEmit(_ -> {});
     }
 
-    /** Creates a flow that emits a single element when `from` completes, or throws an exception when `from` fails. */
+    /**
+     * Creates a flow that emits a single element when `from` completes, or throws an exception when `from` fails.
+     */
     public static <T> Flow<T> fromCompletableFuture(CompletableFuture<T> from) {
         return usingEmit(emit -> {
             emit.apply(from.get());
@@ -272,8 +270,7 @@ public final class Flows {
     /**
      * Creates a flow that fails immediately with the given {@link java.lang.Exception}
      *
-     * @param t
-     *   The {@link java.lang.Exception} to fail with
+     * @param t The {@link java.lang.Exception} to fail with
      */
     public static <T> Flow<T> failed(Exception t) {
         return usingEmit(_ -> {
@@ -286,7 +283,7 @@ public final class Flows {
      * The `initial` state is used for the first application, and then the state is updated with the second element of the entry. Emission stops when `f` returns {@link Optional#empty()},
      * otherwise it continues indefinitely.
      */
-    public static <S, T>  Flow<T> unfold(S initial, Function<S, Optional<Map.Entry<T, S>>> f) {
+    public static <S, T> Flow<T> unfold(S initial, Function<S, Optional<Map.Entry<T, S>>> f) {
         return usingEmit(emit -> {
             S s = initial;
             while (true) {
@@ -301,7 +298,8 @@ public final class Flows {
         });
     }
 
-    /** Creates a Flow from a Publisher, that is, which emits the elements received by subscribing to the publisher. A new
+    /**
+     * Creates a Flow from a Publisher, that is, which emits the elements received by subscribing to the publisher. A new
      * subscription is created every time this flow is run.
      * <p>
      * The data is passed from a subscription to the flow using a Channel, with a capacity given by the {@link Channel#BUFFER_SIZE} in
@@ -402,13 +400,10 @@ public final class Flows {
      * <p>
      * The provided flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
-     * @param flows
-     *   The flows whose elements will be interleaved.
-     * @param segmentSize
-     *   The number of elements sent from each flow before switching to the next one.
-     * @param eagerComplete
-     *   If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
-     *   remaining non-completed flows.
+     * @param flows         The flows whose elements will be interleaved.
+     * @param segmentSize   The number of elements sent from each flow before switching to the next one.
+     * @param eagerComplete If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
+     *                      remaining non-completed flows.
      */
     public static <T> Flow<T> interleaveAll(List<Flow<T>> flows, int segmentSize, boolean eagerComplete) {
         return interleaveAll(flows, segmentSize, eagerComplete, Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
@@ -424,13 +419,10 @@ public final class Flows {
      * <p>
      * The provided flows are run concurrently and asynchronously.
      *
-     * @param flows
-     *   The flows whose elements will be interleaved.
-     * @param segmentSize
-     *   The number of elements sent from each flow before switching to the next one.
-     * @param eagerComplete
-     *   If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
-     *   remaining non-completed flows.
+     * @param flows         The flows whose elements will be interleaved.
+     * @param segmentSize   The number of elements sent from each flow before switching to the next one.
+     * @param eagerComplete If `true`, the returned flow is completed as soon as any of the flows completes. If `false`, the interleaving continues with the
+     *                      remaining non-completed flows.
      */
     public static <T> Flow<T> interleaveAll(List<Flow<T>> flows, int segmentSize, boolean eagerComplete, int bufferCapacity) {
         if (flows.isEmpty()) {
@@ -495,10 +487,8 @@ public final class Flows {
     /**
      * Converts a {@link java.io.InputStream} into {@link ByteFlow}.
      *
-     * @param is
-     *   an `InputStream` to read bytes from.
-     * @param chunkSize
-     *   maximum number of bytes to read from the underlying `InputStream` before emitting a new chunk.
+     * @param is        an `InputStream` to read bytes from.
+     * @param chunkSize maximum number of bytes to read from the underlying `InputStream` before emitting a new chunk.
      */
     public static ByteFlow fromInputStream(InputStream is, int chunkSize) {
         return Flows.<ByteChunk>usingEmit(emit -> {
@@ -521,10 +511,8 @@ public final class Flows {
     /**
      * Creates a {@link ByteFlow} read from a file.
      *
-     * @param path
-     *   path the file to read from.
-     * @param chunkSize
-     *   maximum number of bytes to read from the file before emitting a new chunk.
+     * @param path      path the file to read from.
+     * @param chunkSize maximum number of bytes to read from the file before emitting a new chunk.
      */
     public static ByteFlow fromFile(Path path, int chunkSize) {
         return Flows.<ByteChunk>usingEmit(emit -> {

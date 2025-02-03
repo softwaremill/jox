@@ -1,15 +1,13 @@
 package com.softwaremill.jox.structured;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ActorRefTest {
     interface ITest {
@@ -77,18 +75,18 @@ class ActorRefTest {
 
         // when
         var thrown = Scopes.supervised(scope ->
-             assertThrows(RuntimeException.class, () -> {
-                var state = new AtomicLong(0);
-                ITest logic = x -> {
-                    state.addAndGet(x);
-                    if (state.get() > 2) throw new RuntimeException("too much");
-                    return state.get();
-                };
+                assertThrows(RuntimeException.class, () -> {
+                    var state = new AtomicLong(0);
+                    ITest logic = x -> {
+                        state.addAndGet(x);
+                        if (state.get() > 2) throw new RuntimeException("too much");
+                        return state.get();
+                    };
 
-                var ref = ActorRef.create(scope, logic, _ -> isClosed.set(true));
+                    var ref = ActorRef.create(scope, logic, _ -> isClosed.set(true));
 
-                ref.ask(l -> l.f(5));
-            })
+                    ref.ask(l -> l.f(5));
+                })
         );
 
         // then

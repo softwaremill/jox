@@ -1,16 +1,15 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.IntStream;
-
 import com.softwaremill.jox.structured.Scopes;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.FlowAdapters;
 import reactor.core.publisher.Flux;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FlowsProjectReactorTest {
 

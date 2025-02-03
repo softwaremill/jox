@@ -1,11 +1,5 @@
 package com.softwaremill.jox.flows;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
-import java.time.Duration;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-
 import com.softwaremill.jox.structured.Scopes;
 import org.apache.pekko.actor.ActorSystem;
 import org.apache.pekko.stream.javadsl.AsPublisher;
@@ -16,6 +10,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivestreams.FlowAdapters;
 import org.reactivestreams.Publisher;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class FlowPekkoStreamTest {
 
