@@ -449,21 +449,20 @@ e.g.
 import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.Scopes;
 
-...
-        try{
-        Scopes.supervised(scope ->{
-        throw new
-
-TestException("x");
-    });
-            }catch(
-JoxScopeExecutionException e){
-        e.
-
-unwrapAndThrow(OtherException .class, TestException .class, YetAnotherException .class);
-    throw e;
+public class Demo {
+    public static void main(String[] args) throws ExecutionException, InterruptedException {
+        /* ... */
+        try {
+            Scopes.supervised(scope -> {
+                throw new TestException("x");
+            });
+        } catch (JoxScopeExecutionException e) {
+            e.unwrapAndThrow(OtherException.class, TestException.class, YetAnotherException.class);
+            throw e;
+        }
+        /* ... */
+    }
 }
-        ...
 ```
 
 #### Other types of scopes & forks
