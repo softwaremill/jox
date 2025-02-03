@@ -27,8 +27,8 @@ public class FlowAlsoToTest {
 
         // when
         List<Integer> result = Flows.fromValues(1, 2, 3)
-                                    .alsoTo(c)
-                                    .runToList();
+                .alsoTo(c)
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -44,8 +44,8 @@ public class FlowAlsoToTest {
 
             // when
             List<Integer> result = Flows.fromValues(1, 2, 3, 4, 5)
-                                        .alsoTo(c)
-                                        .runToList();
+                    .alsoTo(c)
+                    .runToList();
 
             // then
             assertEquals(List.of(1, 2, 3, 4, 5), result);
@@ -68,8 +68,8 @@ public class FlowAlsoToTest {
                 return list;
             });
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                                      .take(100)
-                                      .alsoTo(c);
+                    .take(100)
+                    .alsoTo(c);
 
             // when & then
             assertThrows(ChannelClosedException.class, flow::runToList);
@@ -91,8 +91,8 @@ public class FlowAlsoToTest {
             });
 
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                                      .take(100)
-                                      .alsoTo(c);
+                    .take(100)
+                    .alsoTo(c);
 
             // when & then
             assertThrows(ChannelClosedException.class, flow::runToList);
@@ -109,9 +109,9 @@ public class FlowAlsoToTest {
             var forkOther = scope.forkUnsupervised(other::toList);
 
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                                      .take(100)
-                                      .concat(Flows.failed(new IllegalStateException()))
-                                      .alsoTo(other);
+                    .take(100)
+                    .concat(Flows.failed(new IllegalStateException()))
+                    .alsoTo(other);
 
             // when & then
             assertThrows(IllegalStateException.class, flow::runToList);

@@ -262,14 +262,14 @@ class WeightedHeapTest {
         Random random = new SecureRandom();
         WeightedHeap<Integer> heap = new WeightedHeap<>();
         var initialValues = IntStream.rangeClosed(1, 100)
-                                     .boxed()
-                                     .map(_ -> Map.entry(random.nextInt(1000), random.nextLong()))
-                                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, _) -> a));
+                .boxed()
+                .map(_ -> Map.entry(random.nextInt(1000), random.nextLong()))
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, _) -> a));
 
         var elements = initialValues.entrySet().stream()
-                                    .map(e -> new HeapNode<>(e.getKey(), e.getValue()))
-                                    .sorted(Comparator.comparingLong(HeapNode::weight))
-                                    .toList();
+                .map(e -> new HeapNode<>(e.getKey(), e.getValue()))
+                .sorted(Comparator.comparingLong(HeapNode::weight))
+                .toList();
 
         // when
         for (HeapNode<Integer> element : elements) {

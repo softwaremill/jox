@@ -99,14 +99,14 @@ public class FlowFlattenTest {
 
         // when & then
         var result = flow.flattenPar(10)
-                         .runToList().stream().flatMap(f -> {
+                .runToList().stream().flatMap(f -> {
                     try {
                         return f.runToList().stream();
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 })
-                         .toList();
+                .toList();
 
         assertThat(result, containsInAnyOrder(10, 20));
     }

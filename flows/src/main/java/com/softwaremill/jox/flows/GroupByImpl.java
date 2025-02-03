@@ -147,8 +147,8 @@ class GroupByImpl<T, V, U> {
                 // creation (see below). As the receive is conditional, the errors that occur on this channel are also
                 // propagated to `childOutput`, which is always the first (priority) clause in the main `select`.
                 Source<FromParent> parentChannel = parent.map(FromParent::new)
-                                                         .onError(childOutput::errorOrClosed)
-                                                         .runToChannel(scope);
+                        .onError(childOutput::errorOrClosed)
+                        .runToChannel(scope);
 
                 GroupByState state = new GroupByState();
 
@@ -232,19 +232,19 @@ class GroupByImpl<T, V, U> {
 
             scope.forkUnsupervised(() -> {
                 childFlowTransform.apply(v).apply(Flows.fromSource(childChannel))
-                                  .onDone(() -> {
-                                      try {
-                                          childDone.sendOrClosed(new ChildDone(v));
-                                      } catch (InterruptedException e) {
-                                          throw new RuntimeException(e);
-                                      }
-                                  })
-                                  // When the child flow is done, making sure that the source channel becomes closed as well
-                                  // otherwise, we'd be risking a deadlock, if there are `childChannel.send`-s pending, and the
-                                  // buffer is full; if the channel is already closed, this is a no-op.
-                                  .onDone(childChannel::doneOrClosed)
-                                  .onError(childChannel::errorOrClosed)
-                                  .runPipeToSink(childOutput, false);
+                        .onDone(() -> {
+                            try {
+                                childDone.sendOrClosed(new ChildDone(v));
+                            } catch (InterruptedException e) {
+                                throw new RuntimeException(e);
+                            }
+                        })
+                        // When the child flow is done, making sure that the source channel becomes closed as well
+                        // otherwise, we'd be risking a deadlock, if there are `childChannel.send`-s pending, and the
+                        // buffer is full; if the channel is already closed, this is a no-op.
+                        .onDone(childChannel::doneOrClosed)
+                        .onError(childChannel::errorOrClosed)
+                        .runPipeToSink(childOutput, false);
                 return null;
             });
 

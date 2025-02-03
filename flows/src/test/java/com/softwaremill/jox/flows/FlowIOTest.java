@@ -165,10 +165,10 @@ public class FlowIOTest {
         try {
             String sourceContent = "source.toFile test2 content";
             var source = Flows.fromIterable(
-                                      sourceContent.chars().mapToObj(c -> (byte) c)
-                                                   .collect(Collectors.groupingBy(equalSizeChunks(4)))
-                                                   .values())
-                              .toByteFlow(FlowIOTest::convertToByteArray);
+                            sourceContent.chars().mapToObj(c -> (byte) c)
+                                    .collect(Collectors.groupingBy(equalSizeChunks(4)))
+                                    .values())
+                    .toByteFlow(FlowIOTest::convertToByteArray);
 
             // when
             source.runToFile(path);

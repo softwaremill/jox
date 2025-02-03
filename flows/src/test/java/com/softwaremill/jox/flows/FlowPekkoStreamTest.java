@@ -35,8 +35,8 @@ public class FlowPekkoStreamTest {
     void test() throws ExecutionException, InterruptedException {
         Scopes.supervised(scope -> {
             var flow = Flows.fromIterable(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-                            .map(i -> i * 2)
-                            .filter(i -> i % 3 == 0);
+                    .map(i -> i * 2)
+                    .filter(i -> i % 3 == 0);
             var result = Source
                     .fromPublisher(FlowAdapters.toPublisher(flow.toPublisher(scope)))
                     .map(i -> i * 2)
@@ -53,8 +53,8 @@ public class FlowPekkoStreamTest {
     public void testSimpleFlow() throws InterruptedException {
         Scopes.supervised(scope -> {
             var flow = Flows.fromIterable(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-                            .map(i -> i * 2)
-                            .filter(i -> i % 3 == 0);
+                    .map(i -> i * 2)
+                    .filter(i -> i % 3 == 0);
             var result = Source
                     .fromPublisher(FlowAdapters.toPublisher(flow.toPublisher(scope)))
                     .map(i -> i * 2)
@@ -71,8 +71,8 @@ public class FlowPekkoStreamTest {
     public void testConcurrentFlow() throws InterruptedException {
         Scopes.supervised(scope -> {
             var flow = Flows.tick(Duration.ofMillis(100), "x")
-                            .merge(Flows.tick(Duration.ofMillis(200), "y"), false, false)
-                            .take(5);
+                    .merge(Flows.tick(Duration.ofMillis(200), "y"), false, false)
+                    .take(5);
             var result = Source
                     .fromPublisher(FlowAdapters.toPublisher(flow.toPublisher(scope)))
                     .map(s -> s + s)
@@ -94,8 +94,8 @@ public class FlowPekkoStreamTest {
                 .runWith(Sink.asPublisher(AsPublisher.WITHOUT_FANOUT), system);
 
         var result = Flows.fromPublisher(FlowAdapters.toFlowPublisher(publisher))
-                          .map(i -> i * 10)
-                          .runToList();
+                .map(i -> i * 10)
+                .runToList();
 
         assertEquals(List.of(20, 40, 60), result);
     }
@@ -109,8 +109,8 @@ public class FlowPekkoStreamTest {
                 .runWith(Sink.asPublisher(AsPublisher.WITHOUT_FANOUT), system);
 
         var result = Flows.fromPublisher(FlowAdapters.toFlowPublisher(publisher))
-                          .map(s -> s + s)
-                          .runToList();
+                .map(s -> s + s)
+                .runToList();
 
         result.sort(String::compareTo);
         assertEquals(List.of("xx", "xx", "xx", "yy", "yy"), result);

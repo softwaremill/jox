@@ -51,15 +51,15 @@ class ActorRefTest {
 
             // when & then
             var forks = IntStream.rangeClosed(1, outer)
-                                 .mapToObj(_ -> CompletableFuture.runAsync(() ->
-                                         IntStream.rangeClosed(1, inner).forEach(_ -> {
-                                             try {
-                                                 ref.ask(l -> l.f(1));
-                                             } catch (Exception e) {
-                                                 throw new RuntimeException(e);
-                                             }
-                                         })))
-                                 .toList();
+                    .mapToObj(_ -> CompletableFuture.runAsync(() ->
+                            IntStream.rangeClosed(1, inner).forEach(_ -> {
+                                try {
+                                    ref.ask(l -> l.f(1));
+                                } catch (Exception e) {
+                                    throw new RuntimeException(e);
+                                }
+                            })))
+                    .toList();
 
             forks.forEach(CompletableFuture::join);
 

@@ -18,7 +18,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 1, false, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -32,7 +32,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 1, false, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -46,7 +46,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 1, false, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -60,7 +60,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 1, false)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -74,7 +74,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = ScopedValue.where(Channel.BUFFER_SIZE, 10)
-                                .call(() -> c1.interleave(c2, 1, false).runToList());
+                .call(() -> c1.interleave(c2, 1, false).runToList());
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -88,7 +88,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 2, false, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 3, 4, 30, 40), result);
@@ -102,7 +102,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 2, false, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 3, 4, 30, 40, 5, 6, 7), result);
@@ -116,7 +116,7 @@ public class FlowInterleaveTest {
 
         // when
         var result = c1.interleave(c2, 1, true, 10)
-                       .runToList();
+                .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -130,7 +130,7 @@ public class FlowInterleaveTest {
 
         // when
         var s1 = c1.interleave(c2, 1, true, 10)
-                   .runToList();
+                .runToList();
 
         // then
         assertTrue(s1.isEmpty());

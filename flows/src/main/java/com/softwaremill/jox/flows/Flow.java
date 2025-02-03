@@ -684,7 +684,7 @@ public class Flow<T> {
                         Nested t = (Nested) result;
                         scope.forkUnsupervised(() -> {
                             t.child.onDone(() -> childDoneChannel.send(new ChildDone()))
-                                   .runPipeToSink(childOutputChannel, false);
+                                    .runPipeToSink(childOutputChannel, false);
                             return null;
                         });
                         runningChannelCount++;

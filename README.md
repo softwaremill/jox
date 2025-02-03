@@ -132,9 +132,9 @@ public class Demo {
 
     public static void main(String[] args) {
         ScopedValue.where(Channel.BUFFER_SIZE, 10)
-                   .run(() -> {
-                       Channel.withScopedBufferSize(); // creates channel with buffer size = 10
-                   });
+                .run(() -> {
+                    Channel.withScopedBufferSize(); // creates channel with buffer size = 10
+                });
         Channel.withScopedBufferSize(); // no value in the scope, so default (16) buffer size is used
     }
 }
@@ -755,11 +755,11 @@ public class Demo {
 
     public static void main(String[] args) {
         Flows.fromValues(1, 2, 3, 5, 6)
-             .map(i -> i * 2)
-             .filter(i -> i % 2 == 0)
-             .take(3)
-             .zip(Flows.repeat("a number"))
-             .interleave(Flows.repeat(Map.entry(0, "also a number")), 1, false);
+                .map(i -> i * 2)
+                .filter(i -> i % 2 == 0)
+                .take(3)
+                .zip(Flows.repeat("a number"))
+                .interleave(Flows.repeat(Map.entry(0, "also a number")), 1, false);
     }
 }
 ```
@@ -796,9 +796,9 @@ public class Demo {
 
     public static void main(String[] args) throws Exception {
         Flows.fromValues(1, 2, 3, 5, 6)
-             .map(i -> i * 2)
-             .filter(i -> i % 2 == 0)
-             .runToList();
+                .map(i -> i * 2)
+                .filter(i -> i % 2 == 0)
+                .runToList();
     }
 }
 ```
@@ -843,9 +843,9 @@ public class Demo {
         Source<String> ch = getSource(args); // provide a source
         Scopes.supervised(scope -> {
             Source<String> output = ScopedValue.getWhere(Channel.BUFFER_SIZE, 5, () -> Flows.fromSource(ch)
-                                                                                            .mapConcat(v -> Arrays.asList(v.split(" ")))
-                                                                                            .filter(v -> v.startsWith("example"))
-                                                                                            .runToChannel(scope));
+                    .mapConcat(v -> Arrays.asList(v.split(" ")))
+                    .filter(v -> v.startsWith("example"))
+                    .runToChannel(scope));
         });
     }
 }
@@ -891,8 +891,8 @@ public class Demo {
 
     public static void main(String[] args) throws Exception {
         Flows.fromValues(1, 2, 3)
-             .tap(n -> System.out.printf("Received: %d%n", n))
-             .runToList();
+                .tap(n -> System.out.printf("Received: %d%n", n))
+                .runToList();
     }
 }
 ```

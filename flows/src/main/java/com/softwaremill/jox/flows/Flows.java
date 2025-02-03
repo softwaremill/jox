@@ -435,8 +435,8 @@ public final class Flows {
                 unsupervised(scope -> {
                     scope.forkUnsupervised(() -> {
                         List<Source<T>> availableSources = new ArrayList<>(flows.stream()
-                                                                                .map(flow -> flow.runToChannel(scope))
-                                                                                .toList());
+                                .map(flow -> flow.runToChannel(scope))
+                                .toList());
                         int currentSourceIndex = 0;
                         int elementsRead = 0;
 

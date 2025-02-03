@@ -12,7 +12,7 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                               .onComplete(() -> didRun.set(true));
+                .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -27,8 +27,8 @@ public class FlowCompleteCallbacksTest {
         //given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                               .tap(_ -> {throw new RuntimeException();})
-                               .onComplete(() -> didRun.set(true));
+                .tap(_ -> {throw new RuntimeException();})
+                .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -57,8 +57,8 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                               .tap(_ -> {throw new RuntimeException();})
-                               .onDone(() -> didRun.set(true));
+                .tap(_ -> {throw new RuntimeException();})
+                .onDone(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -73,7 +73,7 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                               .onError(_ -> didRun.set(true));
+                .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -88,8 +88,8 @@ public class FlowCompleteCallbacksTest {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
         Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                               .tap(_ -> {throw new RuntimeException();})
-                               .onError(_ -> didRun.set(true));
+                .tap(_ -> {throw new RuntimeException();})
+                .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
