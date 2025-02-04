@@ -23,7 +23,7 @@ public class FlowAlsoToTest {
     @Test
     void alsoTo_shouldSendToBothSinks() throws Exception {
         // given
-        var c = new Channel<Integer>(10);
+        var c = Channel.<Integer>newBufferedChannel(10);
 
         // when
         List<Integer> result = Flows.fromValues(1, 2, 3)
@@ -39,7 +39,7 @@ public class FlowAlsoToTest {
     void alsoTo_shouldSendToBothSinksAndNotHangWhenOtherSinkIsRendezvousChannel() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var c = new Channel<Integer>();
+            var c = Channel.<Integer>newRendezvousChannel();
             var f = scope.fork(c::toList);
 
             // when
@@ -58,7 +58,7 @@ public class FlowAlsoToTest {
     void alsoTo_shouldCloseMainFlowWhenOtherCloses() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var c = new Channel<Integer>();
+            var c = Channel.<Integer>newRendezvousChannel();
             scope.fork(() -> {
                 var list = List.of(c.receiveOrClosed(), c.receiveOrClosed(), c.receiveOrClosed());
                 c.doneOrClosed();
@@ -81,7 +81,7 @@ public class FlowAlsoToTest {
     void alsoTo_shouldCloseMainFlowWithErrorWhenOtherErrors() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var c = new Channel<Integer>(1);
+            var c = Channel.<Integer>newBufferedChannel(1);
             var f = scope.fork(() -> {
                 c.receiveOrClosed();
                 c.receiveOrClosed();
@@ -105,7 +105,7 @@ public class FlowAlsoToTest {
     void alsoTo_shouldCloseOtherChannelWithErrorWhenMainErrors() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var other = new Channel<Integer>(0);
+            var other = Channel.<Integer>newRendezvousChannel();
             var forkOther = scope.forkUnsupervised(other::toList);
 
             Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
@@ -123,7 +123,7 @@ public class FlowAlsoToTest {
     @Test
     void alsoToTap_shouldSendToBothSinksWhenOtherIsFaster() throws Exception {
         // given
-        var other = new Channel<Integer>(10);
+        var other = Channel.<Integer>newBufferedChannel(10);
         Flow<Integer> flow = Flows
                 .fromValues(1, 2, 3)
                 .alsoToTap(other)
@@ -138,7 +138,7 @@ public class FlowAlsoToTest {
     void alsoTapTo_shouldSendToBothSinksWhenOtherIsSlower() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var other = new Channel<Integer>();
+            var other = Channel.<Integer>newRendezvousChannel();
             var slowConsumerFork = scope.fork(() -> {
                 var consumed = new LinkedList<>();
                 while (true) {
@@ -152,7 +152,7 @@ public class FlowAlsoToTest {
                 }
                 return consumed;
             });
-            var main = new Channel<Integer>();
+            var main = Channel.<Integer>newRendezvousChannel();
             scope.fork(() -> {
                 for (int i = 1; i <= 20; i++) {
                     main.send(i);
@@ -176,7 +176,7 @@ public class FlowAlsoToTest {
     void alsoTapTo_shouldNotFailTheFlowWhenTheOtherSinkFails() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var other = new Channel<Integer>();
+            var other = Channel.<Integer>newRendezvousChannel();
             var f = scope.fork(() -> {
                 var v = other.receiveOrClosed();
                 other.error(new RuntimeException("boom!"));
@@ -202,7 +202,7 @@ public class FlowAlsoToTest {
     void alsoTapTo_shouldNotCloseTheFlowWhenTheOtherSinkCloses() throws Exception {
         Scopes.supervised(scope -> {
             // given
-            var other = new Channel<Integer>();
+            var other = Channel.<Integer>newRendezvousChannel();
             var f = scope.fork(() -> {
                 var v = other.receiveOrClosed();
                 other.done();

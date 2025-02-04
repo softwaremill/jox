@@ -70,7 +70,7 @@ class Demo1 {
     public static void main(String[] args) throws InterruptedException {
         // creates a rendezvous channel
         // (a sender & receiver must meet to pass a value: as if the buffer had size 0)
-        var ch = new Channel<Integer>();
+        var ch = Channel.<Integer>newRendezvousChannel();
 
         Thread.ofVirtual().start(() -> {
             try {
@@ -100,8 +100,7 @@ import com.softwaremill.jox.Channel;
 
 class Demo2 {
     public static void main(String[] args) throws InterruptedException {
-        // creates a buffered channel (buffer of size 3)
-        var ch = new Channel<Integer>(3);
+        var ch = Channel.<Integer>newBufferedChannel(3);
 
         // send()-s won't block
         ch.send(1);
@@ -158,8 +157,7 @@ import com.softwaremill.jox.Channel;
 
 class Demo3 {
     public static void main(String[] args) throws InterruptedException {
-        // creates a buffered channel (buffer of size 3)
-        var ch = new Channel<Integer>(3);
+        var ch = Channel.<Integer>newBufferedChannel(3);
 
         // send()-s won't block
         ch.send(1);
@@ -186,9 +184,9 @@ import static com.softwaremill.jox.Select.select;
 class Demo4 {
     public static void main(String[] args) throws InterruptedException {
         // creates a buffered channel (buffer of size 3)
-        var ch1 = new Channel<Integer>(3);
-        var ch2 = new Channel<Integer>(3);
-        var ch3 = new Channel<Integer>(3);
+        var ch1 = Channel.<Integer>newBufferedChannel(3);
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
+        var ch3 = Channel.<Integer>newBufferedChannel(3);
 
         // send a value to two channels
         ch2.send(29);
@@ -218,8 +216,8 @@ import static com.softwaremill.jox.Select.select;
 
 class Demo5 {
     public static void main(String[] args) throws InterruptedException {
-        var ch1 = new Channel<Integer>(1);
-        var ch2 = new Channel<Integer>(1);
+        var ch1 = Channel.<Integer>newBufferedChannel(1);
+        var ch2 = Channel.<Integer>newBufferedChannel(1);
 
         ch1.send(12); // buffer is now full
 
@@ -242,8 +240,8 @@ import static com.softwaremill.jox.Select.select;
 
 class Demo6 {
     public static void main(String[] args) throws InterruptedException {
-        var ch1 = new Channel<Integer>(3);
-        var ch2 = new Channel<Integer>(3);
+        var ch1 = Channel.<Integer>newBufferedChannel(3);
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
 
         var received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(52));
 
@@ -613,7 +611,7 @@ import com.softwaremill.jox.structured.Scopes;
 public class Demo {
 
     public static void main(String[] args) throws ExecutionException, InterruptedException {
-        Channel<Integer> ch = new Channel<>(16);
+        Channel<Integer> ch = Channel.<Integer>newBufferedDefaultChannel();
         Scopes.supervised(scope -> {
             scope.fork(() -> {
                 ch.send(1);

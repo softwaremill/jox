@@ -20,7 +20,7 @@ public class SelectBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void selectWithSingleClause() throws InterruptedException {
-        var ch = new Channel<Integer>();
+        var ch = Channel.newRendezvousChannel();
         var t1 = Thread.startVirtualThread(() -> {
             for (int i = 0; i < OPERATIONS_PER_INVOCATION; i++) {
                 try {
@@ -48,8 +48,8 @@ public class SelectBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void selectWithTwoClauses() throws InterruptedException {
-        var ch1 = new Channel<Integer>();
-        var ch2 = new Channel<Integer>();
+        var ch1 = Channel.newRendezvousChannel();
+        var ch2 = Channel.newRendezvousChannel();
         var t1 = Thread.startVirtualThread(() -> {
             for (int i = 0; i < OPERATIONS_PER_INVOCATION / 2; i++) {
                 try {

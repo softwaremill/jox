@@ -108,7 +108,7 @@ public class Flow<T> {
      * @param bufferCapacity Specifies buffer capacity of created channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope, int bufferCapacity) {
-        return runToChannelInternal(scope, () -> new Channel<>(bufferCapacity));
+        return runToChannelInternal(scope, () -> Channel.newBufferedChannel(bufferCapacity));
     }
 
     private Source<T> runToChannelInternal(UnsupervisedScope scope, Supplier<Channel<T>> channelProvider) {
@@ -251,7 +251,7 @@ public class Flow<T> {
      */
     public Flow<T> buffer(int bufferCapacity) {
         return usingEmit(emit -> {
-            Channel<T> ch = new Channel<>(bufferCapacity);
+            Channel<T> ch = Channel.newBufferedChannel(bufferCapacity);
             unsupervised(scope -> {
                 runLastToChannelAsync(scope, ch);
                 FlowEmit.channelToEmit(ch, emit);
@@ -1257,7 +1257,7 @@ public class Flow<T> {
     public <U> Flow<U> mapPar(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
             Semaphore semaphore = new Semaphore(parallelism);
-            Channel<Fork<Optional<U>>> inProgress = new Channel<>(parallelism);
+            Channel<Fork<Optional<U>>> inProgress = Channel.newBufferedChannel(parallelism);
             Channel<U> results = Channel.withScopedBufferSize();
 
             // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,

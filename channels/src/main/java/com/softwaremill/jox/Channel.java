@@ -24,9 +24,9 @@ import static com.softwaremill.jox.Segment.findAndMoveForward;
  * - buffered channels, where a given number of sent values might be buffered, before subsequent `send`s block
  * - unlimited channels, where an unlimited number of values might be buffered, hence `send` never blocks
  * <p>
- * The no-argument {@link Channel} constructor creates a rendezvous channel, while a buffered channel can be created
- * by providing a positive integer to the constructor. A rendezvous channel behaves like a buffered channel with
- * buffer size 0. An unlimited channel can be created using {@link Channel#newUnlimitedChannel()}.
+ * To create a channel, use {@link Channel#newRendezvousChannel()}, {@link Channel#newBufferedChannel(int)} and
+ * {@link Channel#newUnlimitedChannel()} methods. Additionally, {@link Channel#newBufferedDefaultChannel()} creates
+ * a buffered channel with a "default" capacity of 16, which should be a good starting point for most use-cases.
  * <p>
  * In a rendezvous channel, senders and receivers block, until a matching party arrives (unless one is already waiting).
  * Similarly, buffered channels block if the buffer is full (in case of senders), or in case of receivers, if the
@@ -153,16 +153,9 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     /**
-     * Creates a rendezvous channel.
-     */
-    public Channel() {
-        this(0);
-    }
-
-    /**
      * Creates a buffered channel (when capacity is positive), or a rendezvous channel if the capacity is 0.
      */
-    public Channel(int capacity) {
+    private Channel(int capacity) {
         if (capacity < UNLIMITED_CAPACITY) {
             throw new IllegalArgumentException("Capacity must be 0 (rendezvous), positive (buffered) or -1 (unlimited channels).");
         }
@@ -203,6 +196,21 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             //noinspection DataFlowIssue
             currentSegment.setup_markCellsProcessed(cellsToProcess);
         }
+    }
+
+    public static <T> Channel<T> newRendezvousChannel() {
+        return new Channel<>(0);
+    }
+
+    public static <T> Channel<T> newBufferedChannel(int capacity) {
+        return new Channel<>(capacity);
+    }
+
+    /**
+     * Creates a new buffered channel, with the default buffer size (16).
+     */
+    public static <T> Channel<T> newBufferedDefaultChannel() {
+        return new Channel<>(DEFAULT_BUFFER_SIZE);
     }
 
     public static <T> Channel<T> newUnlimitedChannel() {

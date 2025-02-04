@@ -76,7 +76,7 @@ public class RendezvousBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void channel() throws InterruptedException {
-        var ch = new Channel<>();
+        var ch = Channel.newRendezvousChannel();
         var t1 = Thread.startVirtualThread(() -> {
             for (int i = 0; i < OPERATIONS_PER_INVOCATION; i++) {
                 try {

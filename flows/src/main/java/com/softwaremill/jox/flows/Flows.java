@@ -431,7 +431,7 @@ public final class Flows {
             return flows.getFirst();
         } else {
             return usingEmit(emit -> {
-                Channel<T> results = new Channel<>(bufferCapacity);
+                Channel<T> results = Channel.newBufferedChannel(bufferCapacity);
                 unsupervised(scope -> {
                     scope.forkUnsupervised(() -> {
                         List<Source<T>> availableSources = new ArrayList<>(flows.stream()

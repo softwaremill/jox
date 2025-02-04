@@ -32,7 +32,7 @@ public class ChainedBenchmark {
         int elements = OPERATIONS_PER_INVOCATION / chainLength;
         Channel<Integer>[] channels = new Channel[chainLength];
         for (int i = 0; i < chainLength; i++) {
-            channels[i] = new Channel<>(capacity);
+            channels[i] = (capacity == 0) ? Channel.newRendezvousChannel() : Channel.newBufferedChannel(capacity);
         }
 
         Thread[] threads = new Thread[chainLength + 1];

@@ -55,7 +55,7 @@ public class BufferedBenchmark {
     @Benchmark
     @OperationsPerInvocation(OPERATIONS_PER_INVOCATION)
     public void channel() throws InterruptedException {
-        var ch = new Channel<>(capacity);
+        var ch = Channel.newBufferedChannel(capacity);
         var t1 = Thread.startVirtualThread(() -> {
             for (int i = 0; i < OPERATIONS_PER_INVOCATION; i++) {
                 try {

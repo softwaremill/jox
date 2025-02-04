@@ -16,8 +16,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromFirst_buffered_immediate() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.send("v");
 
         // when
@@ -30,8 +30,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromSecond_buffered_immediate() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch2.send("v");
 
         // when
@@ -44,8 +44,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromFirst_buffered_suspend() throws InterruptedException, ExecutionException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
 
         scoped(scope -> {
             // when
@@ -63,8 +63,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectBiasedTowardsFirst_buffered() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.send("v1");
         ch2.send("v2");
 
@@ -78,8 +78,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectBiasedTowardsFirst_whenDone_buffered() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.send("x");
         ch2.done();
 
@@ -93,8 +93,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromReady_rendezvous_suspend() throws InterruptedException, ExecutionException {
         // given
-        Channel<String> ch1 = new Channel<>();
-        Channel<String> ch2 = new Channel<>();
+        Channel<String> ch1 = Channel.newRendezvousChannel();
+        Channel<String> ch2 = Channel.newRendezvousChannel();
 
         scoped(scope -> {
             forkVoid(scope, () -> {
@@ -113,8 +113,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromReady_rendezvous_immediate() throws InterruptedException, ExecutionException {
         // given
-        Channel<String> ch1 = new Channel<>();
-        Channel<String> ch2 = new Channel<>();
+        Channel<String> ch1 = Channel.newRendezvousChannel();
+        Channel<String> ch2 = Channel.newRendezvousChannel();
 
         scoped(scope -> {
             forkVoid(scope, () -> ch2.send("v"));
@@ -131,8 +131,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectWhenDone() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.done();
         ch2.send("x");
 
@@ -151,7 +151,7 @@ public class SelectReceiveTest {
 
         var channels = new ArrayList<Channel<String>>();
         for (int i = 0; i < channelsCount; i++) {
-            channels.add(new Channel<>(capacity));
+            channels.add(capacity == 0 ? Channel.newRendezvousChannel() : Channel.newBufferedChannel(capacity));
         }
 
         scoped(scope -> {
@@ -185,8 +185,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectWithTransformation() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.send("v");
 
         // when
@@ -199,7 +199,7 @@ public class SelectReceiveTest {
     @Test
     void testBufferExpandedWhenSelecting() throws InterruptedException {
         // given
-        Channel<String> ch = new Channel<>(2);
+        Channel<String> ch = Channel.newBufferedChannel(2);
 
         // when
         ch.send("v1");
@@ -227,8 +227,8 @@ public class SelectReceiveTest {
     @Test
     void testSelectFromNullableList() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch1.send("v");
 
         // when
@@ -239,11 +239,11 @@ public class SelectReceiveTest {
     @Test
     void testSelect_immediate_withError() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(2);
+        Channel<String> ch1 = Channel.newBufferedChannel(2);
         ch1.send("x");
 
         var e = new RuntimeException("boom!");
-        Channel<String> ch2 = new Channel<>(2);
+        Channel<String> ch2 = Channel.newBufferedChannel(2);
         ch2.error(e);
 
         // when

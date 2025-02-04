@@ -16,7 +16,7 @@ public class ChannelInterruptionTest {
     @Test
     void testSendReceiveAfterSendInterrupt() throws Exception {
         // given
-        Channel<String> channel = new Channel<>();
+        Channel<String> channel = Channel.newRendezvousChannel();
 
         // when
         scoped(scope -> {
@@ -34,7 +34,7 @@ public class ChannelInterruptionTest {
     @Test
     void testSendReceiveAfterReceiveInterrupt() throws Exception {
         // given
-        Channel<String> channel = new Channel<>();
+        Channel<String> channel = Channel.newRendezvousChannel();
 
         // when
         scoped(scope -> {
@@ -55,7 +55,7 @@ public class ChannelInterruptionTest {
         scoped(scope -> {
             for (int i = 0; i < 100; i++) {
                 // given
-                Channel<String> channel = new Channel<>();
+                Channel<String> channel = Channel.newRendezvousChannel();
 
                 var t1 = forkCancelable(scope, () -> channel.send("x"));
                 var t2 = fork(scope, channel::receive);
@@ -76,7 +76,7 @@ public class ChannelInterruptionTest {
     @Test
     void testReceiveManyInterruptsReceive() throws ExecutionException, InterruptedException {
         scoped(scope -> {
-            Channel<String> channel = new Channel<>();
+            Channel<String> channel = Channel.newRendezvousChannel();
             Set<String> received = ConcurrentHashMap.newKeySet();
 
             // starting with a single receive
@@ -115,7 +115,7 @@ public class ChannelInterruptionTest {
 
     @Test
     void testManyInterruptedReceivesShouldNotLeakMemory() throws InterruptedException, ExecutionException {
-        var ch = new Channel<String>();
+        var ch = Channel.newRendezvousChannel();
 
         scoped(scope -> {
             var forks = new Fork[300];
@@ -138,7 +138,7 @@ public class ChannelInterruptionTest {
 
     @Test
     void testManyInterruptedSendsShouldNotLeakMemory() throws InterruptedException, ExecutionException {
-        var ch = new Channel<String>(1);
+        var ch = Channel.<String>newBufferedChannel(1);
         ch.send("x");
 
         scoped(scope -> {

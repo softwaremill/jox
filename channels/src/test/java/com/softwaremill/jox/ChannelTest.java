@@ -16,7 +16,7 @@ public class ChannelTest {
     @TestWithCapacities
     void testSendReceiveInManyForks(int capacity) throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>(capacity);
+        Channel<Integer> channel = capacity == 0 ? Channel.newRendezvousChannel() : Channel.newBufferedChannel(capacity);
         var fs = new HashSet<Future<Void>>();
         var s = new ConcurrentSkipListSet<Integer>();
 
@@ -41,7 +41,7 @@ public class ChannelTest {
     @TestWithCapacities
     void testSendReceiveManyElementsInTwoForks(int capacity) throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>(capacity);
+        Channel<Integer> channel = capacity == 0 ? Channel.newRendezvousChannel() : Channel.newBufferedChannel(capacity);
         var s = new ConcurrentSkipListSet<Integer>();
 
         // when

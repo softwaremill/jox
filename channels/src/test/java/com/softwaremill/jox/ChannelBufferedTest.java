@@ -17,7 +17,7 @@ public class ChannelBufferedTest {
     @Timeout(1)
     void testSimpleSendReceiveBuffer1() throws InterruptedException {
         // given
-        Channel<String> channel = new Channel<>(1);
+        Channel<String> channel = Channel.newBufferedChannel(1);
 
         // when
         channel.send("x"); // should not block
@@ -31,7 +31,7 @@ public class ChannelBufferedTest {
     @Timeout(1)
     void testSimpleSendReceiveBuffer2() throws InterruptedException {
         // given
-        Channel<String> channel = new Channel<>(2);
+        Channel<String> channel = Channel.newBufferedChannel(2);
 
         // when
         channel.send("x"); // should not block
@@ -48,7 +48,7 @@ public class ChannelBufferedTest {
     @Timeout(2)
     void testBufferCapacityStaysTheSameAfterSendsReceives() throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>(2);
+        Channel<Integer> channel = Channel.newBufferedChannel(2);
 
         // when
         scoped(scope -> {
@@ -78,7 +78,7 @@ public class ChannelBufferedTest {
     @Timeout(1)
     void shouldReceiveFromAChannelUntilDone() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>(3);
+        Channel<Integer> c = Channel.newBufferedChannel(3);
         c.send(1);
         c.send(2);
         c.done();
@@ -98,7 +98,7 @@ public class ChannelBufferedTest {
     @Timeout(1)
     void shouldNotReceiveFromAChannelInCaseOfAnError() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>(3);
+        Channel<Integer> c = Channel.newBufferedChannel(3);
         c.send(1);
         c.send(2);
         c.error(new RuntimeException());
@@ -114,8 +114,8 @@ public class ChannelBufferedTest {
 
     @Test
     void shouldProcessCellsInitially() {
-        assertTrue(new Channel<String>(1).toString().contains("notProcessed=31"));
-        assertTrue(new Channel<String>(31).toString().contains("notProcessed=1"));
-        assertTrue(new Channel<String>(32).toString().contains("notProcessed=0"));
+        assertTrue(Channel.<String>newBufferedChannel(1).toString().contains("notProcessed=31"));
+        assertTrue(Channel.<String>newBufferedChannel(31).toString().contains("notProcessed=1"));
+        assertTrue(Channel.<String>newBufferedChannel(32).toString().contains("notProcessed=0"));
     }
 }
