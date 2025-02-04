@@ -74,10 +74,10 @@ public class ActorRef<T> {
      * propagated to the caller, and the actor continues. Fatal exceptions, or exceptions that occur during `ActorRef.tell` invocations,
      * cause the actor's channel to be closed with an error, and are propagated to the enclosing scope.
      * <p>
-     * The actor's mailbox (incoming channel) will have a capacity as specified by the {@link Channel#BUFFER_SIZE} in scope or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * The actor's mailbox (incoming channel) will have a capacity of {@link Channel#DEFAULT_BUFFER_SIZE}.
      */
     public static <T> ActorRef<T> create(Scope scope, T logic, Consumer<T> close) {
-        Channel<ThrowingConsumer<T>> c = Channel.withScopedBufferSize();
+        Channel<ThrowingConsumer<T>> c = Channel.newBufferedDefaultChannel();
         ActorRef<T> ref = new ActorRef<>(c);
         scope.fork(() -> {
             try {

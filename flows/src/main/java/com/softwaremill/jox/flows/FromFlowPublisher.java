@@ -65,7 +65,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                 // we need separate error & data channels so that we can select from error & signals only, without receiving data
                 // 1.4 any errors from running the flow end up here
                 Channel<DummyError> errors = Channel.newUnlimitedChannel();
-                Channel<T> data = Channel.withScopedBufferSize();
+                Channel<T> data = com.softwaremill.jox.flows.Flow.newChannelWithBufferSizeFromScope();
 
                 // running the flow in the background; all errors end up as an error of the `errors` channel
                 forkPropagate(scope, errors, () -> {

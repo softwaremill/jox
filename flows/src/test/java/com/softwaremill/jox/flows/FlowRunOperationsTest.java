@@ -75,7 +75,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runToChannel_shouldRunWithBufferSizeDefinedInScope() throws Throwable {
-        ScopedValue.where(Channel.BUFFER_SIZE, 2).call(() -> {
+        ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 2).call(() -> {
             Scopes.unsupervised(scope -> {
                 // given
                 Flow<Integer> flow = Flows.fromValues(1, 2, 3);

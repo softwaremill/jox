@@ -266,7 +266,7 @@ public class FlowGroupedTest {
     void groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches() throws InterruptedException {
         Scopes.supervised(scope -> {
             // given
-            var c = Channel.<Integer>withScopedBufferSize();
+            var c = Flow.<Integer>newChannelWithBufferSizeFromScope();
             scope.fork(() -> {
                 c.send(1);
                 c.send(2);
