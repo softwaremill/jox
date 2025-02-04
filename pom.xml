@@ -20,7 +20,6 @@
         <module>channels</module>
         <module>structured</module>
         <module>bench</module>
-        <module>channel-ops</module>
         <module>flows</module>
     </modules>
 
