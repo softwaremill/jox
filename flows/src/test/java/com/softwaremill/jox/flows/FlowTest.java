@@ -266,6 +266,15 @@ class FlowTest {
     }
 
     @Test
+    void shouldTakeWhileFromAsyncFlow() throws Exception {
+        // given
+        Flow<Integer> flow = Flows.fromValues(3, 2, 1).buffer().takeWhile(x -> x > 2, false);
+
+        // when & then
+        assertEquals(List.of(3), flow.runToList());
+    }
+
+    @Test
     void shouldNotThrottleEmptySource() throws Exception {
         // given
         Flow<Integer> s = Flows.empty();
