@@ -28,6 +28,7 @@ public class JoxScopeExecutionException extends RuntimeException {
      *     e.unwrapAndThrow(OtherException.class, TestException.class, YetAnotherException.class);
      *     throw e;
      * }
+     * }
      * </pre>
      */
     @SafeVarargs
