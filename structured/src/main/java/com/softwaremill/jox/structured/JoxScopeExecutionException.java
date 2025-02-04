@@ -18,7 +18,8 @@ public class JoxScopeExecutionException extends RuntimeException {
      * after calling this method.
      * <p>
      * e.g.
-     * <pre>{@code
+     * <pre>
+     * {@code
      * try {
      *     Scopes.supervised(scope -> {
      *         throw new TestException("x");
@@ -26,7 +27,8 @@ public class JoxScopeExecutionException extends RuntimeException {
      * } catch (JoxScopeExecutionException e) {
      *     e.unwrapAndThrow(OtherException.class, TestException.class, YetAnotherException.class);
      *     throw e;
-     * }</pre>
+     * }
+     * </pre>
      */
     @SafeVarargs
     public final <T extends Throwable> void unwrapAndThrow(Class<? extends T>... exceptionsToRethrow) throws T {
