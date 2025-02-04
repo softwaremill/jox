@@ -8,12 +8,12 @@
     <parent>
         <groupId>com.softwaremill.jox</groupId>
         <artifactId>parent</artifactId>
-        <version>0.3.1</version>
+        <version>0.4.0</version>
     </parent>
 
     <artifactId>bench</artifactId>
     <packaging>pom</packaging>
-    <version>0.3.1</version>
+    <version>0.4.0</version>
 
     <modules>
         <module>bench-java</module>
@@ -40,7 +40,7 @@
         <dependency>
             <groupId>com.softwaremill.jox</groupId>
             <artifactId>channels</artifactId>
-            <version>0.3.1</version>
+            <version>0.4.0</version>
         </dependency>
     </dependencies>
 
