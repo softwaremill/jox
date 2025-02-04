@@ -302,7 +302,7 @@ public final class Flows {
      * Creates a Flow from a Publisher, that is, which emits the elements received by subscribing to the publisher. A new
      * subscription is created every time this flow is run.
      * <p>
-     * The data is passed from a subscription to the flow using a Channel, with a capacity given by the {@link Channel#BUFFER_SIZE} in
+     * The data is passed from a subscription to the flow using a Channel, with a capacity given by the {@link Flow#CHANNEL_BUFFER_SIZE} in
      * scope or {@link Channel#DEFAULT_BUFFER_SIZE} is used. That's also how many elements will be at most requested from the publisher at a time.
      * <p>
      * The publisher parameter should implement the JDK 9+ Flow.Publisher API
@@ -311,8 +311,8 @@ public final class Flows {
         return usingEmit(emit -> {
             // using an unsafe scope for efficiency
             Scopes.unsupervised(scope -> {
-                Channel<T> channel = Channel.withScopedBufferSize();
-                int capacity = Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE);
+                Channel<T> channel = Flow.newChannelWithBufferSizeFromScope();
+                int capacity = Flow.CHANNEL_BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE);
                 int demandThreshold = (int) Math.ceil(capacity / 2.0);
 
                 // used to "extract" the subscription that is set in the subscription running in a fork
@@ -398,7 +398,7 @@ public final class Flows {
      * is completed immediately, otherwise the interleaving continues with the remaining non-completed flows. Once all but one flows are
      * complete, the elements of the remaining non-complete flow are emitted by the returned flow.
      * <p>
-     * The provided flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * The provided flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @param flows         The flows whose elements will be interleaved.
      * @param segmentSize   The number of elements sent from each flow before switching to the next one.
@@ -406,7 +406,7 @@ public final class Flows {
      *                      remaining non-completed flows.
      */
     public static <T> Flow<T> interleaveAll(List<Flow<T>> flows, int segmentSize, boolean eagerComplete) {
-        return interleaveAll(flows, segmentSize, eagerComplete, Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
+        return interleaveAll(flows, segmentSize, eagerComplete, Flow.CHANNEL_BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
     }
 
     /**

@@ -84,7 +84,7 @@ public class Flow<T> {
      * The flow is run in the background, and each emitted element is sent to a newly created channel, which is then returned as the result
      * of this method.
      * <p>
-     * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Buffer capacity can be set via scoped value {@link Flow#CHANNEL_BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Method does not block until the flow completes.
      * <p>
@@ -93,7 +93,7 @@ public class Flow<T> {
      * @param scope Required for creating async forks responsible for writing to channel
      */
     public Source<T> runToChannel(UnsupervisedScope scope) {
-        return runToChannelInternal(scope, Channel::withScopedBufferSize);
+        return runToChannelInternal(scope, Flow::newChannelWithBufferSizeFromScope);
     }
 
     /**
@@ -264,12 +264,12 @@ public class Flow<T> {
      * When run, the current pipeline is run asynchronously in the background, emitting elements to a buffer.
      * The elements of the buffer are then emitted by the returned flow.
      * <p>
-     * Buffer capacity is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Buffer capacity is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Any exceptions are propagated by the returned flow.
      */
     public Flow<T> buffer() {
-        return buffer(Channel.BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
+        return buffer(Flow.CHANNEL_BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
     }
 
     /**
@@ -500,7 +500,7 @@ public class Flow<T> {
      * Combines elements from this and the other flow into Map.Entry. Completion of either flow completes the returned flow as well. The flows
      * are run concurrently.
      * <p>
-     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Flow#CHANNEL_BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @see Flow#zipAll
      */
@@ -539,7 +539,7 @@ public class Flow<T> {
      * Combines elements from this and the other flow into tuples, handling early completion of either flow with defaults. The flows are run
      * concurrently.
      * <p>
-     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Channel#BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Method uses channels to emit elements. The size of channel buffer is determined by the scoped value {@link Flow#CHANNEL_BUFFER_SIZE} or {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @param other        A flow of elements to be combined with.
      * @param thisDefault  A default element to be used in the result tuple when the other flow is longer.
@@ -623,7 +623,7 @@ public class Flow<T> {
      * Up to `parallelism` child flows are run concurrently in the background. When the limit is reached, until a child flow completes, no
      * more child flows are run.
      * <p>
-     * The size of the buffers for the elements emitted by the child flows is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * The size of the buffers for the elements emitted by the child flows is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @param parallelism An upper bound on the number of child flows that run in parallel.
      * @param args        This param should *NOT* be passed. It's only used to verify that this flow contains other flows.
@@ -646,8 +646,8 @@ public class Flow<T> {
             final class ChildDone {}
 
             unsupervised(scope -> {
-                Channel<U> childOutputChannel = Channel.withScopedBufferSize();
-                Channel<ChildDone> childDoneChannel = Channel.withScopedBufferSize();
+                Channel<U> childOutputChannel = newChannelWithBufferSizeFromScope();
+                Channel<ChildDone> childDoneChannel = newChannelWithBufferSizeFromScope();
 
                 // When an error occurs in the parent, propagating it also to `childOutputChannel`, from which we always
                 // `select` in the main loop. That way, even if max parallelism is reached, errors in the parent will
@@ -774,7 +774,7 @@ public class Flow<T> {
      * {@link ChannelClosedException}.
      * <p>
      * The size of the buffers for the elements emitted by this flow (which is also run in the background) and the child flows are determined
-     * by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Wraps exceptions from `groupingFunction`, `childFlowTransform` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
@@ -804,7 +804,7 @@ public class Flow<T> {
      * first. The timeout is reset after a group is emitted. If timeout expires and the buffer is empty, nothing is emitted. As soon as a new
      * element is emitted, the flow will emit it as a single-element group and reset the timer.
      * <p>
-     * The size of buffers used by this method is determined by {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * The size of buffers used by this method is determined by {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * Wraps exceptions from upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
@@ -821,7 +821,7 @@ public class Flow<T> {
      * `minWeight`, whatever happens first. The timeout is reset after a group is emitted. If timeout expires and the buffer is empty,
      * nothing is emitted. As soon as a new element is received, the flow will emit it as a single-element group and reset the timer.
      * <p>
-     * The size of buffer used by this method is determined by {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * The size of buffer used by this method is determined by {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @param minWeight The minimum cumulative weight of elements in a group if no timeout happens.
      * @param duration  The time window in which the elements are grouped.
@@ -835,8 +835,8 @@ public class Flow<T> {
         return usingEmit(emit -> {
             unsupervised(scope -> {
                 Source<T> flowSource = runToChannel(scope);
-                Channel<List<T>> outputChannel = Channel.withScopedBufferSize();
-                Channel<GroupingTimeout> timerChannel = Channel.withScopedBufferSize();
+                Channel<List<T>> outputChannel = newChannelWithBufferSizeFromScope();
+                Channel<GroupingTimeout> timerChannel = newChannelWithBufferSizeFromScope();
 
                 forkPropagate(scope, outputChannel, () -> {
                     List<T> buffer = new ArrayList<>();
@@ -1123,7 +1123,7 @@ public class Flow<T> {
      * with the `propagateDoneLeft` and `propagateDoneRight` flags.
      * <p>
      * Both flows are run concurrently in the background.
-     * The size of the buffers is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     * The size of the buffers is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
      * Wraps exceptions from upstream and `other` in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
@@ -1211,7 +1211,7 @@ public class Flow<T> {
      * If one of the flows is done before the other, the behavior depends on the `eagerComplete` flag. When set to `true`, the returned flow is
      * completed immediately, otherwise the remaining elements from the other flow are emitted by the returned flow.
      * <p>
-     * Both flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Both flows are run concurrently and asynchronously. The size of used buffer is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      *
      * @param other         The flow whose elements will be interleaved with the elements of this flow.
      * @param segmentSize   The number of elements sent from each flow before switching to the other one.
@@ -1246,7 +1246,7 @@ public class Flow<T> {
      * <p>
      * The mapped results are emitted in the same order, in which inputs are received. In other words, ordering is preserved.
      * <p>
-     * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     * The size of the output buffer is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
      * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
@@ -1258,7 +1258,7 @@ public class Flow<T> {
         return usingEmit(emit -> {
             Semaphore semaphore = new Semaphore(parallelism);
             Channel<Fork<Optional<U>>> inProgress = Channel.newBufferedChannel(parallelism);
-            Channel<U> results = Channel.withScopedBufferSize();
+            Channel<U> results = newChannelWithBufferSizeFromScope();
 
             // creating a nested scope, so that in case of errors, we can clean up any mapping forks in a "local" fashion,
             // that is without closing the main scope; any error management must be done in the forks, as the scope is
@@ -1316,7 +1316,7 @@ public class Flow<T> {
      * <p>
      * The mapped results **might** be emitted out-of-order, depending on the order in which the mapping function completes.
      * <p>
-     * The size of the output buffer is determined by the {@link Channel#BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
+     * The size of the output buffer is determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default value {@link Channel#DEFAULT_BUFFER_SIZE} is chosen if not specified.
      * <p>
      * Wraps exceptions from `f` and upstream in {@link ChannelErrorException} and {@link JoxScopeExecutionException} when flow is run.
      * <p>
@@ -1326,7 +1326,7 @@ public class Flow<T> {
      */
     public <U> Flow<U> mapParUnordered(int parallelism, ThrowingFunction<T, U> f) {
         return usingEmit(emit -> {
-            Channel<U> results = Channel.withScopedBufferSize();
+            Channel<U> results = newChannelWithBufferSizeFromScope();
             Semaphore s = new Semaphore(parallelism);
             unsupervised(unsupervisedScope -> { // the outer scope, used for the fork which runs the `last` pipeline
                 forkPropagate(unsupervisedScope, results, () -> {
@@ -1459,7 +1459,7 @@ public class Flow<T> {
      * Must be run within a concurrency scope, as upon subscribing, a fork is created to run the publishing process. Hence, the scope should
      * remain active as long as the publisher is used.
      * <p>
-     * Elements emitted by the flow are buffered, using a buffer of capacity given by the {@link Channel#BUFFER_SIZE} in scope or default value {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+     * Elements emitted by the flow are buffered, using a buffer of capacity given by the {@link Flow#CHANNEL_BUFFER_SIZE} in scope or default value {@link Channel#DEFAULT_BUFFER_SIZE} is used.
      * <p>
      * The returned publisher implements the JDK 9+ {@code Flow.Publisher} API.
      */
@@ -1567,7 +1567,7 @@ public class Flow<T> {
          * <p>
          * Must be run within a concurrency scope, as under the hood the flow is run in the background.
          * <p>
-         * Buffer capacity can be set via scoped value {@link Channel#BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
+         * Buffer capacity can be set via scoped value {@link Flow#CHANNEL_BUFFER_SIZE}. If not specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
          */
         public InputStream runToInputStream(UnsupervisedScope scope) {
             Source<ByteChunk> ch = this
@@ -1663,6 +1663,28 @@ public class Flow<T> {
                 throw cause != null ? cause : e;
             }
         }
+    }
+
+    // endregion
+
+    // region Channel creation with buffer size from scope
+
+    /**
+     * Specifies the buffer size to be used when creating new channels inside flow operations. Use
+     * {@link Flow#newChannelWithBufferSizeFromScope()} to create a channel with buffer size from scope.
+     * <p>
+     * To modify the buffer size, use the {@link ScopedValue#where(ScopedValue, Object)} method.
+     * E.g. `ScopedValues.where(CHANNEL_BUFFER_SIZE, 8).run(() -> runAsynchronousFlow())` will cause all channels in the
+     * created flow to be created with buffer size = 8.
+     **/
+    public static final ScopedValue<Integer> CHANNEL_BUFFER_SIZE = ScopedValue.newInstance();
+
+    /**
+     * Creates a {@link Channel} with buffer size specified in scope by {@link ScopedValue}, or {@link Channel#DEFAULT_BUFFER_SIZE} if
+     * no value is specified.
+     */
+    public static <T> Channel<T> newChannelWithBufferSizeFromScope() {
+        return Channel.newBufferedChannel(CHANNEL_BUFFER_SIZE.orElse(Channel.DEFAULT_BUFFER_SIZE));
     }
 
     // endregion

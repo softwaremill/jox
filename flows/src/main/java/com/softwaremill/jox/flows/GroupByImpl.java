@@ -137,7 +137,7 @@ class GroupByImpl<T, V, U> {
                 // Channel where all elements emitted by child flows will be sent; we use such a collective channel instead of
                 // enumerating all child channels in the main `select`, as `select`s don't scale well with the number of
                 // clauses. The elements from this channel are then emitted by the returned flow.
-                Channel<U> childOutput = Channel.withScopedBufferSize();
+                Channel<U> childOutput = Flow.newChannelWithBufferSizeFromScope();
 
                 // Channel where completion of children is signalled (because the parent is complete, or the parallelism limit
                 // is reached).
@@ -227,7 +227,7 @@ class GroupByImpl<T, V, U> {
             // Starting a new child flow, running in the background; the child flow receives values via a channel,
             // and feeds its output to `childOutput`. Done signals are forwarded to `childDone`; elements & errors
             // are propagated to `childOutput`.
-            Channel<T> childChannel = Channel.withScopedBufferSize();
+            Channel<T> childChannel = Flow.newChannelWithBufferSizeFromScope();
             s = s.withChildAdded(v, childChannel);
 
             scope.forkUnsupervised(() -> {

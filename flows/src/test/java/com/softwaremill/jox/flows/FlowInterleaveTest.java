@@ -73,7 +73,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
 
         // when
-        var result = ScopedValue.where(Channel.BUFFER_SIZE, 10)
+        var result = ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 10)
                 .call(() -> c1.interleave(c2, 1, false).runToList());
 
         // then
