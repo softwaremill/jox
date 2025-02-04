@@ -41,7 +41,7 @@ public class StressTest {
         for (int r = 0; r < numberOfRepetitions; r++) {
             var chs = new ArrayList<Channel<String>>();
             for (int i = 0; i < numberOfChannels; i++) {
-                chs.add(new Channel<>(capacity));
+                chs.add(Channel.newBufferedChannel(capacity));
             }
             try {
                 scoped(scope -> {

@@ -32,7 +32,7 @@ public class ParallelBenchmark {
         var latch = new CountDownLatch(parallelism);
 
         for (int t = 0; t < parallelism; t++) {
-            var ch = new Channel<Integer>(capacity);
+            var ch = (capacity == 0) ? Channel.<Integer>newRendezvousChannel() : Channel.<Integer>newBufferedChannel(capacity);
             // sender
             Thread.startVirtualThread(() -> {
                 for (int i = 0; i < elementsPerChannel; i++) {

@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 public class SourceOpsForEachTest {
     @Test
     void testIterateOverSource() throws Exception {
-        var c = new Channel<Integer>(10);
+        var c = Channel.<Integer>newBufferedChannel(10);
         c.sendOrClosed(1);
         c.sendOrClosed(2);
         c.sendOrClosed(3);
@@ -25,7 +25,7 @@ public class SourceOpsForEachTest {
 
     @Test
     void testConvertSourceToList() throws Exception {
-        var c = new Channel<Integer>(10);
+        var c = Channel.<Integer>newBufferedChannel(10);
         c.sendOrClosed(1);
         c.sendOrClosed(2);
         c.sendOrClosed(3);

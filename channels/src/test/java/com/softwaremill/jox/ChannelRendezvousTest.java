@@ -19,7 +19,7 @@ public class ChannelRendezvousTest {
     @Test
     void testSimpleSendReceive() throws InterruptedException, ExecutionException {
         // given
-        Channel<String> channel = new Channel<>();
+        Channel<String> channel = Channel.newRendezvousChannel();
 
         // when
         scoped(scope -> {
@@ -34,7 +34,7 @@ public class ChannelRendezvousTest {
     @Test
     void testSendReceiveInManyForks() throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>();
+        Channel<Integer> channel = Channel.newRendezvousChannel();
         var fs = new HashSet<Future<Void>>();
         var s = new ConcurrentSkipListSet<Integer>();
 
@@ -59,7 +59,7 @@ public class ChannelRendezvousTest {
     @Test
     void testSendReceiveManyElementsInTwoForks() throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>();
+        Channel<Integer> channel = Channel.newRendezvousChannel();
         var s = new ConcurrentSkipListSet<Integer>();
 
         // when
@@ -83,7 +83,7 @@ public class ChannelRendezvousTest {
     @Test
     void testSendWaitsForRendezvous() throws ExecutionException, InterruptedException {
         // given
-        Channel<Integer> channel = new Channel<>();
+        Channel<Integer> channel = Channel.newRendezvousChannel();
         var trail = new ConcurrentLinkedQueue<String>();
 
         // when
@@ -116,7 +116,7 @@ public class ChannelRendezvousTest {
     @Test
     void pendingReceivesShouldGetNotifiedThatChannelIsDone() throws InterruptedException, ExecutionException {
         // given
-        Channel<Integer> c = new Channel<>();
+        Channel<Integer> c = Channel.newRendezvousChannel();
         scoped(scope -> {
             var f = fork(scope, c::receiveOrClosed);
 
@@ -135,7 +135,7 @@ public class ChannelRendezvousTest {
     @Test
     void pendingSendsShouldGetNotifiedThatChannelIsErrored() throws InterruptedException, ExecutionException {
         // given
-        Channel<Integer> c = new Channel<>();
+        Channel<Integer> c = Channel.newRendezvousChannel();
         scoped(scope -> {
             var f = fork(scope, () -> c.sendOrClosed(1));
 
@@ -156,7 +156,7 @@ public class ChannelRendezvousTest {
     void performanceTest() throws Exception {
         for (int j = 1; j <= 10; j++) {
             var max = 10_000_000L;
-            var c = new Channel<Integer>();
+            var c = Channel.<Integer>newRendezvousChannel();
             timed("rendezvous", () -> {
                 scoped(scope -> {
                     forkVoid(scope, () -> {

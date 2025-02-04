@@ -11,8 +11,8 @@ public class SelectTest {
     @Test
     public void testSelectDefault() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
 
         // when
         String received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClause("x"));
@@ -24,8 +24,8 @@ public class SelectTest {
     @Test
     public void testDoNotSelectDefault() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
         ch2.send("a");
 
         // when
@@ -38,8 +38,8 @@ public class SelectTest {
     @Test
     public void testDefaultCanOnlyBeLast() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<String> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
 
         // when
         try {
@@ -53,8 +53,8 @@ public class SelectTest {
     @Test
     public void testSelectObject() throws InterruptedException {
         // given
-        Channel<String> ch1 = new Channel<>(1);
-        Channel<Integer> ch2 = new Channel<>(1);
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<Integer> ch2 = Channel.newBufferedChannel(1);
         ch1.send("x");
 
         // when

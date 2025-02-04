@@ -326,7 +326,7 @@ public class FlowRunOperationsTest {
     void runPipeToSink_pipeOneSourceToAnother() throws InterruptedException {
         Scopes.supervised(scope -> {
             Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
-            Channel<Integer> c2 = new Channel<>();
+            Channel<Integer> c2 = Channel.newRendezvousChannel();
 
             scope.fork(() -> {
                 c1.runPipeToSink(c2, false);
@@ -343,7 +343,7 @@ public class FlowRunOperationsTest {
     void runPipeToSink_pipeOneSourceToAnotherWithDonePropagation() throws InterruptedException {
         Scopes.supervised(scope -> {
             Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
-            Channel<Integer> c2 = new Channel<>();
+            Channel<Integer> c2 = Channel.newRendezvousChannel();
 
             scope.fork(() -> {
                 c1.runPipeToSink(c2, true);

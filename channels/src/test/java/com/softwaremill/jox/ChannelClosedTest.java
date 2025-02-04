@@ -12,7 +12,7 @@ public class ChannelClosedTest {
     @Test
     void testClosed_noValues_whenError() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>();
+        Channel<Integer> c = Channel.newRendezvousChannel();
         RuntimeException reason = new RuntimeException();
 
         // when
@@ -27,7 +27,7 @@ public class ChannelClosedTest {
     @Test
     void testClosed_noValues_whenDone() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>();
+        Channel<Integer> c = Channel.newRendezvousChannel();
 
         // when
         c.done();
@@ -41,7 +41,7 @@ public class ChannelClosedTest {
     @Test
     void testClosed_hasSuspendedValues_whenDone() throws InterruptedException, ExecutionException {
         // given
-        Channel<Integer> c = new Channel<>();
+        Channel<Integer> c = Channel.newRendezvousChannel();
 
         // when
         scoped(scope -> {
@@ -65,7 +65,7 @@ public class ChannelClosedTest {
     @Test
     void testClosed_hasBufferedValues_whenDone() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>(5);
+        Channel<Integer> c = Channel.newBufferedChannel(5);
 
         // when
         c.send(1);
@@ -80,7 +80,7 @@ public class ChannelClosedTest {
     @Test
     void testClosed_hasValues_whenError() throws InterruptedException {
         // given
-        Channel<Integer> c = new Channel<>(5);
+        Channel<Integer> c = Channel.newBufferedChannel(5);
 
         // when
         c.send(1);
