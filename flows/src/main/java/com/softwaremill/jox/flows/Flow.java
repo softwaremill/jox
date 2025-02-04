@@ -1078,6 +1078,11 @@ public class Flow<T> {
                         throw new BreakException();
                     }
                 });
+            } catch (JoxScopeExecutionException e) {
+                if (!(e.getCause() instanceof BreakException)) {
+                    throw e;
+                }
+                // done
             } catch (BreakException e) {
                 // done
             }
