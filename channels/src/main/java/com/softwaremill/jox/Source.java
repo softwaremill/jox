@@ -36,33 +36,6 @@ public interface Source<T> extends CloseableChannel {
      */
     <U> SelectClause<U> receiveClause(Function<T, U> callback);
 
-    //
-
-    /**
-     * Creates a view of this source, where the results of {@link #receive()} will be transformed using the given function {@code f}.
-     * If {@code f} returns {@code null}, the value will be skipped, and another value will be received.
-     * <p>
-     * The same logic applies to receive clauses created using this source, which can be used in {@link Select#select(SelectClause[])}.
-     *
-     * @param f The mapping / filtering function. If the function returns {@code null}, the value will be skipped.
-     * @return A source which is a view of this source, with the mapping / filtering function applied.
-     */
-    default <V> Source<V> collectAsView(Function<T, V> f) {
-        return new CollectSource<>(this, f);
-    }
-
-    /**
-     * Creates a view of this source, where the results of {@link #receive()} will be filtered using the given predicate {@code p}.
-     * <p>
-     * The same logic applies to receive clauses created using this source, which can be used in {@link Select#select(SelectClause[])}.
-     *
-     * @param p The predicate to use for filtering.
-     * @return A source which is a view of this source, with the filtering function applied.
-     */
-    default Source<T> filterAsView(Predicate<T> p) {
-        return new CollectSource<>(this, t -> p.test(t) ? t : null);
-    }
-
     // draining operations
 
 
