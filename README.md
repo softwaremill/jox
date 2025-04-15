@@ -5,17 +5,19 @@
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels)
 [![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/channels/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/channels)
 
-Modern concurrency for Java 21 (backed by virtual threads, see [Project Loom](https://openjdk.org/projects/loom/)).
+[Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
+for Java 21.
+
 Includes:
 
 * Fast and Scalable Channels in Java. Inspired by the "Fast and Scalable Channels in Kotlin Coroutines"
   [paper](https://arxiv.org/abs/2211.04986), and
   the [Kotlin implementation](https://github.com/Kotlin/kotlinx.coroutines/blob/master/kotlinx-coroutines-core/common/src/channels/BufferedChannel.kt).
 * Programmer-friendly structured concurrency
-* Blocking, synchronous, functional streaming
+* Blocking, synchronous, reactive-compatible, functional streaming
 
 JavaDocs can be browsed
-at [https://javadoc.io](https://www.javadoc.io/doc/com.softwaremill.jox/core/latest/com.softwaremill.jox/com/softwaremill/jox/package-summary.html).
+at [https://javadoc.io](https://www.javadoc.io/doc/com.softwaremill.jox/channels/latest/com.softwaremill.jox/com/softwaremill/jox/package-summary.html).
 
 Articles:
 
@@ -47,14 +49,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>channels</artifactId>
-    <version>0.4.0</version>
+    <version>1.0.0-RC1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:channels:0.4.0'
+implementation 'com.softwaremill.jox:channels:1.0.0-RC1'
 ```
 
 ### Usage
@@ -556,14 +558,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>flows</artifactId>
-    <version>tbd</version>
+    <version>0.4.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:flows:tbd'
+implementation 'com.softwaremill.jox:flows:0.4.0'
 ```
 
 ### Usage
