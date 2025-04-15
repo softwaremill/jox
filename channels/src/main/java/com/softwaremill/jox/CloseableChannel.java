@@ -91,8 +91,7 @@ public interface CloseableChannel {
      * <p>
      * When {@code false}, values <strong>might</strong> be received from the channel, when calling
      * {@link Source#receive()}, but it's not guaranteed that some values will be available. They might be received
-     * concurrently, or filtered out if the channel is created using {@link Source#collectAsView(Function)} or
-     * {@link Source#filterAsView(Predicate)}.
+     * concurrently.
      */
     default boolean isClosedForReceive() {
         return closedForReceive() != null;
