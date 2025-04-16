@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <kotlin.version>1.9.25</kotlin.version>
+        <kotlin.version>2.1.20</kotlin.version>
     </properties>
 
     <dependencies>
@@ -26,7 +26,7 @@
         <dependency>
             <groupId>org.jetbrains.kotlinx</groupId>
             <artifactId>kotlinx-coroutines-core</artifactId>
-            <version>1.7.3</version>
+            <version>1.10.2</version>
         </dependency>
     </dependencies>
 
