@@ -19,7 +19,7 @@ Find out more in the documentation available at [jox.softwaremill.com](https://j
 
 ## A tour of Jox
 
-Selectable [channels](https://jox.softwaremill.com/channels.md):
+Selectable [channels](https://jox.softwaremill.com/latest/channels.html):
 
 ```
 var ch1 = Channel.<Integer>newBufferedDefaultChannel();
@@ -33,7 +33,7 @@ ch3.send(32);
 var received = select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
 ```
 
-A [flow](https://jox.softwaremill.com/flows.md) with time-based & parallel processing:
+A [flow](https://jox.softwaremill.com/latest/flows.html) with time-based & parallel processing:
 
 ```
 var nats =
@@ -51,7 +51,7 @@ Flows.range(1, 100, 1)
   .runForeach(System.out::println);
 ```
 
-[Sructured concurrency](https://jox.softwaremill.com/structured.md) scope:
+[Sructured concurrency](https://jox.softwaremill.com/latest/structured.html) scope:
 
 ```
 var result = supervised(scope -> {
