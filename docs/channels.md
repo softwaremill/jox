@@ -17,14 +17,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>channels</artifactId>
-    <version>1.0.0-RC1</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:channels:1.0.0-RC1'
+implementation 'com.softwaremill.jox:channels:1.0.0'
 ```
 
 ## Buffered channel
