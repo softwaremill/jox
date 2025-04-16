@@ -20,7 +20,7 @@ jobs:
       - name: Test
         run: mvn --batch-mode --update-snapshots verify
       - name: Prepare release notes
-        uses: release-drafter/release-drafter@v5
+        uses: release-drafter/release-drafter@v6
         with:
           config-name: release-drafter.yml
         env:
@@ -44,7 +44,7 @@ jobs:
           version=${GITHUB_REF/refs\/tags\/v/}
           echo "VERSION=$version" >> $GITHUB_ENV
       - name: Publish release notes
-        uses: release-drafter/release-drafter@v5
+        uses: release-drafter/release-drafter@v6
         with:
           config-name: release-drafter.yml
           publish: true
