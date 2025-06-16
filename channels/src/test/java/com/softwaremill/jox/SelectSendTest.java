@@ -1,6 +1,9 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
+import static com.softwaremill.jox.Select.select;
+import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.TestUtil.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -8,10 +11,7 @@ import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 
-import static com.softwaremill.jox.Select.select;
-import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 public class SelectSendTest {
     @Test
@@ -43,22 +43,26 @@ public class SelectSendTest {
     }
 
     @Test
-    public void testSelectBiasedTowardsToFirst_rendezvous_immediate() throws InterruptedException, ExecutionException {
+    public void testSelectBiasedTowardsToFirst_rendezvous_immediate()
+            throws InterruptedException, ExecutionException {
         // given
         Channel<String> ch1 = Channel.newRendezvousChannel();
         Channel<String> ch2 = Channel.newRendezvousChannel();
 
-        scoped(scope -> {
-            // when
-            forkVoid(scope, () -> {
-                Thread.sleep(100); // making sure receives suspend
-                select(ch1.sendClause("v1"), ch2.sendClause("v2"));
-            });
+        scoped(
+                scope -> {
+                    // when
+                    forkVoid(
+                            scope,
+                            () -> {
+                                Thread.sleep(100); // making sure receives suspend
+                                select(ch1.sendClause("v1"), ch2.sendClause("v2"));
+                            });
 
-            // then
-            var received = select(ch1.receiveClause(), ch2.receiveClause());
-            assertEquals("v1", received);
-        });
+                    // then
+                    var received = select(ch1.receiveClause(), ch2.receiveClause());
+                    assertEquals("v1", received);
+                });
     }
 
     @Test
@@ -67,19 +71,26 @@ public class SelectSendTest {
         Channel<String> ch1 = Channel.newRendezvousChannel();
         Channel<String> ch2 = Channel.newRendezvousChannel();
 
-        scoped(scope -> {
-            // when
-            var f = fork(scope, () -> select(ch1.sendClause("v1", () -> "1"), ch2.sendClause("v2", () -> "2")));
-            Thread.sleep(100); // making sure send suspends
+        scoped(
+                scope -> {
+                    // when
+                    var f =
+                            fork(
+                                    scope,
+                                    () ->
+                                            select(
+                                                    ch1.sendClause("v1", () -> "1"),
+                                                    ch2.sendClause("v2", () -> "2")));
+                    Thread.sleep(100); // making sure send suspends
 
-            // then
-            var received = select(ch1.receiveClause(), ch2.receiveClause());
-            if (f.get().equals("1")) {
-                assertEquals("v1", received);
-            } else {
-                assertEquals("v2", received);
-            }
-        });
+                    // then
+                    var received = select(ch1.receiveClause(), ch2.receiveClause());
+                    if (f.get().equals("1")) {
+                        assertEquals("v1", received);
+                    } else {
+                        assertEquals("v2", received);
+                    }
+                });
     }
 
     @Test
@@ -123,39 +134,57 @@ public class SelectSendTest {
             }
 
             try {
-                scoped(scope -> {
-                    var received = ConcurrentHashMap.newKeySet();
-                    var f = forkVoid(scope, () -> {
-                        for (int i = 0; i < channelsCount * msgsCount; i++) {
-                            var r = select(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new));
-                            if (!received.add(r)) {
-                                throw new IllegalStateException("Duplicate: " + r);
+                scoped(
+                        scope -> {
+                            var received = ConcurrentHashMap.newKeySet();
+                            var f =
+                                    forkVoid(
+                                            scope,
+                                            () -> {
+                                                for (int i = 0;
+                                                        i < channelsCount * msgsCount;
+                                                        i++) {
+                                                    var r =
+                                                            select(
+                                                                    channels.stream()
+                                                                            .map(
+                                                                                    Channel
+                                                                                            ::receiveClause)
+                                                                            .toArray(
+                                                                                    SelectClause[]
+                                                                                            ::new));
+                                                    if (!received.add(r)) {
+                                                        throw new IllegalStateException(
+                                                                "Duplicate: " + r);
+                                                    }
+                                                }
+                                            });
+
+                            // when
+                            for (int i = 0; i < channelsCount * msgsCount; i++) {
+                                int finalI = i;
+                                select(
+                                        channels.stream()
+                                                .map(ch -> ch.sendClause("v_" + finalI))
+                                                .toArray(SelectClause[]::new));
                             }
-                        }
-                    });
 
-                    // when
-                    for (int i = 0; i < channelsCount * msgsCount; i++) {
-                        int finalI = i;
-                        select(channels.stream().map(ch -> ch.sendClause("v_" + finalI)).toArray(SelectClause[]::new));
-                    }
+                            // then
+                            f.get(); // wait for receivers to finish
 
-                    // then
-                    f.get(); // wait for receivers to finish
+                            var expectedReceived = new HashSet<>();
+                            for (int i = 0; i < channelsCount * msgsCount; i++) {
+                                expectedReceived.add("v_" + i);
+                            }
 
-                    var expectedReceived = new HashSet<>();
-                    for (int i = 0; i < channelsCount * msgsCount; i++) {
-                        expectedReceived.add("v_" + i);
-                    }
+                            var notReceived = new HashSet<>(expectedReceived);
+                            notReceived.removeAll(received);
+                            assertEquals(Collections.emptySet(), notReceived);
 
-                    var notReceived = new HashSet<>(expectedReceived);
-                    notReceived.removeAll(received);
-                    assertEquals(Collections.emptySet(), notReceived);
-
-                    var extraReceived = new HashSet<>(received);
-                    extraReceived.removeAll(expectedReceived);
-                    assertEquals(Collections.emptySet(), extraReceived);
-                });
+                            var extraReceived = new HashSet<>(received);
+                            extraReceived.removeAll(expectedReceived);
+                            assertEquals(Collections.emptySet(), extraReceived);
+                        });
             } catch (Exception e) {
                 System.out.println("Channels:");
                 for (var ch : channels) {

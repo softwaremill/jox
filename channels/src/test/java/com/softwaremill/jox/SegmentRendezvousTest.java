@@ -1,18 +1,18 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-
 import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
 import static com.softwaremill.jox.SegmentTest.createSegmentChain;
 import static com.softwaremill.jox.SegmentTest.sendInterruptAllCells;
 import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.Test;
 
 public class SegmentRendezvousTest {
     // a field which we use for testing where VarHandle is required
@@ -21,8 +21,11 @@ public class SegmentRendezvousTest {
 
     static {
         try {
-            MethodHandles.Lookup l = MethodHandles.privateLookupIn(SegmentRendezvousTest.class, MethodHandles.lookup());
-            SOME_SEGMENT = l.findVarHandle(SegmentRendezvousTest.class, "someSegment", Segment.class);
+            MethodHandles.Lookup l =
+                    MethodHandles.privateLookupIn(
+                            SegmentRendezvousTest.class, MethodHandles.lookup());
+            SOME_SEGMENT =
+                    l.findVarHandle(SegmentRendezvousTest.class, "someSegment", Segment.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -145,22 +148,26 @@ public class SegmentRendezvousTest {
             var ss = createSegmentChain(segmentCount, 0, true);
 
             // when
-            scoped(scope -> {
-                // first interrupting all cells but one in segments 2-(segmentCount-1))
-                for (int i = 1; i < ss.length - 1; i++) {
-                    for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
-                        ss[i].cellInterruptedReceiver();
-                    }
-                }
+            scoped(
+                    scope -> {
+                        // first interrupting all cells but one in segments 2-(segmentCount-1))
+                        for (int i = 1; i < ss.length - 1; i++) {
+                            for (int j = 0; j < SEGMENT_SIZE - 1; j++) {
+                                ss[i].cellInterruptedReceiver();
+                            }
+                        }
 
-                // then, running (segmentCount-2) forks which will interrupt the last cell in each segment
-                for (int i = 1; i < ss.length - 1; i++) {
-                    int ii = i;
-                    forkVoid(scope, () -> {
-                        ss[ii].cellInterruptedReceiver();
+                        // then, running (segmentCount-2) forks which will interrupt the last cell
+                        // in each segment
+                        for (int i = 1; i < ss.length - 1; i++) {
+                            int ii = i;
+                            forkVoid(
+                                    scope,
+                                    () -> {
+                                        ss[ii].cellInterruptedReceiver();
+                                    });
+                        }
                     });
-                }
-            });
 
             // then, the segments should be removed
             for (int i = 1; i < ss.length - 1; i++) {
@@ -320,21 +327,33 @@ public class SegmentRendezvousTest {
             var observedSegments = new ConcurrentHashMap<Integer, Segment>();
 
             // when
-            scoped(scope -> {
-                // creating 10 forks, each moving the reference forward 300 times, to subsequent ids
-                for (int f = 0; f < 10; f++) {
-                    forkVoid(scope, () -> {
-                        var s = ss[0];
-                        for (int i = 0; i < 300; i++) {
-                            s = Segment.findAndMoveForward(SOME_SEGMENT, this, s, i);
-                            var previous = observedSegments.put(i, s);
-                            if (previous != s && previous != null) {
-                                fail("Already observed segment: " + previous + " for id: " + i + ", but found: " + s);
-                            }
+            scoped(
+                    scope -> {
+                        // creating 10 forks, each moving the reference forward 300 times, to
+                        // subsequent ids
+                        for (int f = 0; f < 10; f++) {
+                            forkVoid(
+                                    scope,
+                                    () -> {
+                                        var s = ss[0];
+                                        for (int i = 0; i < 300; i++) {
+                                            s =
+                                                    Segment.findAndMoveForward(
+                                                            SOME_SEGMENT, this, s, i);
+                                            var previous = observedSegments.put(i, s);
+                                            if (previous != s && previous != null) {
+                                                fail(
+                                                        "Already observed segment: "
+                                                                + previous
+                                                                + " for id: "
+                                                                + i
+                                                                + ", but found: "
+                                                                + s);
+                                            }
+                                        }
+                                    });
                         }
                     });
-                }
-            });
         }
     }
 }

@@ -4,16 +4,17 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 /**
- * A fork started using {@link Scope#fork}, {@link Scope#forkUser}, {@link UnsupervisedScope#forkCancellable} or
- * {@link UnsupervisedScope#forkUnsupervised}, backed by a (virtual) thread.
+ * A fork started using {@link Scope#fork}, {@link Scope#forkUser}, {@link
+ * UnsupervisedScope#forkCancellable} or {@link UnsupervisedScope#forkUnsupervised}, backed by a
+ * (virtual) thread.
  */
 public interface Fork<T> {
     /**
      * Blocks until the fork completes with a result.
      *
-     * @throws ExecutionException If the fork completed with an exception, and is unsupervised (started with
-     *                            {@link UnsupervisedScope#forkUnsupervised} or
-     *                            {@link UnsupervisedScope#forkCancellable}).
+     * @throws ExecutionException If the fork completed with an exception, and is unsupervised
+     *     (started with {@link UnsupervisedScope#forkUnsupervised} or {@link
+     *     UnsupervisedScope#forkCancellable}).
      */
     T join() throws InterruptedException, ExecutionException;
 }

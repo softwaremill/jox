@@ -1,22 +1,23 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelClosedException;
-import com.softwaremill.jox.ChannelDone;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.IntStream;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.ChannelClosedException;
+import com.softwaremill.jox.ChannelDone;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.structured.Scopes;
 
 public class FlowAlsoToTest {
 
@@ -26,9 +27,7 @@ public class FlowAlsoToTest {
         var c = Channel.<Integer>newBufferedChannel(10);
 
         // when
-        List<Integer> result = Flows.fromValues(1, 2, 3)
-                .alsoTo(c)
-                .runToList();
+        List<Integer> result = Flows.fromValues(1, 2, 3).alsoTo(c).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -37,97 +36,101 @@ public class FlowAlsoToTest {
 
     @Test
     void alsoTo_shouldSendToBothSinksAndNotHangWhenOtherSinkIsRendezvousChannel() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var c = Channel.<Integer>newRendezvousChannel();
-            var f = scope.fork(c::toList);
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var c = Channel.<Integer>newRendezvousChannel();
+                    var f = scope.fork(c::toList);
 
-            // when
-            List<Integer> result = Flows.fromValues(1, 2, 3, 4, 5)
-                    .alsoTo(c)
-                    .runToList();
+                    // when
+                    List<Integer> result = Flows.fromValues(1, 2, 3, 4, 5).alsoTo(c).runToList();
 
-            // then
-            assertEquals(List.of(1, 2, 3, 4, 5), result);
-            assertEquals(List.of(1, 2, 3, 4, 5), f.join());
-            return null;
-        });
+                    // then
+                    assertEquals(List.of(1, 2, 3, 4, 5), result);
+                    assertEquals(List.of(1, 2, 3, 4, 5), f.join());
+                    return null;
+                });
     }
 
     @Test
     void alsoTo_shouldCloseMainFlowWhenOtherCloses() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var c = Channel.<Integer>newRendezvousChannel();
-            scope.fork(() -> {
-                var list = List.of(c.receiveOrClosed(), c.receiveOrClosed(), c.receiveOrClosed());
-                c.doneOrClosed();
-                // a send() from the main thread might be waiting - we need to consume that, and only then the main thread
-                // will discover that the channel is closed
-                c.receiveOrClosed();
-                return list;
-            });
-            Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .alsoTo(c);
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var c = Channel.<Integer>newRendezvousChannel();
+                    scope.fork(
+                            () -> {
+                                var list =
+                                        List.of(
+                                                c.receiveOrClosed(),
+                                                c.receiveOrClosed(),
+                                                c.receiveOrClosed());
+                                c.doneOrClosed();
+                                // a send() from the main thread might be waiting - we need to
+                                // consume that, and only then the main thread
+                                // will discover that the channel is closed
+                                c.receiveOrClosed();
+                                return list;
+                            });
+                    Flow<Integer> flow = Flows.iterate(1, i -> i + 1).take(100).alsoTo(c);
 
-            // when & then
-            assertThrows(ChannelClosedException.class, flow::runToList);
-            return null;
-        });
+                    // when & then
+                    assertThrows(ChannelClosedException.class, flow::runToList);
+                    return null;
+                });
     }
 
     @Test
     void alsoTo_shouldCloseMainFlowWithErrorWhenOtherErrors() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var c = Channel.<Integer>newBufferedChannel(1);
-            var f = scope.fork(() -> {
-                c.receiveOrClosed();
-                c.receiveOrClosed();
-                c.receiveOrClosed();
-                c.errorOrClosed(new IllegalStateException());
-                return null;
-            });
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var c = Channel.<Integer>newBufferedChannel(1);
+                    var f =
+                            scope.fork(
+                                    () -> {
+                                        c.receiveOrClosed();
+                                        c.receiveOrClosed();
+                                        c.receiveOrClosed();
+                                        c.errorOrClosed(new IllegalStateException());
+                                        return null;
+                                    });
 
-            Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .alsoTo(c);
+                    Flow<Integer> flow = Flows.iterate(1, i -> i + 1).take(100).alsoTo(c);
 
-            // when & then
-            assertThrows(ChannelClosedException.class, flow::runToList);
-            f.join();
-            return null;
-        });
+                    // when & then
+                    assertThrows(ChannelClosedException.class, flow::runToList);
+                    f.join();
+                    return null;
+                });
     }
 
     @Test
     void alsoTo_shouldCloseOtherChannelWithErrorWhenMainErrors() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var other = Channel.<Integer>newRendezvousChannel();
-            var forkOther = scope.forkUnsupervised(other::toList);
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var other = Channel.<Integer>newRendezvousChannel();
+                    var forkOther = scope.forkUnsupervised(other::toList);
 
-            Flow<Integer> flow = Flows.iterate(1, i -> i + 1)
-                    .take(100)
-                    .concat(Flows.failed(new IllegalStateException()))
-                    .alsoTo(other);
+                    Flow<Integer> flow =
+                            Flows.iterate(1, i -> i + 1)
+                                    .take(100)
+                                    .concat(Flows.failed(new IllegalStateException()))
+                                    .alsoTo(other);
 
-            // when & then
-            assertThrows(IllegalStateException.class, flow::runToList);
-            assertThrows(ExecutionException.class, forkOther::join);
-            return null;
-        });
+                    // when & then
+                    assertThrows(IllegalStateException.class, flow::runToList);
+                    assertThrows(ExecutionException.class, forkOther::join);
+                    return null;
+                });
     }
 
     @Test
     void alsoToTap_shouldSendToBothSinksWhenOtherIsFaster() throws Exception {
         // given
         var other = Channel.<Integer>newBufferedChannel(10);
-        Flow<Integer> flow = Flows
-                .fromValues(1, 2, 3)
-                .alsoToTap(other)
-                .tap(_ -> Thread.sleep(50));
+        Flow<Integer> flow = Flows.fromValues(1, 2, 3).alsoToTap(other).tap(_ -> Thread.sleep(50));
 
         // when & then
         assertEquals(List.of(1, 2, 3), flow.runToList());
@@ -136,91 +139,102 @@ public class FlowAlsoToTest {
 
     @Test
     void alsoTapTo_shouldSendToBothSinksWhenOtherIsSlower() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var other = Channel.<Integer>newRendezvousChannel();
-            var slowConsumerFork = scope.fork(() -> {
-                var consumed = new LinkedList<>();
-                while (true) {
-                    Thread.sleep(100);
-                    var result = other.receiveOrClosed();
-                    if (result instanceof ChannelDone || result instanceof ChannelError) {
-                        break;
-                    } else {
-                        consumed.add(result);
-                    }
-                }
-                return consumed;
-            });
-            var main = Channel.<Integer>newRendezvousChannel();
-            scope.fork(() -> {
-                for (int i = 1; i <= 20; i++) {
-                    main.send(i);
-                    Thread.sleep(10);
-                }
-                main.done();
-                return null;
-            });
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var other = Channel.<Integer>newRendezvousChannel();
+                    var slowConsumerFork =
+                            scope.fork(
+                                    () -> {
+                                        var consumed = new LinkedList<>();
+                                        while (true) {
+                                            Thread.sleep(100);
+                                            var result = other.receiveOrClosed();
+                                            if (result instanceof ChannelDone
+                                                    || result instanceof ChannelError) {
+                                                break;
+                                            } else {
+                                                consumed.add(result);
+                                            }
+                                        }
+                                        return consumed;
+                                    });
+                    var main = Channel.<Integer>newRendezvousChannel();
+                    scope.fork(
+                            () -> {
+                                for (int i = 1; i <= 20; i++) {
+                                    main.send(i);
+                                    Thread.sleep(10);
+                                }
+                                main.done();
+                                return null;
+                            });
 
-            // when
-            List<Integer> result = Flows.fromSource(main).alsoToTap(other).runToList();
+                    // when
+                    List<Integer> result = Flows.fromSource(main).alsoToTap(other).runToList();
 
-            // then
-            assertEquals(IntStream.rangeClosed(1, 20).boxed().toList(), result);
-            assertThat(slowConsumerFork.join(), hasSize(lessThan(10)));
-            return null;
-        });
+                    // then
+                    assertEquals(IntStream.rangeClosed(1, 20).boxed().toList(), result);
+                    assertThat(slowConsumerFork.join(), hasSize(lessThan(10)));
+                    return null;
+                });
     }
 
     @Test
     void alsoTapTo_shouldNotFailTheFlowWhenTheOtherSinkFails() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var other = Channel.<Integer>newRendezvousChannel();
-            var f = scope.fork(() -> {
-                var v = other.receiveOrClosed();
-                other.error(new RuntimeException("boom!"));
-                return v;
-            });
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var other = Channel.<Integer>newRendezvousChannel();
+                    var f =
+                            scope.fork(
+                                    () -> {
+                                        var v = other.receiveOrClosed();
+                                        other.error(new RuntimeException("boom!"));
+                                        return v;
+                                    });
 
-            // when
-            List<Integer> result = Flows
-                    .iterate(1, i -> i + 1)
-                    .take(10)
-                    .tap(_ -> Thread.sleep(10))
-                    .alsoToTap(other)
-                    .runToList();
+                    // when
+                    List<Integer> result =
+                            Flows.iterate(1, i -> i + 1)
+                                    .take(10)
+                                    .tap(_ -> Thread.sleep(10))
+                                    .alsoToTap(other)
+                                    .runToList();
 
-            // then
-            assertEquals(IntStream.rangeClosed(1, 10).boxed().toList(), result);
-            assertEquals(1, f.join());
-            return null;
-        });
+                    // then
+                    assertEquals(IntStream.rangeClosed(1, 10).boxed().toList(), result);
+                    assertEquals(1, f.join());
+                    return null;
+                });
     }
 
     @Test
     void alsoTapTo_shouldNotCloseTheFlowWhenTheOtherSinkCloses() throws Exception {
-        Scopes.supervised(scope -> {
-            // given
-            var other = Channel.<Integer>newRendezvousChannel();
-            var f = scope.fork(() -> {
-                var v = other.receiveOrClosed();
-                other.done();
-                return v;
-            });
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var other = Channel.<Integer>newRendezvousChannel();
+                    var f =
+                            scope.fork(
+                                    () -> {
+                                        var v = other.receiveOrClosed();
+                                        other.done();
+                                        return v;
+                                    });
 
-            // when
-            List<Integer> result = Flows
-                    .iterate(1, i -> i + 1)
-                    .take(10)
-                    .tap(_ -> Thread.sleep(10))
-                    .alsoToTap(other)
-                    .runToList();
+                    // when
+                    List<Integer> result =
+                            Flows.iterate(1, i -> i + 1)
+                                    .take(10)
+                                    .tap(_ -> Thread.sleep(10))
+                                    .alsoToTap(other)
+                                    .runToList();
 
-            // then
-            assertEquals(IntStream.rangeClosed(1, 10).boxed().toList(), result);
-            assertEquals(1, f.join());
-            return null;
-        });
+                    // then
+                    assertEquals(IntStream.rangeClosed(1, 10).boxed().toList(), result);
+                    assertEquals(1, f.join());
+                    return null;
+                });
     }
 }

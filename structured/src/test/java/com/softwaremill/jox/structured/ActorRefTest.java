@@ -1,13 +1,13 @@
 package com.softwaremill.jox.structured;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 class ActorRefTest {
     interface ITest {
@@ -16,56 +16,72 @@ class ActorRefTest {
 
     @Test
     void shouldInvokeMethodsOnTheActor() throws InterruptedException {
-        Scopes.supervised(scope -> {
-            // given
-            var state = new AtomicLong(0);
-            ITest logic = x -> {
-                state.addAndGet(x);
-                return state.get();
-            };
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var state = new AtomicLong(0);
+                    ITest logic =
+                            x -> {
+                                state.addAndGet(x);
+                                return state.get();
+                            };
 
-            var ref = ActorRef.create(scope, logic);
+                    var ref = ActorRef.create(scope, logic);
 
-            // when & then
-            assertEquals(10, ref.<Long>ask(l1 -> l1.f(10)));
-            assertEquals(30, ref.<Long>ask(l -> l.f(20)));
-            return null;
-        });
+                    // when & then
+                    assertEquals(10, ref.<Long>ask(l1 -> l1.f(10)));
+                    assertEquals(30, ref.<Long>ask(l -> l.f(20)));
+                    return null;
+                });
     }
 
     @Test
     void shouldProtectTheInternalStateOfTheActor() throws InterruptedException {
-        Scopes.supervised(scope -> {
-            // given
-            var state = new AtomicLong(0);
-            ITest logic = x -> {
-                state.addAndGet(x);
-                return state.get();
-            };
+        Scopes.supervised(
+                scope -> {
+                    // given
+                    var state = new AtomicLong(0);
+                    ITest logic =
+                            x -> {
+                                state.addAndGet(x);
+                                return state.get();
+                            };
 
-            var ref = ActorRef.create(scope, logic);
+                    var ref = ActorRef.create(scope, logic);
 
-            int outer = 1000;
-            int inner = 1000;
+                    int outer = 1000;
+                    int inner = 1000;
 
+                    // when & then
+                    var forks =
+                            IntStream.rangeClosed(1, outer)
+                                    .mapToObj(
+                                            _ ->
+                                                    CompletableFuture.runAsync(
+                                                            () ->
+                                                                    IntStream.rangeClosed(1, inner)
+                                                                            .forEach(
+                                                                                    _ -> {
+                                                                                        try {
+                                                                                            ref.ask(
+                                                                                                    l ->
+                                                                                                            l
+                                                                                                                    .f(
+                                                                                                                            1));
+                                                                                        } catch (
+                                                                                                Exception
+                                                                                                        e) {
+                                                                                            throw new RuntimeException(
+                                                                                                    e);
+                                                                                        }
+                                                                                    })))
+                                    .toList();
 
-            // when & then
-            var forks = IntStream.rangeClosed(1, outer)
-                    .mapToObj(_ -> CompletableFuture.runAsync(() ->
-                            IntStream.rangeClosed(1, inner).forEach(_ -> {
-                                try {
-                                    ref.ask(l -> l.f(1));
-                                } catch (Exception e) {
-                                    throw new RuntimeException(e);
-                                }
-                            })))
-                    .toList();
+                    forks.forEach(CompletableFuture::join);
 
-            forks.forEach(CompletableFuture::join);
-
-            assertEquals(outer * inner, ref.<Long>ask(l -> l.f(0)));
-            return null;
-        });
+                    assertEquals(outer * inner, ref.<Long>ask(l -> l.f(0)));
+                    return null;
+                });
     }
 
     @Test
@@ -74,20 +90,27 @@ class ActorRefTest {
         var isClosed = new AtomicBoolean(false);
 
         // when
-        var thrown = Scopes.supervised(scope ->
-                assertThrows(RuntimeException.class, () -> {
-                    var state = new AtomicLong(0);
-                    ITest logic = x -> {
-                        state.addAndGet(x);
-                        if (state.get() > 2) throw new RuntimeException("too much");
-                        return state.get();
-                    };
+        var thrown =
+                Scopes.supervised(
+                        scope ->
+                                assertThrows(
+                                        RuntimeException.class,
+                                        () -> {
+                                            var state = new AtomicLong(0);
+                                            ITest logic =
+                                                    x -> {
+                                                        state.addAndGet(x);
+                                                        if (state.get() > 2)
+                                                            throw new RuntimeException("too much");
+                                                        return state.get();
+                                                    };
 
-                    var ref = ActorRef.create(scope, logic, _ -> isClosed.set(true));
+                                            var ref =
+                                                    ActorRef.create(
+                                                            scope, logic, _ -> isClosed.set(true));
 
-                    ref.ask(l -> l.f(5));
-                })
-        );
+                                            ref.ask(l -> l.f(5));
+                                        }));
 
         // then
         assertEquals("too much", thrown.getMessage());
@@ -97,18 +120,22 @@ class ActorRefTest {
     @Test
     void shouldEndTheScopeWhenAnExceptionIsThrownWhenHandlingTell() {
         // when
-        var thrown = assertThrows(JoxScopeExecutionException.class, () ->
-                Scopes.supervised(scope -> {
-                    ITest logic = _ -> {
-                        throw new RuntimeException("boom");
-                    };
+        var thrown =
+                assertThrows(
+                        JoxScopeExecutionException.class,
+                        () ->
+                                Scopes.supervised(
+                                        scope -> {
+                                            ITest logic =
+                                                    _ -> {
+                                                        throw new RuntimeException("boom");
+                                                    };
 
-                    var ref = ActorRef.create(scope, logic);
-                    ref.tell(l -> l.f(5));
-                    Thread.sleep(1000);
-                    return null;
-                })
-        );
+                                            var ref = ActorRef.create(scope, logic);
+                                            ref.tell(l -> l.f(5));
+                                            Thread.sleep(1000);
+                                            return null;
+                                        }));
 
         // then
         assertEquals("boom", thrown.getCause().getMessage());

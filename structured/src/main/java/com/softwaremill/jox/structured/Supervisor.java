@@ -22,7 +22,9 @@ final class NoOpSupervisor implements Supervisor {
     public void forkSuccess() {}
 
     @Override
-    public boolean forkException(Throwable e) {return false;}
+    public boolean forkException(Throwable e) {
+        return false;
+    }
 }
 
 final class DefaultSupervisor implements Supervisor {

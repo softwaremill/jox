@@ -1,17 +1,15 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
-import java.util.concurrent.ExecutionException;
-
 import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Tests which always use buffered channels.
- */
+import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+/** Tests which always use buffered channels. */
 public class ChannelBufferedTest {
     @Test
     @Timeout(1)
@@ -46,32 +44,36 @@ public class ChannelBufferedTest {
 
     @Test
     @Timeout(2)
-    void testBufferCapacityStaysTheSameAfterSendsReceives() throws ExecutionException, InterruptedException {
+    void testBufferCapacityStaysTheSameAfterSendsReceives()
+            throws ExecutionException, InterruptedException {
         // given
         Channel<Integer> channel = Channel.newBufferedChannel(2);
 
         // when
-        scoped(scope -> {
-            forkVoid(scope, () -> {
-                channel.send(1); // should not block
-                channel.send(2); // should not block
-                channel.send(3);
-                channel.send(4);
-            });
+        scoped(
+                scope -> {
+                    forkVoid(
+                            scope,
+                            () -> {
+                                channel.send(1); // should not block
+                                channel.send(2); // should not block
+                                channel.send(3);
+                                channel.send(4);
+                            });
 
-            // then
-            Thread.sleep(100L);
-            assertEquals(1, channel.receive());
-            Thread.sleep(100L);
-            assertEquals(2, channel.receive());
-            Thread.sleep(100L);
-            assertEquals(3, channel.receive());
-            Thread.sleep(100L);
-            assertEquals(4, channel.receive());
+                    // then
+                    Thread.sleep(100L);
+                    assertEquals(1, channel.receive());
+                    Thread.sleep(100L);
+                    assertEquals(2, channel.receive());
+                    Thread.sleep(100L);
+                    assertEquals(3, channel.receive());
+                    Thread.sleep(100L);
+                    assertEquals(4, channel.receive());
 
-            channel.send(5); // should not block
-            channel.send(6); // should not block
-        });
+                    channel.send(5); // should not block
+                    channel.send(6); // should not block
+                });
     }
 
     @Test

@@ -1,11 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -23,7 +18,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Fork;
+import com.softwaremill.jox.structured.Scopes;
 
 class FlowsTest {
 
@@ -34,12 +35,13 @@ class FlowsTest {
 
     @Test
     void shouldCreateFlowFromFork() throws Exception {
-        Scopes.unsupervised(scope -> {
-            Fork<Integer> f = scope.forkUnsupervised(() -> 1);
-            Flow<Integer> c = Flows.fromFork(f);
-            assertEquals(List.of(1), c.runToList());
-            return null;
-        });
+        Scopes.unsupervised(
+                scope -> {
+                    Fork<Integer> f = scope.forkUnsupervised(() -> 1);
+                    Flow<Integer> c = Flows.fromFork(f);
+                    assertEquals(List.of(1), c.runToList());
+                    return null;
+                });
     }
 
     @Test
@@ -60,16 +62,17 @@ class FlowsTest {
 
     @Test
     public void shouldFailOnReceive() throws Exception {
-        Scopes.unsupervised(scope -> {
-            // when
-            Flow<String> s = Flows.failed(new RuntimeException("boom"));
+        Scopes.unsupervised(
+                scope -> {
+                    // when
+                    Flow<String> s = Flows.failed(new RuntimeException("boom"));
 
-            // then
-            Object received = s.runToChannel(scope).receiveOrClosed();
-            assertInstanceOf(ChannelError.class, received);
-            assertEquals("boom", ((ChannelError) received).cause().getMessage());
-            return null;
-        });
+                    // then
+                    Object received = s.runToChannel(scope).receiveOrClosed();
+                    assertInstanceOf(ChannelError.class, received);
+                    assertEquals("boom", ((ChannelError) received).cause().getMessage());
+                    return null;
+                });
     }
 
     @Test
@@ -78,8 +81,12 @@ class FlowsTest {
         RuntimeException failure = new RuntimeException("future failed");
 
         // when & then
-        ExecutionException exception = assertThrows(ExecutionException.class,
-                () -> Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure)).runToList());
+        ExecutionException exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                Flows.fromCompletableFuture(CompletableFuture.failedFuture(failure))
+                                        .runToList());
         assertEquals(failure, exception.getCause());
     }
 
@@ -97,18 +104,20 @@ class FlowsTest {
 
     @Test
     void shouldReturnFuturesSourceValues() throws Exception {
-        Scopes.unsupervised(scope -> {
-            // given
-            CompletableFuture<Source<Integer>> completableFuture = CompletableFuture
-                    .completedFuture(Flows.fromValues(1, 2).runToChannel(scope));
+        Scopes.unsupervised(
+                scope -> {
+                    // given
+                    CompletableFuture<Source<Integer>> completableFuture =
+                            CompletableFuture.completedFuture(
+                                    Flows.fromValues(1, 2).runToChannel(scope));
 
-            // when
-            List<Integer> result = Flows.fromFutureSource(completableFuture).runToList();
+                    // when
+                    List<Integer> result = Flows.fromFutureSource(completableFuture).runToList();
 
-            // then
-            assertEquals(List.of(1, 2), result);
-            return null;
-        });
+                    // then
+                    assertEquals(List.of(1, 2), result);
+                    return null;
+                });
     }
 
     @Test
@@ -117,7 +126,8 @@ class FlowsTest {
         RuntimeException failure = new RuntimeException("future failed");
 
         // when & then
-        assertThrows(RuntimeException.class,
+        assertThrows(
+                RuntimeException.class,
                 () -> Flows.fromFutureSource(CompletableFuture.failedFuture(failure)).runToList(),
                 failure.getMessage());
     }
@@ -128,9 +138,7 @@ class FlowsTest {
         AtomicInteger i = new AtomicInteger(0);
 
         // when
-        List<Integer> actual = Flows.repeatEval(i::incrementAndGet)
-                .take(3)
-                .runToList();
+        List<Integer> actual = Flows.repeatEval(i::incrementAndGet).take(3).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), actual);
@@ -143,12 +151,14 @@ class FlowsTest {
         Set<Integer> evaluated = new HashSet<>();
 
         // when
-        List<Integer> result = Flows.repeatEvalWhileDefined(() -> {
-                    int value = i.incrementAndGet();
-                    evaluated.add(value);
-                    return value < 5 ? Optional.of(value) : Optional.empty();
-                })
-                .runToList();
+        List<Integer> result =
+                Flows.repeatEvalWhileDefined(
+                                () -> {
+                                    int value = i.incrementAndGet();
+                                    evaluated.add(value);
+                                    return value < 5 ? Optional.of(value) : Optional.empty();
+                                })
+                        .runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4), result);
@@ -158,9 +168,7 @@ class FlowsTest {
     @Test
     void shouldRepeatTheSameElement() throws Exception {
         // when
-        List<Integer> result = Flows.repeat(2137)
-                .take(3)
-                .runToList();
+        List<Integer> result = Flows.repeat(2137).take(3).runToList();
 
         // then
         assertEquals(List.of(2137, 2137, 2137), result);
@@ -169,54 +177,52 @@ class FlowsTest {
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
     void shouldTickRegularly() throws InterruptedException {
-        Scopes.unsupervised(scope -> {
-            var c = Flows.tick(Duration.ofMillis(100), 1L)
-                    .runToChannel(scope);
-            var start = System.currentTimeMillis();
+        Scopes.unsupervised(
+                scope -> {
+                    var c = Flows.tick(Duration.ofMillis(100), 1L).runToChannel(scope);
+                    var start = System.currentTimeMillis();
 
-            c.receive();
-            assertTrue(System.currentTimeMillis() - start >= 0);
-            assertTrue(System.currentTimeMillis() - start <= 50);
+                    c.receive();
+                    assertTrue(System.currentTimeMillis() - start >= 0);
+                    assertTrue(System.currentTimeMillis() - start <= 50);
 
-            c.receive();
-            assertTrue(System.currentTimeMillis() - start >= 100);
-            assertTrue(System.currentTimeMillis() - start <= 150);
+                    c.receive();
+                    assertTrue(System.currentTimeMillis() - start >= 100);
+                    assertTrue(System.currentTimeMillis() - start <= 150);
 
-            c.receive();
-            assertTrue(System.currentTimeMillis() - start >= 200);
-            assertTrue(System.currentTimeMillis() - start <= 250);
-            return null;
-        });
+                    c.receive();
+                    assertTrue(System.currentTimeMillis() - start >= 200);
+                    assertTrue(System.currentTimeMillis() - start <= 250);
+                    return null;
+                });
     }
 
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
-    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal() throws InterruptedException {
-        Scopes.unsupervised(scope -> {
-            var c = Flows.tick(Duration.ofMillis(100), 1L)
-                    .runToChannel(scope);
-            var start = System.currentTimeMillis();
+    void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal()
+            throws InterruptedException {
+        Scopes.unsupervised(
+                scope -> {
+                    var c = Flows.tick(Duration.ofMillis(100), 1L).runToChannel(scope);
+                    var start = System.currentTimeMillis();
 
-            Thread.sleep(200);
-            c.receive();
-            assertTrue(System.currentTimeMillis() - start >= 200);
-            assertTrue(System.currentTimeMillis() - start <= 250);
+                    Thread.sleep(200);
+                    c.receive();
+                    assertTrue(System.currentTimeMillis() - start >= 200);
+                    assertTrue(System.currentTimeMillis() - start <= 250);
 
-            c.receive();
-            assertTrue(System.currentTimeMillis() - start >= 200);
-            assertTrue(System.currentTimeMillis() - start <= 250);
-            return null;
-        });
+                    c.receive();
+                    assertTrue(System.currentTimeMillis() - start >= 200);
+                    assertTrue(System.currentTimeMillis() - start <= 250);
+                    return null;
+                });
     }
 
     @Test
     void shouldTimeout() throws Exception {
         // given
         long start = System.currentTimeMillis();
-        Flow<Integer> c = Flows.concat(
-                Flows.timeout(Duration.ofMillis(100)),
-                Flows.fromValues(1)
-        );
+        Flow<Integer> c = Flows.concat(Flows.timeout(Duration.ofMillis(100)), Flows.fromValues(1));
 
         // when
         List<Integer> result = c.runToList();
@@ -231,10 +237,7 @@ class FlowsTest {
     @Test
     void shouldConcatFlows() throws Exception {
         // given
-        Flow<Integer> flow = Flows.concat(
-                Flows.fromValues(1, 2, 3),
-                Flows.fromValues(4, 5, 6)
-        );
+        Flow<Integer> flow = Flows.concat(Flows.fromValues(1, 2, 3), Flows.fromValues(4, 5, 6));
 
         // when
         List<Integer> result = flow.runToList();
@@ -246,8 +249,8 @@ class FlowsTest {
     @Test
     void shouldInterleaveNoSources() throws Exception {
         // when
-        List<Integer> actual = Flows.<Integer>interleaveAll(Collections.emptyList(), 1, false, 10)
-                .runToList();
+        List<Integer> actual =
+                Flows.<Integer>interleaveAll(Collections.emptyList(), 1, false, 10).runToList();
 
         // then
         assertEquals(Collections.emptyList(), actual);
@@ -259,8 +262,7 @@ class FlowsTest {
         Flow<Integer> c = Flows.fromValues(1, 2, 3);
 
         // when
-        List<Integer> result = Flows.interleaveAll(List.of(c), 1, false, 10)
-                .runToList();
+        List<Integer> result = Flows.interleaveAll(List.of(c), 1, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -274,8 +276,7 @@ class FlowsTest {
         Flow<Integer> c3 = Flows.fromValues(100, 200, 300, 400, 500);
 
         // when
-        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 1, false, 10)
-                .runToList();
+        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 1, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 10, 100, 2, 20, 200, 3, 30, 300, 4, 400, 5, 500, 6, 7, 8), result);
@@ -289,15 +290,15 @@ class FlowsTest {
         Flow<Integer> c3 = Flows.fromValues(100, 200, 300, 400, 500);
 
         // when
-        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 2, false, 10)
-                .runToList();
+        List<Integer> result = Flows.interleaveAll(List.of(c1, c2, c3), 2, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 100, 200, 3, 4, 30, 300, 400, 5, 6, 500, 7, 8), result);
     }
 
     @Test
-    void shouldInterleaveMultipleFlowsUsingSegmentSizeBiggerThan1AndCompleteEagerly() throws Exception {
+    void shouldInterleaveMultipleFlowsUsingSegmentSizeBiggerThan1AndCompleteEagerly()
+            throws Exception {
         // given
         Flow<Integer> c1 = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8);
         Flow<Integer> c2 = Flows.fromValues(10, 20, 30);
@@ -317,12 +318,15 @@ class FlowsTest {
 
     @Test
     void handleInputStreamShorterThanBufferSize() throws Exception {
-        assertEquals(List.of("abc"), toStrings(Flows.fromInputStream(inputStream("abc", false), 1024)));
+        assertEquals(
+                List.of("abc"), toStrings(Flows.fromInputStream(inputStream("abc", false), 1024)));
     }
 
     @Test
     void handleInputStreamLongerThanBufferSize() throws Exception {
-        assertEquals(List.of("som", "e t", "ext"), toStrings(Flows.fromInputStream(inputStream("some text", false), 3)));
+        assertEquals(
+                List.of("som", "e t", "ext"),
+                toStrings(Flows.fromInputStream(inputStream("some text", false), 3)));
     }
 
     @Test
@@ -385,13 +389,15 @@ class FlowsTest {
     @Test
     void throwExceptionIfPathIsDirectory() throws URISyntaxException {
         Path path = Paths.get(getClass().getResource("/").toURI());
-        IOException exception = assertThrows(IOException.class, () -> Flows.fromFile(path, 1024).runToList());
+        IOException exception =
+                assertThrows(IOException.class, () -> Flows.fromFile(path, 1024).runToList());
         assertTrue(exception.getMessage().endsWith("is a directory"));
     }
 
     @Test
     void shouldUnfoldFunction() throws Exception {
-        Flow<Integer> c = Flows.unfold(0, i -> i < 3 ? Optional.of(Map.entry(i, i + 1)) : Optional.empty());
+        Flow<Integer> c =
+                Flows.unfold(0, i -> i < 3 ? Optional.of(Map.entry(i, i + 1)) : Optional.empty());
         assertEquals(List.of(0, 1, 2), c.runToList());
     }
 
@@ -400,7 +406,9 @@ class FlowsTest {
         Flow<Integer> flow = Flows.fromIterator(List.of(1, 2, 3).iterator());
 
         assertEquals(List.of(1, 2, 3), flow.runToList()); // first run traverses iterator
-        assertEquals(Collections.emptyList(), flow.runToList()); // second run is empty, as iterator is exhausted
+        assertEquals(
+                Collections.emptyList(),
+                flow.runToList()); // second run is empty, as iterator is exhausted
     }
 
     @Test
@@ -409,7 +417,9 @@ class FlowsTest {
         var flow = Flows.fromIterator(source::iterator);
 
         for (int i = 0; i < 5; i++) {
-            assertEquals(List.of(1, 2, 3), flow.runToList()); // each run gets new iterator, and is able to traverse it
+            assertEquals(
+                    List.of(1, 2, 3),
+                    flow.runToList()); // each run gets new iterator, and is able to traverse it
         }
     }
 

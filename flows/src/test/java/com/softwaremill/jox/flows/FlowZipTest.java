@@ -1,13 +1,13 @@
 package com.softwaremill.jox.flows;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 public class FlowZipTest {
 
@@ -25,9 +25,13 @@ public class FlowZipTest {
     void shouldZipFlowWithIndex() throws Exception {
         // given
         Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5);
-        List<Map.Entry<Integer, Long>> expected = Arrays.asList(
-                Map.entry(1, 0L), Map.entry(2, 1L), Map.entry(3, 2L), Map.entry(4, 3L), Map.entry(5, 4L)
-        );
+        List<Map.Entry<Integer, Long>> expected =
+                Arrays.asList(
+                        Map.entry(1, 0L),
+                        Map.entry(2, 1L),
+                        Map.entry(3, 2L),
+                        Map.entry(4, 3L),
+                        Map.entry(5, 4L));
 
         // when & then
         Flow<Map.Entry<Integer, Long>> s = c.zipWithIndex();
@@ -105,11 +109,8 @@ public class FlowZipTest {
         // given
         Flow<Integer> c1 = Flows.fromValues(1, 2, 3, 0);
         Flow<Integer> c2 = Flows.fromValues(4, 5, 6);
-        List<Map.Entry<Integer, Integer>> expected = List.of(
-                Map.entry(1, 4),
-                Map.entry(2, 5),
-                Map.entry(3, 6)
-        );
+        List<Map.Entry<Integer, Integer>> expected =
+                List.of(Map.entry(1, 4), Map.entry(2, 5), Map.entry(3, 6));
 
         // when & then
         List<Map.Entry<Integer, Integer>> s = c1.zip(c2).runToList();

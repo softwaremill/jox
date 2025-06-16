@@ -1,12 +1,12 @@
 package com.softwaremill.jox.flows;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class ByteChunkTest {
 
@@ -82,7 +82,7 @@ public class ByteChunkTest {
         ByteChunk taken = chunk.take(2);
 
         // then
-        assertArrayEquals(new byte[]{1, 2}, taken.toArray());
+        assertArrayEquals(new byte[] {1, 2}, taken.toArray());
     }
 
     @Test
@@ -95,7 +95,7 @@ public class ByteChunkTest {
         ByteChunk dropped = chunk.drop(1);
 
         // then
-        assertArrayEquals(new byte[]{2, 3}, dropped.toArray());
+        assertArrayEquals(new byte[] {2, 3}, dropped.toArray());
     }
 
     @Test
@@ -108,8 +108,8 @@ public class ByteChunkTest {
         Map.Entry<ByteChunk, ByteChunk> split = chunk.splitAt(1);
 
         // then
-        assertArrayEquals(new byte[]{1}, split.getKey().toArray());
-        assertArrayEquals(new byte[]{2, 3}, split.getValue().toArray());
+        assertArrayEquals(new byte[] {1}, split.getKey().toArray());
+        assertArrayEquals(new byte[] {2, 3}, split.getValue().toArray());
     }
 
     @Test
@@ -124,7 +124,7 @@ public class ByteChunkTest {
         ByteChunk concatenated = chunk2.concat(chunk1);
 
         // then
-        assertArrayEquals(new byte[]{3, 4, 1, 2}, concatenated.toArray());
+        assertArrayEquals(new byte[] {3, 4, 1, 2}, concatenated.toArray());
     }
 
     @Test

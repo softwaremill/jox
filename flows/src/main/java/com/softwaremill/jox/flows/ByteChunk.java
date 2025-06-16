@@ -33,7 +33,8 @@ public class ByteChunk {
      */
     public byte get(int idx) {
         if (idx < 0 || idx >= array.length) {
-            throw new IndexOutOfBoundsException("Index %d out of bounds for array of length %d".formatted(idx, array.length));
+            throw new IndexOutOfBoundsException(
+                    "Index %d out of bounds for array of length %d".formatted(idx, array.length));
         }
         return array[idx];
     }
@@ -49,9 +50,7 @@ public class ByteChunk {
      * @return Iterator over the elements of the Chunk
      */
     public Iterator<Byte> iterator() {
-        return IntStream.range(0, array.length)
-                .mapToObj(i -> array[i])
-                .iterator();
+        return IntStream.range(0, array.length).mapToObj(i -> array[i]).iterator();
     }
 
     /**
@@ -61,23 +60,20 @@ public class ByteChunk {
         return array.length;
     }
 
-    /**
-     * Takes n elements from the beginning of the Chunk and returns copy of the result
-     */
+    /** Takes n elements from the beginning of the Chunk and returns copy of the result */
     public ByteChunk take(int n) {
         return new ByteChunk(Arrays.copyOf(array, n));
     }
 
-    /**
-     * Drops n elements from the beginning of the array and returns copy of the result
-     */
+    /** Drops n elements from the beginning of the array and returns copy of the result */
     public ByteChunk drop(int n) {
         return new ByteChunk(Arrays.copyOfRange(array, n, array.length));
     }
 
     /**
      * @param idx index at which to split the Chunk
-     * @return Pair of Chunks, first containing elements from 0 to idx (exclusive), second containing elements from idx to the end
+     * @return Pair of Chunks, first containing elements from 0 to idx (exclusive), second
+     *     containing elements from idx to the end
      */
     public Map.Entry<ByteChunk, ByteChunk> splitAt(int idx) {
         return Map.entry(take(idx), drop(idx));
@@ -93,7 +89,8 @@ public class ByteChunk {
 
     /**
      * @param condition function that returns true for element that should be found
-     * @return index of the first element that satisfies the condition, or -1 if no such element is found
+     * @return index of the first element that satisfies the condition, or -1 if no such element is
+     *     found
      */
     public int indexWhere(Function<Byte, Boolean> condition) {
         Iterator<Byte> iterator = iterator();
@@ -115,9 +112,7 @@ public class ByteChunk {
         return Arrays.copyOf(array, array.length);
     }
 
-    /**
-     * Checks if this starts with chunk b
-     */
+    /** Checks if this starts with chunk b */
     public boolean startsWith(ByteChunk other) {
         return Arrays.equals(this.take(other.length()).toArray(), other.toArray());
     }

@@ -1,18 +1,17 @@
 package com.softwaremill.jox.flows;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class FlowCompleteCallbacksTest {
     @Test
     void ensureOnCompleteRunsInCaseOfSuccess() throws Exception {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .onComplete(() -> didRun.set(true));
+        Flow<Integer> f = Flows.fromValues(1, 2, 3).onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -24,11 +23,15 @@ public class FlowCompleteCallbacksTest {
 
     @Test
     void ensureOnCompleteRunsInCaseOfError() {
-        //given
+        // given
         AtomicBoolean didRun = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(_ -> {throw new RuntimeException();})
-                .onComplete(() -> didRun.set(true));
+        Flow<Integer> f =
+                Flows.fromValues(1, 2, 3)
+                        .tap(
+                                _ -> {
+                                    throw new RuntimeException();
+                                })
+                        .onComplete(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -56,9 +59,13 @@ public class FlowCompleteCallbacksTest {
     void ensureOnDoneDoesNotRunInCaseOfError() {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(_ -> {throw new RuntimeException();})
-                .onDone(() -> didRun.set(true));
+        Flow<Integer> f =
+                Flows.fromValues(1, 2, 3)
+                        .tap(
+                                _ -> {
+                                    throw new RuntimeException();
+                                })
+                        .onDone(() -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -72,8 +79,7 @@ public class FlowCompleteCallbacksTest {
     void ensureOnErrorDoesNotRunInCaseOfSuccess() throws Exception {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .onError(_ -> didRun.set(true));
+        Flow<Integer> f = Flows.fromValues(1, 2, 3).onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when
@@ -87,9 +93,13 @@ public class FlowCompleteCallbacksTest {
     void ensureOnErrorRunsInCaseOfError() {
         // given
         AtomicBoolean didRun = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.fromValues(1, 2, 3)
-                .tap(_ -> {throw new RuntimeException();})
-                .onError(_ -> didRun.set(true));
+        Flow<Integer> f =
+                Flows.fromValues(1, 2, 3)
+                        .tap(
+                                _ -> {
+                                    throw new RuntimeException();
+                                })
+                        .onError(_ -> didRun.set(true));
         assertFalse(didRun.get());
 
         // when

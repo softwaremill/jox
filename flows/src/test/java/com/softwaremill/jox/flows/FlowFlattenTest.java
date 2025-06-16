@@ -1,17 +1,17 @@
 package com.softwaremill.jox.flows;
 
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
 
 public class FlowFlattenTest {
 
@@ -30,26 +30,33 @@ public class FlowFlattenTest {
     @Test
     void flatten_shouldThrowWhenCalledOnFlowNotContainingFlows() {
         // when & then
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> Flows.fromValues(3, 3).flatten());
-        assertEquals("requirement failed: flatten can be called on Flow containing Flows", exception.getMessage());
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> Flows.fromValues(3, 3).flatten());
+        assertEquals(
+                "requirement failed: flatten can be called on Flow containing Flows",
+                exception.getMessage());
     }
 
     @Test
     void flattenPar_shouldThrowWhenCalledOnFlowNotContainingFlows() {
         // when & then
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> Flows.fromValues(3, 3).flattenPar(1));
-        assertEquals("requirement failed: flattenPar can be called on Flow containing Flows", exception.getMessage());
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> Flows.fromValues(3, 3).flattenPar(1));
+        assertEquals(
+                "requirement failed: flattenPar can be called on Flow containing Flows",
+                exception.getMessage());
     }
 
     @Test
     void shouldPipeAllElementsOfTheChildFlowsIntoTheOutputFlow() throws Exception {
         // given
-        var flow = Flows.fromValues(
-                Flows.fromValues(10),
-                Flows.fromValues(20, 30),
-                Flows.fromValues(40, 50, 60)
-        );
+        var flow =
+                Flows.fromValues(
+                        Flows.fromValues(10),
+                        Flows.fromValues(20, 30),
+                        Flows.fromValues(40, 50, 60));
 
         // when & then
         List<Integer> actual = flow.flattenPar(10).runToList();
@@ -98,15 +105,17 @@ public class FlowFlattenTest {
         var flow = Flows.fromValues(Flows.fromValues(Flows.fromValues(10), Flows.fromValues(20)));
 
         // when & then
-        var result = flow.flattenPar(10)
-                .runToList().stream().flatMap(f -> {
-                    try {
-                        return f.runToList().stream();
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                })
-                .toList();
+        var result =
+                flow.flattenPar(10).runToList().stream()
+                        .flatMap(
+                                f -> {
+                                    try {
+                                        return f.runToList().stream();
+                                    } catch (Exception e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                })
+                        .toList();
 
         assertThat(result, containsInAnyOrder(10, 20));
     }
@@ -114,11 +123,11 @@ public class FlowFlattenTest {
     @Test
     void shouldRunAtMostParallelismChildFlows() throws Exception {
         // given
-        var flow = Flows.fromValues(
-                Flows.timeout(Duration.ofMillis(200)).concat(Flows.fromValues(10)),
-                Flows.timeout(Duration.ofMillis(100)).concat(Flows.fromValues(20, 30)),
-                Flows.fromValues(40, 50, 60)
-        );
+        var flow =
+                Flows.fromValues(
+                        Flows.timeout(Duration.ofMillis(200)).concat(Flows.fromValues(10)),
+                        Flows.timeout(Duration.ofMillis(100)).concat(Flows.fromValues(20, 30)),
+                        Flows.fromValues(40, 50, 60));
 
         // when & then
         // only one flow can run at a time
