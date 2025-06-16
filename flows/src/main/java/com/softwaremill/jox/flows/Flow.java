@@ -1681,6 +1681,115 @@ public class Flow<T> {
     }
 
     /**
+     * Breaks the input into chunks where the delimiter matches the predicate. The delimiter does not
+     * appear in the output. Two adjacent delimiters in the input result in an empty chunk in the output.
+     *
+     * @param delimiter A predicate function that identifies delimiter elements.
+     * @return A flow emitting lists of elements split by the delimiter.
+     * @example
+     * {@code
+     * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
+     * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
+     * }
+     */
+    public Flow<List<T>> split(Predicate<T> delimiter) {
+        return usingEmit(
+                emit -> {
+                    List<T> buffer = new ArrayList<>();
+                    last.run(
+                            t -> {
+                                if (delimiter.test(t)) {
+                                    // Delimiter found - emit current buffer and start a new one
+                                    emit.apply(new ArrayList<>(buffer));
+                                    buffer.clear();
+                                } else {
+                                    // Non-delimiter element - add to current buffer
+                                    buffer.add(t);
+                                }
+                            });
+                    // Emit the final buffer if it's not empty
+                    if (!buffer.isEmpty()) {
+                        emit.apply(buffer);
+                    }
+                });
+    }
+
+    /**
+     * Breaks the input into chunks delimited by the given sequence of elements. The delimiter sequence
+     * does not appear in the output. Two adjacent delimiter sequences in the input result in an empty
+     * chunk in the output.
+     *
+     * @param delimiter A list of elements that serves as a delimiter. If empty, the entire input is
+     *                 returned as a single chunk.
+     * @return A flow emitting lists of elements split by the delimiter sequence.
+     * @example
+     * {@code
+     * Flows.fromValues(1, 2, 0, 0, 3, 4, 0, 0, 5).splitOn(List.of(0, 0)).runToList()
+     * // Returns: [[1, 2], [3, 4], [5]]
+     * }
+     */
+    public <U> Flow<List<T>> splitOn(List<U> delimiter) {
+        if (delimiter.isEmpty()) {
+            // If delimiter is empty, return the entire input as a single chunk
+            return usingEmit(emit -> {
+                List<T> allElements = new ArrayList<>();
+                last.run(allElements::add);
+                if (!allElements.isEmpty()) {
+                    emit.apply(allElements);
+                }
+            });
+        }
+
+        return usingEmit(
+                emit -> {
+                    List<T> buffer = new ArrayList<>();
+                    ArrayDeque<T> matchBuffer = new ArrayDeque<>();
+                    
+                    last.run(
+                            t -> {
+                                matchBuffer.addLast(t);
+                                
+                                // Check if we've collected enough elements to potentially match the delimiter
+                                if (matchBuffer.size() >= delimiter.size()) {
+                                    // Check if the last 'delimiter.size()' elements match the delimiter
+                                    boolean matches = true;
+                                    Iterator<T> it = matchBuffer.descendingIterator();
+                                    for (int i = delimiter.size() - 1; i >= 0; i--) {
+                                        if (!Objects.equals(it.next(), delimiter.get(i))) {
+                                            matches = false;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    if (matches) {
+                                        // Found delimiter - emit current buffer and start fresh
+                                        // Add all but the delimiter sequence to the buffer
+                                        int elementsToAdd = matchBuffer.size() - delimiter.size();
+                                        for (int i = 0; i < elementsToAdd; i++) {
+                                            buffer.add(matchBuffer.removeFirst());
+                                        }
+                                        emit.apply(new ArrayList<>(buffer));
+                                        buffer.clear();
+                                        matchBuffer.clear();
+                                    } else {
+                                        // No match - move the first element from matchBuffer to buffer
+                                        // if matchBuffer is getting too long
+                                        if (matchBuffer.size() > delimiter.size()) {
+                                            buffer.add(matchBuffer.removeFirst());
+                                        }
+                                    }
+                                }
+                            });
+                    
+                    // Emit remaining elements
+                    buffer.addAll(matchBuffer);
+                    if (!buffer.isEmpty()) {
+                        emit.apply(buffer);
+                    }
+                });
+    }
+
+    /**
      * Attaches the given {@link Sink} to this flow, meaning elements that pass through will also be
      * sent to the sink. If emitting an element, or sending to the `other` sink blocks, no elements
      * will be processed until both are done. The elements are first emitted by the flow and then,
