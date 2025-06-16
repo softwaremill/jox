@@ -1,12 +1,12 @@
 package com.softwaremill.jox.structured;
 
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import org.junit.jupiter.api.Test;
 
 public class ScopeTest {
 
@@ -17,15 +17,17 @@ public class ScopeTest {
         int numberOfCalls = 1_000_000;
 
         // when
-        Scopes.supervised(scope -> {
-            for (int i = 0; i < numberOfCalls; i++) {
-                scope.forkUser(() -> {
-                    results.add(scope.externalRunner().scheduler());
+        Scopes.supervised(
+                scope -> {
+                    for (int i = 0; i < numberOfCalls; i++) {
+                        scope.forkUser(
+                                () -> {
+                                    results.add(scope.externalRunner().scheduler());
+                                    return null;
+                                });
+                    }
                     return null;
                 });
-            }
-            return null;
-        });
 
         // then
         assertEquals(numberOfCalls, results.size());

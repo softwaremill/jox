@@ -1,9 +1,9 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
 import static com.softwaremill.jox.Segment.SEGMENT_SIZE;
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
 
 public class SegmentTest {
     @Test

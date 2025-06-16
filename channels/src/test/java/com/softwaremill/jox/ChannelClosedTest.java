@@ -1,12 +1,12 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
-import java.util.concurrent.ExecutionException;
-
 import static com.softwaremill.jox.TestUtil.forkCancelable;
 import static com.softwaremill.jox.TestUtil.scoped;
 import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.Test;
 
 public class ChannelClosedTest {
     @Test
@@ -44,22 +44,26 @@ public class ChannelClosedTest {
         Channel<Integer> c = Channel.newRendezvousChannel();
 
         // when
-        scoped(scope -> {
-            var f = forkCancelable(scope, () -> {
-                c.send(1);
-            });
+        scoped(
+                scope -> {
+                    var f =
+                            forkCancelable(
+                                    scope,
+                                    () -> {
+                                        c.send(1);
+                                    });
 
-            try {
-                Thread.sleep(100); // let the send suspend
-                c.done();
+                    try {
+                        Thread.sleep(100); // let the send suspend
+                        c.done();
 
-                // then
-                assertFalse(c.isClosedForReceive());
-                assertTrue(c.isClosedForSend());
-            } finally {
-                f.cancel();
-            }
-        });
+                        // then
+                        assertFalse(c.isClosedForReceive());
+                        assertTrue(c.isClosedForSend());
+                    } finally {
+                        f.cancel();
+                    }
+                });
     }
 
     @Test

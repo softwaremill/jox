@@ -1,34 +1,38 @@
 package com.softwaremill.jox.structured;
 
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasSize;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
 
 public class SupervisedTest {
     @Test
     void testSupervisedWaitsUntilAllForksComplete() throws Exception {
         Trail trail = new Trail();
 
-        int result = Scopes.supervised(scope -> {
-            scope.forkUser(() -> {
-                Thread.sleep(200);
-                trail.add("a");
-                return null;
-            });
+        int result =
+                Scopes.supervised(
+                        scope -> {
+                            scope.forkUser(
+                                    () -> {
+                                        Thread.sleep(200);
+                                        trail.add("a");
+                                        return null;
+                                    });
 
-            scope.forkUser(() -> {
-                Thread.sleep(100);
-                trail.add("b");
-                return null;
-            });
+                            scope.forkUser(
+                                    () -> {
+                                        Thread.sleep(100);
+                                        trail.add("b");
+                                        return null;
+                                    });
 
-            return 2;
-        });
+                            return 2;
+                        });
 
         assertEquals(2, result);
         trail.add("done");
@@ -39,21 +43,25 @@ public class SupervisedTest {
     void testSupervisedOnlyWaitsUntilUserForksComplete() throws Exception {
         Trail trail = new Trail();
 
-        int result = Scopes.supervised(scope -> {
-            scope.fork(() -> {
-                Thread.sleep(200);
-                trail.add("a");
-                return null;
-            });
+        int result =
+                Scopes.supervised(
+                        scope -> {
+                            scope.fork(
+                                    () -> {
+                                        Thread.sleep(200);
+                                        trail.add("a");
+                                        return null;
+                                    });
 
-            scope.forkUser(() -> {
-                Thread.sleep(100);
-                trail.add("b");
-                return null;
-            });
+                            scope.forkUser(
+                                    () -> {
+                                        Thread.sleep(100);
+                                        trail.add("b");
+                                        return null;
+                                    });
 
-            return 2;
-        });
+                            return 2;
+                        });
 
         assertEquals(2, result);
         trail.add("done");
@@ -64,28 +72,35 @@ public class SupervisedTest {
     void testSupervisedInterruptsOnceAnyForkEndsWithException() {
         Trail trail = new Trail();
 
-        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
-            Scopes.supervised(scope -> {
-                scope.forkUser(() -> {
-                    Thread.sleep(300);
-                    trail.add("a");
-                    return null;
-                });
+        var exception =
+                assertThrows(
+                        JoxScopeExecutionException.class,
+                        () -> {
+                            Scopes.supervised(
+                                    scope -> {
+                                        scope.forkUser(
+                                                () -> {
+                                                    Thread.sleep(300);
+                                                    trail.add("a");
+                                                    return null;
+                                                });
 
-                scope.forkUser(() -> {
-                    Thread.sleep(200);
-                    throw new RuntimeException("x");
-                });
+                                        scope.forkUser(
+                                                () -> {
+                                                    Thread.sleep(200);
+                                                    throw new RuntimeException("x");
+                                                });
 
-                scope.forkUser(() -> {
-                    Thread.sleep(100);
-                    trail.add("b");
-                    return null;
-                });
+                                        scope.forkUser(
+                                                () -> {
+                                                    Thread.sleep(100);
+                                                    trail.add("b");
+                                                    return null;
+                                                });
 
-                return 2;
-            });
-        });
+                                        return 2;
+                                    });
+                        });
 
         assertEquals("x", exception.getCause().getMessage());
         trail.add("done");
@@ -96,18 +111,23 @@ public class SupervisedTest {
     void testSupervisedInterruptsMainBodyOnceForkEndsWithException() {
         Trail trail = new Trail();
 
-        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
-            Scopes.supervised(scope -> {
-                scope.forkUser(() -> {
-                    Thread.sleep(200);
-                    throw new RuntimeException("x");
-                });
+        var exception =
+                assertThrows(
+                        JoxScopeExecutionException.class,
+                        () -> {
+                            Scopes.supervised(
+                                    scope -> {
+                                        scope.forkUser(
+                                                () -> {
+                                                    Thread.sleep(200);
+                                                    throw new RuntimeException("x");
+                                                });
 
-                Thread.sleep(300);
-                trail.add("a");
-                return null;
-            });
-        });
+                                        Thread.sleep(300);
+                                        trail.add("a");
+                                        return null;
+                                    });
+                        });
 
         assertEquals("x", exception.getCause().getMessage());
         trail.add("done");
@@ -118,26 +138,31 @@ public class SupervisedTest {
     void testSupervisedDoesNotInterruptIfUnsupervisedForkEndsWithException() throws Exception {
         Trail trail = new Trail();
 
-        int result = Scopes.supervised(scope -> {
-            scope.forkUser(() -> {
-                Thread.sleep(300);
-                trail.add("a");
-                return null;
-            });
+        int result =
+                Scopes.supervised(
+                        scope -> {
+                            scope.forkUser(
+                                    () -> {
+                                        Thread.sleep(300);
+                                        trail.add("a");
+                                        return null;
+                                    });
 
-            scope.forkUnsupervised(() -> {
-                Thread.sleep(200);
-                throw new RuntimeException("x");
-            });
+                            scope.forkUnsupervised(
+                                    () -> {
+                                        Thread.sleep(200);
+                                        throw new RuntimeException("x");
+                                    });
 
-            scope.forkUser(() -> {
-                Thread.sleep(100);
-                trail.add("b");
-                return null;
-            });
+                            scope.forkUser(
+                                    () -> {
+                                        Thread.sleep(100);
+                                        trail.add("b");
+                                        return null;
+                                    });
 
-            return 2;
-        });
+                            return 2;
+                        });
 
         assertEquals(2, result);
         trail.add("done");
@@ -152,16 +177,19 @@ public class SupervisedTest {
             }
         }
 
-        assertThrows(TestException.class, () -> {
-            try {
-                Scopes.supervised(scope -> {
-                    throw new TestException("x");
+        assertThrows(
+                TestException.class,
+                () -> {
+                    try {
+                        Scopes.supervised(
+                                scope -> {
+                                    throw new TestException("x");
+                                });
+                    } catch (JoxScopeExecutionException e) {
+                        e.unwrapAndThrow(TestException.class);
+                        throw e;
+                    }
                 });
-            } catch (JoxScopeExecutionException e) {
-                e.unwrapAndThrow(TestException.class);
-                throw e;
-            }
-        });
     }
 
     @Test
@@ -172,16 +200,18 @@ public class SupervisedTest {
             }
         }
 
-        assertDoesNotThrow(() -> {
-            try {
-                Scopes.supervised(scope -> {
-                    throw new RuntimeException("x"); // different exception
+        assertDoesNotThrow(
+                () -> {
+                    try {
+                        Scopes.supervised(
+                                scope -> {
+                                    throw new RuntimeException("x"); // different exception
+                                });
+                    } catch (JoxScopeExecutionException e) {
+                        e.unwrapAndThrow(TestException.class); // we expect test exception
+                        // no rethrow of e
+                    }
                 });
-            } catch (JoxScopeExecutionException e) {
-                e.unwrapAndThrow(TestException.class); // we expect test exception
-                // no rethrow of e
-            }
-        });
     }
 
     @Test
@@ -192,16 +222,19 @@ public class SupervisedTest {
             }
         }
 
-        assertThrows(JoxScopeExecutionException.class, () -> {
-            try {
-                Scopes.supervised(scope -> {
-                    throw new RuntimeException("x"); // different exception
+        assertThrows(
+                JoxScopeExecutionException.class,
+                () -> {
+                    try {
+                        Scopes.supervised(
+                                scope -> {
+                                    throw new RuntimeException("x"); // different exception
+                                });
+                    } catch (JoxScopeExecutionException e) {
+                        e.unwrapAndThrow(TestException.class); // we expect test exception
+                        throw e; // e is rethrown
+                    }
                 });
-            } catch (JoxScopeExecutionException e) {
-                e.unwrapAndThrow(TestException.class); // we expect test exception
-                throw e; // e is rethrown
-            }
-        });
     }
 
     @Test
@@ -212,19 +245,24 @@ public class SupervisedTest {
             }
         }
 
-        TestException testException = assertThrows(TestException.class, () -> {
-            try {
-                Scopes.supervised(scope -> {
-                    scope.fork(() -> {
-                        throw new TestException("y");
-                    });
-                    throw new TestException("x"); // different exception
-                });
-            } catch (JoxScopeExecutionException e) {
-                e.unwrapAndThrow(TestException.class); // we expect test exception
-                throw e; // e is rethrown
-            }
-        });
+        TestException testException =
+                assertThrows(
+                        TestException.class,
+                        () -> {
+                            try {
+                                Scopes.supervised(
+                                        scope -> {
+                                            scope.fork(
+                                                    () -> {
+                                                        throw new TestException("y");
+                                                    });
+                                            throw new TestException("x"); // different exception
+                                        });
+                            } catch (JoxScopeExecutionException e) {
+                                e.unwrapAndThrow(TestException.class); // we expect test exception
+                                throw e; // e is rethrown
+                            }
+                        });
 
         assertThat(Arrays.asList(testException.getSuppressed()), hasSize(1));
         assertInstanceOf(TestException.class, testException.getSuppressed()[0]);

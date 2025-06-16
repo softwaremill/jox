@@ -1,11 +1,11 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
 import static com.softwaremill.jox.Select.defaultClause;
 import static com.softwaremill.jox.Select.select;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
+
+import org.junit.jupiter.api.Test;
 
 public class SelectTest {
     @Test

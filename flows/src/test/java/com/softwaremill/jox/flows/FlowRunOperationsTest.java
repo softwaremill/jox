@@ -1,17 +1,18 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.Scopes;
 
 public class FlowRunOperationsTest {
 
@@ -42,88 +43,96 @@ public class FlowRunOperationsTest {
 
     @Test
     void runToChannel_shouldRun() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Flow<Integer> flow = Flows.fromValues(1, 2, 3);
+        Scopes.unsupervised(
+                scope -> {
+                    // given
+                    Flow<Integer> flow = Flows.fromValues(1, 2, 3);
 
-            // when
-            Source<Integer> source = flow.runToChannel(scope);
+                    // when
+                    Source<Integer> source = flow.runToChannel(scope);
 
-            // then
-            assertEquals(1, source.receive());
-            assertEquals(2, source.receive());
-            assertEquals(3, source.receive());
-            return null;
-        });
+                    // then
+                    assertEquals(1, source.receive());
+                    assertEquals(2, source.receive());
+                    assertEquals(3, source.receive());
+                    return null;
+                });
     }
 
     @Test
     void runToChannel_shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Channel<Integer> channel = Channel.newUnlimitedChannel();
-            Flow<Integer> flow = Flows.fromSource(channel);
+        Scopes.unsupervised(
+                scope -> {
+                    // given
+                    Channel<Integer> channel = Channel.newUnlimitedChannel();
+                    Flow<Integer> flow = Flows.fromSource(channel);
 
-            // when
-            Source<Integer> receivedChannel = flow.runToChannel(scope);
+                    // when
+                    Source<Integer> receivedChannel = flow.runToChannel(scope);
 
-            // then
-            assertEquals(channel, receivedChannel);
-            return null;
-        });
+                    // then
+                    assertEquals(channel, receivedChannel);
+                    return null;
+                });
     }
 
     @Test
     void runToChannel_shouldRunWithBufferSizeDefinedInScope() throws Throwable {
-        ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 2).call(() -> {
-            Scopes.unsupervised(scope -> {
-                // given
-                Flow<Integer> flow = Flows.fromValues(1, 2, 3);
+        ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 2)
+                .call(
+                        () -> {
+                            Scopes.unsupervised(
+                                    scope -> {
+                                        // given
+                                        Flow<Integer> flow = Flows.fromValues(1, 2, 3);
 
-                // when
-                Source<Integer> source = flow.runToChannel(scope);
+                                        // when
+                                        Source<Integer> source = flow.runToChannel(scope);
 
-                // then
-                assertEquals(1, source.receive());
-                assertEquals(2, source.receive());
-                assertEquals(3, source.receive());
-                return null;
-            });
-            return null;
-        });
+                                        // then
+                                        assertEquals(1, source.receive());
+                                        assertEquals(2, source.receive());
+                                        assertEquals(3, source.receive());
+                                        return null;
+                                    });
+                            return null;
+                        });
     }
 
     @Test
     void runToChannelWithBufferCapacity_shouldRun() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Flow<Integer> flow = Flows.fromValues(1, 2, 3);
+        Scopes.unsupervised(
+                scope -> {
+                    // given
+                    Flow<Integer> flow = Flows.fromValues(1, 2, 3);
 
-            // when
-            Source<Integer> source = flow.runToChannel(scope, 2);
+                    // when
+                    Source<Integer> source = flow.runToChannel(scope, 2);
 
-            // then
-            assertEquals(1, source.receive());
-            assertEquals(2, source.receive());
-            assertEquals(3, source.receive());
-            return null;
-        });
+                    // then
+                    assertEquals(1, source.receive());
+                    assertEquals(2, source.receive());
+                    assertEquals(3, source.receive());
+                    return null;
+                });
     }
 
     @Test
-    void runToChannelWithBufferCapacity_shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
-        Scopes.unsupervised(scope -> {
-            // given
-            Channel<Integer> channel = Channel.newUnlimitedChannel();
-            Flow<Integer> flow = Flows.fromSource(channel);
+    void runToChannelWithBufferCapacity_shouldReturnOriginalSourceWhenRunningASourcedBackedFlow()
+            throws Throwable {
+        Scopes.unsupervised(
+                scope -> {
+                    // given
+                    Channel<Integer> channel = Channel.newUnlimitedChannel();
+                    Flow<Integer> flow = Flows.fromSource(channel);
 
-            // when
-            Source<Integer> receivedChannel = flow.runToChannel(scope, 10);
+                    // when
+                    Source<Integer> receivedChannel = flow.runToChannel(scope, 10);
 
-            // then
-            assertEquals(channel, receivedChannel);
-            return null;
-        });
+                    // then
+                    assertEquals(channel, receivedChannel);
+                    return null;
+                });
     }
 
     @Test
@@ -132,9 +141,9 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.failed(new IllegalStateException());
 
         // when & then
-        assertThrows(IllegalStateException.class, () ->
-                flow
-                        .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n)));
+        assertThrows(
+                IllegalStateException.class,
+                () -> flow.runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n)));
     }
 
     @Test
@@ -143,10 +152,16 @@ public class FlowRunOperationsTest {
         Flow<Integer> flow = Flows.fromValues(1);
 
         // when & then
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
-            flow
-                    .runFold(0, (_, _) -> {throw new RuntimeException("Function `f` is broken");});
-        });
+        RuntimeException thrown =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> {
+                            flow.runFold(
+                                    0,
+                                    (_, _) -> {
+                                        throw new RuntimeException("Function `f` is broken");
+                                    });
+                        });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
 
@@ -156,9 +171,7 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.empty();
 
         // when & then
-        assertEquals(0,
-                flow
-                        .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n)));
+        assertEquals(0, flow.runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n)));
     }
 
     @Test
@@ -185,8 +198,8 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.empty();
 
         // when & then
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> flow.runTakeLast(-1));
+        IllegalArgumentException exception =
+                assertThrows(IllegalArgumentException.class, () -> flow.runTakeLast(-1));
         assertEquals("requirement failed: n must be >= 0", exception.getMessage());
     }
 
@@ -209,7 +222,8 @@ public class FlowRunOperationsTest {
     }
 
     @Test
-    void runTakeLast_shouldReturnListWithAllElementsIfSourceIsSmallerThanRequestedNumber() throws Exception {
+    void runTakeLast_shouldReturnListWithAllElementsIfSourceIsSmallerThanRequestedNumber()
+            throws Exception {
         // given
         Flow<Integer> flow = Flows.fromValues(1, 2);
 
@@ -232,7 +246,8 @@ public class FlowRunOperationsTest {
         Flow<Integer> flow = Flows.empty();
 
         // when & then
-        NoSuchElementException exception = assertThrows(NoSuchElementException.class, () -> flow.runReduce(Integer::sum));
+        NoSuchElementException exception =
+                assertThrows(NoSuchElementException.class, () -> flow.runReduce(Integer::sum));
         assertEquals("cannot reduce an empty flow", exception.getMessage());
     }
 
@@ -242,8 +257,14 @@ public class FlowRunOperationsTest {
         Flow<Integer> flow = Flows.fromValues(1, 2);
 
         // when & then
-        RuntimeException exception = assertThrows(RuntimeException.class, () ->
-                flow.runReduce((_, _) -> {throw new RuntimeException("Function `f` is broken");}));
+        RuntimeException exception =
+                assertThrows(
+                        RuntimeException.class,
+                        () ->
+                                flow.runReduce(
+                                        (_, _) -> {
+                                            throw new RuntimeException("Function `f` is broken");
+                                        }));
         assertEquals("Function `f` is broken", exception.getMessage());
     }
 
@@ -271,7 +292,8 @@ public class FlowRunOperationsTest {
         Flow<?> flow = Flows.empty();
 
         // when & then
-        NoSuchElementException exception = assertThrows(NoSuchElementException.class, flow::runLast);
+        NoSuchElementException exception =
+                assertThrows(NoSuchElementException.class, flow::runLast);
         assertEquals("cannot obtain last element from an empty source", exception.getMessage());
     }
 
@@ -324,34 +346,38 @@ public class FlowRunOperationsTest {
 
     @Test
     void runPipeToSink_pipeOneSourceToAnother() throws InterruptedException {
-        Scopes.supervised(scope -> {
-            Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
-            Channel<Integer> c2 = Channel.newRendezvousChannel();
+        Scopes.supervised(
+                scope -> {
+                    Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
+                    Channel<Integer> c2 = Channel.newRendezvousChannel();
 
-            scope.fork(() -> {
-                c1.runPipeToSink(c2, false);
-                c2.done();
-                return null;
-            });
+                    scope.fork(
+                            () -> {
+                                c1.runPipeToSink(c2, false);
+                                c2.done();
+                                return null;
+                            });
 
-            assertEquals(List.of(1, 2, 3), c2.toList());
-            return null;
-        });
+                    assertEquals(List.of(1, 2, 3), c2.toList());
+                    return null;
+                });
     }
 
     @Test
     void runPipeToSink_pipeOneSourceToAnotherWithDonePropagation() throws InterruptedException {
-        Scopes.supervised(scope -> {
-            Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
-            Channel<Integer> c2 = Channel.newRendezvousChannel();
+        Scopes.supervised(
+                scope -> {
+                    Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
+                    Channel<Integer> c2 = Channel.newRendezvousChannel();
 
-            scope.fork(() -> {
-                c1.runPipeToSink(c2, true);
-                return null;
-            });
+                    scope.fork(
+                            () -> {
+                                c1.runPipeToSink(c2, true);
+                                return null;
+                            });
 
-            assertEquals(List.of(1, 2, 3), c2.toList());
-            return null;
-        });
+                    assertEquals(List.of(1, 2, 3), c2.toList());
+                    return null;
+                });
     }
 }

@@ -3,10 +3,7 @@ package com.softwaremill.jox.flows;
 import java.util.*;
 
 class WeightedHeap<T> {
-    public record HeapNode<T>(
-            T item,
-            long weight
-    ) {
+    public record HeapNode<T>(T item, long weight) {
         private HeapNode<T> copy() {
             return new HeapNode<>(item, weight);
         }
@@ -67,9 +64,7 @@ class WeightedHeap<T> {
         if (heap.isEmpty()) {
             return Map.entry(Optional.empty(), this);
         } else if (heap.size() == 1) {
-            return Map.entry(
-                    Optional.of(heap.getFirst().copy()),
-                    new WeightedHeap<>());
+            return Map.entry(Optional.of(heap.getFirst().copy()), new WeightedHeap<>());
         }
         var min = heap.getFirst();
         var last = heap.getLast();
@@ -84,8 +79,7 @@ class WeightedHeap<T> {
 
         var result = bubbleDown(newHeap, newValueToIndex, 0);
         return Map.entry(
-                Optional.of(min.copy()),
-                new WeightedHeap<>(result.getKey(), result.getValue()));
+                Optional.of(min.copy()), new WeightedHeap<>(result.getKey(), result.getValue()));
     }
 
     public Optional<HeapNode<T>> peekMin() {
@@ -119,7 +113,8 @@ class WeightedHeap<T> {
         return 2 * i + 2;
     }
 
-    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> swap(List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i, int j) {
+    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> swap(
+            List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i, int j) {
         List<HeapNode<T>> newHeap = new ArrayList<>(heap);
         Collections.swap(newHeap, i, j);
 
@@ -130,12 +125,15 @@ class WeightedHeap<T> {
         return Map.entry(newHeap, newValueToIndex);
     }
 
-    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> bubbleUp(List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i) {
+    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> bubbleUp(
+            List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i) {
         int currentIndex = i;
         List<HeapNode<T>> currentHeap = heap;
         Map<T, Integer> currentMap = valueToIndex;
 
-        while (currentIndex > 0 && currentHeap.get(currentIndex).weight < currentHeap.get(parentIndex(currentIndex)).weight) {
+        while (currentIndex > 0
+                && currentHeap.get(currentIndex).weight
+                        < currentHeap.get(parentIndex(currentIndex)).weight) {
             var result = swap(currentHeap, currentMap, currentIndex, parentIndex(currentIndex));
 
             currentHeap = result.getKey();
@@ -145,7 +143,8 @@ class WeightedHeap<T> {
         return Map.entry(currentHeap, currentMap);
     }
 
-    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> bubbleDown(List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i) {
+    private Map.Entry<List<HeapNode<T>>, Map<T, Integer>> bubbleDown(
+            List<HeapNode<T>> heap, Map<T, Integer> valueToIndex, int i) {
         int currentIndex = i;
         var currentHeap = heap;
         Map<T, Integer> currentMap = valueToIndex;
@@ -155,10 +154,12 @@ class WeightedHeap<T> {
             int right = rightChildIndex(currentIndex);
             int smallest = currentIndex;
 
-            if (left < currentHeap.size() && currentHeap.get(left).weight < currentHeap.get(smallest).weight) {
+            if (left < currentHeap.size()
+                    && currentHeap.get(left).weight < currentHeap.get(smallest).weight) {
                 smallest = left;
             }
-            if (right < currentHeap.size() && currentHeap.get(right).weight < currentHeap.get(smallest).weight) {
+            if (right < currentHeap.size()
+                    && currentHeap.get(right).weight < currentHeap.get(smallest).weight) {
                 smallest = right;
             }
 

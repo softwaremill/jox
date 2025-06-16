@@ -78,6 +78,12 @@ Let us know in the issues, or our [community forum](https://softwaremill.communi
 
 We offer commercial development services. [Contact us](https://softwaremill.com) to learn more!
 
+## Building & working on Jox
+
+Jox uses the spotless maven plugin to format code. The formatting is automatically applied during compilation.
+
+When using VS Code, format-on-save should be disabled (see the pom.xml).
+
 ## Copyright
 
 Copyright (C) 2023-2025 SoftwareMill [https://softwaremill.com](https://softwaremill.com).

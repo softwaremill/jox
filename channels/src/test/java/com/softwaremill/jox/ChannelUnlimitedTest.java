@@ -1,14 +1,12 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-/**
- * Tests which always use unlimited channels.
- */
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
+/** Tests which always use unlimited channels. */
 public class ChannelUnlimitedTest {
     @Test
     @Timeout(1)

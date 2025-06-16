@@ -1,19 +1,20 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.IntStream;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
+import com.softwaremill.jox.structured.Scopes;
 
 class FlowTest {
 
@@ -44,18 +45,28 @@ class FlowTest {
 
     @Test
     void shouldThrowExceptionForFailedFlow() {
-        assertThrows(IllegalStateException.class, () -> {
-            Flows.failed(new IllegalStateException())
-                    .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
-        });
+        assertThrows(
+                IllegalStateException.class,
+                () -> {
+                    Flows.failed(new IllegalStateException())
+                            .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
+                });
     }
 
     @Test
     void shouldThrowExceptionThrownInFunctionF() {
-        RuntimeException thrown = assertThrows(RuntimeException.class, () -> {
-            Flows.fromValues(1)
-                    .runFold(0, (_, _) -> {throw new RuntimeException("Function `f` is broken");});
-        });
+        RuntimeException thrown =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> {
+                            Flows.fromValues(1)
+                                    .runFold(
+                                            0,
+                                            (_, _) -> {
+                                                throw new RuntimeException(
+                                                        "Function `f` is broken");
+                                            });
+                        });
         assertEquals("Function `f` is broken", thrown.getMessage());
     }
 
@@ -78,8 +89,7 @@ class FlowTest {
 
     @Test
     void shouldTakeFromAsyncFlow() throws Exception {
-        Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-                .buffer(16);
+        Flow<Integer> f = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10).buffer(16);
         List<Integer> result = f.take(5).runToList();
         assertEquals(List.of(1, 2, 3, 4, 5), result);
     }
@@ -94,8 +104,7 @@ class FlowTest {
     @Test
     void shouldWorkWithASingleAsyncBoundary() throws Throwable {
         // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .buffer(3);
+        Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5).buffer(3);
 
         // when
         List<Integer> integers = flow.runToList();
@@ -107,12 +116,13 @@ class FlowTest {
     @Test
     void shouldWorkWithMultipleAsyncBoundaries() throws Throwable {
         // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3, 4, 5)
-                .buffer(3)
-                .map(i -> i * 2)
-                .buffer(2)
-                .map(i -> i + 1)
-                .buffer(5);
+        Flow<Integer> flow =
+                Flows.fromValues(1, 2, 3, 4, 5)
+                        .buffer(3)
+                        .map(i -> i * 2)
+                        .buffer(2)
+                        .map(i -> i + 1)
+                        .buffer(5);
 
         // when
         List<Integer> integers = flow.runToList();
@@ -123,12 +133,18 @@ class FlowTest {
 
     @Test
     void shouldPropagateErrorsWhenUsingBuffer() {
-        var exception = assertThrows(JoxScopeExecutionException.class, () -> {
-            Flows.fromValues(1, 2, 3)
-                    .map(_ -> {throw new IllegalStateException();})
-                    .buffer(5)
-                    .runToList();
-        });
+        var exception =
+                assertThrows(
+                        JoxScopeExecutionException.class,
+                        () -> {
+                            Flows.fromValues(1, 2, 3)
+                                    .map(
+                                            _ -> {
+                                                throw new IllegalStateException();
+                                            })
+                                    .buffer(5)
+                                    .runToList();
+                        });
         assertInstanceOf(IllegalStateException.class, exception.getCause().getCause());
     }
 
@@ -139,8 +155,7 @@ class FlowTest {
         List<Integer> results = new ArrayList<>();
 
         // when
-        flow.filter(i -> i % 2 == 0)
-                .runForeach(results::add);
+        flow.filter(i -> i % 2 == 0).runForeach(results::add);
 
         // then
         assertEquals(List.of(2, 4), results);
@@ -153,11 +168,7 @@ class FlowTest {
         List<Integer> results = new ArrayList<>();
 
         // when
-        flow
-                .tap(results::add)
-                .map(i -> i * 2)
-                .runForeach(_ -> {
-                });
+        flow.tap(results::add).map(i -> i * 2).runForeach(_ -> {});
 
         // then
         assertEquals(List.of(1, 2, 3), results);
@@ -214,15 +225,15 @@ class FlowTest {
         Flow<String> f = Flows.fromValues("foo", "bar");
 
         // when & then
-        assertEquals(List.of("[", "foo", ", ", "bar", "]"), f.intersperse("[", ", ", "]").runToList());
+        assertEquals(
+                List.of("[", "foo", ", ", "bar", "]"), f.intersperse("[", ", ", "]").runToList());
     }
 
     @Test
     void shouldNotTakeFromEmptyFlow() throws Exception {
         // given
         Flow<Integer> flow = Flows.empty();
-        flow = flow
-                .takeWhile(x -> x < 3, false);
+        flow = flow.takeWhile(x -> x < 3, false);
 
         // when & then
         assertEquals(List.of(), flow.runToList());
@@ -231,8 +242,7 @@ class FlowTest {
     @Test
     void shouldTakeAsLongAsPredicateIsSatisfied() throws Exception {
         // given
-        Flow<Integer> flow = Flows.fromValues(1, 2, 3)
-                .takeWhile(x -> x < 3, false);
+        Flow<Integer> flow = Flows.fromValues(1, 2, 3).takeWhile(x -> x < 3, false);
 
         // when & then
         assertEquals(List.of(1, 2), flow.runToList());
@@ -310,8 +320,10 @@ class FlowTest {
         Flow<Integer> s = Flows.empty();
 
         // when
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> s.throttle(-1, Duration.ofMillis(50)));
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class,
+                        () -> s.throttle(-1, Duration.ofMillis(50)));
 
         // then
         assertEquals("requirement failed: elements must be > 0", exception.getMessage());
@@ -323,8 +335,9 @@ class FlowTest {
         Flow<Integer> s = Flows.empty();
 
         // when
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
-                () -> s.throttle(1, Duration.ofNanos(50)));
+        IllegalArgumentException exception =
+                assertThrows(
+                        IllegalArgumentException.class, () -> s.throttle(1, Duration.ofNanos(50)));
 
         // then
         assertEquals("requirement failed: per time must be >= 1 ms", exception.getMessage());
@@ -334,11 +347,14 @@ class FlowTest {
     void shouldNotEvaluateSubsequentFlowsIfThereIsAFailure() {
         // given
         AtomicBoolean evaluated = new AtomicBoolean(false);
-        Flow<Integer> f = Flows.<Integer>failed(new IllegalStateException())
-                .concat(Flows.usingEmit(emit -> {
-                    evaluated.set(true);
-                    emit.apply(1);
-                }));
+        Flow<Integer> f =
+                Flows.<Integer>failed(new IllegalStateException())
+                        .concat(
+                                Flows.usingEmit(
+                                        emit -> {
+                                            evaluated.set(true);
+                                            emit.apply(1);
+                                        }));
 
         // when & then
         assertThrows(IllegalStateException.class, f::runToList);
@@ -414,10 +430,7 @@ class FlowTest {
         var c2 = Flows.fromValues(4, 5, 6);
 
         // when
-        List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+        List<Integer> result = c1.merge(c2, false, false).runToList().stream().sorted().toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -430,10 +443,7 @@ class FlowTest {
         var c2 = Flows.fromValues(4, 5, 6).buffer(10);
 
         // when
-        List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+        List<Integer> result = c1.merge(c2, false, false).runToList().stream().sorted().toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -490,10 +500,7 @@ class FlowTest {
         var c2 = Flows.fromValues(5, 6).throttle(1, Duration.ofMillis(100));
 
         // when
-        List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+        List<Integer> result = c1.merge(c2, false, false).runToList().stream().sorted().toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -506,10 +513,7 @@ class FlowTest {
         var c2 = Flows.fromValues(3, 4, 5, 6).throttle(1, Duration.ofMillis(100));
 
         // when
-        List<Integer> result = c1.merge(c2, false, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+        List<Integer> result = c1.merge(c2, false, false).runToList().stream().sorted().toList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -522,10 +526,7 @@ class FlowTest {
         var c2 = Flows.fromValues(3, 4, 5, 6).throttle(1, Duration.ofMillis(100));
 
         // when
-        var result = c1.merge(c2, true, false).runToList()
-                .stream()
-                .sorted()
-                .toList();
+        var result = c1.merge(c2, true, false).runToList().stream().sorted().toList();
 
         // then
         assertTrue(result.equals(List.of(1, 2, 3, 4)) || result.equals(List.of(1, 2, 3)));
@@ -538,11 +539,7 @@ class FlowTest {
         var c2 = Flows.fromValues(5, 6).throttle(1, Duration.ofMillis(100));
 
         // when
-        var result = c1.merge(c2, false, true)
-                .runToList()
-                .stream()
-                .sorted()
-                .toList();
+        var result = c1.merge(c2, false, true).runToList().stream().sorted().toList();
 
         // then
         assertTrue(new HashSet<>(result).containsAll(List.of(5, 6)));
@@ -552,15 +549,15 @@ class FlowTest {
     @Test
     void shouldEmitElementsOnlyFromOriginalSourceWhenNotEmpty() throws Exception {
         // given
-        Flow<Integer> flow = Flows.fromValues(1)
-                .orElse(Flows.fromValues(2, 3));
+        Flow<Integer> flow = Flows.fromValues(1).orElse(Flows.fromValues(2, 3));
 
         // when & then
         assertEquals(List.of(1), flow.runToList());
     }
 
     @Test
-    void shouldEmitElementsOnlyFromAlternativeSourceWhenOriginalSourceCreatedEmpty() throws Exception {
+    void shouldEmitElementsOnlyFromAlternativeSourceWhenOriginalSourceCreatedEmpty()
+            throws Exception {
         // given
         Flow<Integer> flow = Flows.<Integer>empty().orElse(Flows.fromValues(2, 3));
 
@@ -584,11 +581,12 @@ class FlowTest {
         Flow<Integer> flow = Flows.<Integer>failed(failure).orElse(Flows.fromValues(2, 3));
 
         // when & then
-        Scopes.unsupervised(scope -> {
-            Source<Integer> source = flow.runToChannel(scope);
-            assertEquals(failure, ((ChannelError) source.receiveOrClosed()).cause());
-            return null;
-        });
+        Scopes.unsupervised(
+                scope -> {
+                    Source<Integer> source = flow.runToChannel(scope);
+                    assertEquals(failure, ((ChannelError) source.receiveOrClosed()).cause());
+                    return null;
+                });
     }
 
     @Test
@@ -618,7 +616,9 @@ class FlowTest {
 
         // when & then
         Flow<Integer> scannedFlow = flow.scan(1, (acc, el) -> acc * el);
-        assertEquals(List.of(1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800), scannedFlow.runToList());
+        assertEquals(
+                List.of(1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880, 3628800),
+                scannedFlow.runToList());
     }
 
     @Test
@@ -642,7 +642,8 @@ class FlowTest {
     }
 
     @Test
-    void debounceBy_shouldNotDebounceIfAppliedOnFlowContainingOnlyDistinctFValue() throws Exception {
+    void debounceBy_shouldNotDebounceIfAppliedOnFlowContainingOnlyDistinctFValue()
+            throws Exception {
         // given
         Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 
@@ -759,12 +760,14 @@ class FlowTest {
         Flow<Integer> c = Flows.fromValues(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
 
         // when & then
-        Flow<Integer> s = c.collect(i -> {
-            if (i % 2 == 0) {
-                return Optional.of(i * 10);
-            }
-            return Optional.empty();
-        });
+        Flow<Integer> s =
+                c.collect(
+                        i -> {
+                            if (i % 2 == 0) {
+                                return Optional.of(i * 10);
+                            }
+                            return Optional.empty();
+                        });
         List<Integer> result = s.runToList();
         assertEquals(List.of(20, 40, 60, 80, 100), result);
     }

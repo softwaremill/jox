@@ -1,13 +1,13 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Timeout;
+import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.TestUtil.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.*;
 import java.util.concurrent.*;
 
-import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Timeout;
 
 public class StressTest {
     @TestWithCapacities
@@ -23,15 +23,16 @@ public class StressTest {
     }
 
     /**
-     * Runs a large number of send/receive operations in multiple threads, occasionally interrupting them. At the end,
-     * closes the channel as "done".
-     * <p>
-     * Verifies that messages are not duplicated and sent/received properly, as well as the channel's internal state is
-     * correct.
+     * Runs a large number of send/receive operations in multiple threads, occasionally interrupting
+     * them. At the end, closes the channel as "done".
+     *
+     * <p>Verifies that messages are not duplicated and sent/received properly, as well as the
+     * channel's internal state is correct.
      */
     private void testAndVerify(int capacity, boolean direct) throws Exception {
         boolean ci = System.getenv("CI") != null;
-        System.out.println("Running in ci: " + ci + "; capacity: " + capacity + "; direct: " + direct);
+        System.out.println(
+                "Running in ci: " + ci + "; capacity: " + capacity + "; direct: " + direct);
 
         int numberOfRepetitions = ci ? 20 : 5;
         int numberOfThreads = 8;
@@ -44,83 +45,133 @@ public class StressTest {
                 chs.add(Channel.newBufferedChannel(capacity));
             }
             try {
-                scoped(scope -> {
-                    // start forks
-                    var forks = new ArrayList<Future<StressTestThreadData>>();
-                    for (int i = 0; i < numberOfThreads; i++) {
-                        int finalI = i;
-                        forks.add(fork(scope, () -> {
-                            // in each fork, run the given number of iterations; copying the channels list as it might be mutated by each thread
-                            var data = new StressTestThreadData(scope, new ArrayList<>(chs), new Random(), finalI, direct, new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Counter());
-                            for (int j = 0; j < numberOfIterations; j++) {
-                                stressTestIteration(data, j);
+                scoped(
+                        scope -> {
+                            // start forks
+                            var forks = new ArrayList<Future<StressTestThreadData>>();
+                            for (int i = 0; i < numberOfThreads; i++) {
+                                int finalI = i;
+                                forks.add(
+                                        fork(
+                                                scope,
+                                                () -> {
+                                                    // in each fork, run the given number of
+                                                    // iterations; copying the channels list as it
+                                                    // might be mutated by each thread
+                                                    var data =
+                                                            new StressTestThreadData(
+                                                                    scope,
+                                                                    new ArrayList<>(chs),
+                                                                    new Random(),
+                                                                    finalI,
+                                                                    direct,
+                                                                    new ArrayList<>(),
+                                                                    new ArrayList<>(),
+                                                                    new ArrayList<>(),
+                                                                    new Counter());
+                                                    for (int j = 0; j < numberOfIterations; j++) {
+                                                        stressTestIteration(data, j);
+                                                    }
+                                                    // if this is the first fork, after all the
+                                                    // iterations complete, close the channels
+                                                    if (finalI == 0) {
+                                                        for (var ch : chs) {
+                                                            ch.done();
+                                                        }
+                                                    }
+                                                    return data;
+                                                }));
                             }
-                            // if this is the first fork, after all the iterations complete, close the channels
-                            if (finalI == 0) {
-                                for (var ch : chs) {
-                                    ch.done();
-                                }
+
+                            // collect data from all forks, perform duplicate checks
+                            Set<String> allSent = new HashSet<>();
+                            Set<String> allReceived = new HashSet<>();
+
+                            for (var fork : forks) {
+                                var data = fork.get();
+                                System.out.println(
+                                        "Fork done, sent: "
+                                                + data.sent.size()
+                                                + ", received: "
+                                                + data.received.size()
+                                                + ", sendInterrupted: "
+                                                + data.sendInterrupted.size()
+                                                + ", receiveInterrupted: "
+                                                + data.receiveInterrupted.value);
+
+                                // sanity check: each iteration should produce a result
+                                assertEquals(
+                                        numberOfIterations,
+                                        data.sent.size()
+                                                + data.sendInterrupted.size()
+                                                + data.received.size()
+                                                + data.receiveInterrupted.value);
+
+                                var sentSet = new HashSet<>(data.sent);
+                                var receivedSet = new HashSet<>(data.received);
+
+                                // every message should be sent & received once
+                                assertEquals(data.sent.size(), sentSet.size());
+                                assertEquals(data.received.size(), receivedSet.size());
+
+                                allSent.addAll(sentSet);
+                                allReceived.addAll(receivedSet);
                             }
-                            return data;
-                        }));
-                    }
 
-                    // collect data from all forks, perform duplicate checks
-                    Set<String> allSent = new HashSet<>();
-                    Set<String> allReceived = new HashSet<>();
+                            // check received messages
+                            Set<String> receivedNotSent = new HashSet<>(allReceived);
+                            receivedNotSent.removeAll(allSent);
+                            assertEquals(
+                                    Set.of(),
+                                    receivedNotSent,
+                                    "each received message should have been sent");
 
-                    for (var fork : forks) {
-                        var data = fork.get();
-                        System.out.println("Fork done, sent: " + data.sent.size() + ", received: " + data.received.size() + ", sendInterrupted: " + data.sendInterrupted.size() + ", receiveInterrupted: " + data.receiveInterrupted.value);
+                            for (var ch : chs) {
+                                List<String> remainingInChannel = drainChannel(ch);
+                                allReceived.addAll(remainingInChannel);
+                                assertTrue(ch.isClosedForReceive());
+                            }
+                            assertEquals(
+                                    allSent,
+                                    allReceived,
+                                    "each sent message should have been received, or drained");
 
-                        // sanity check: each iteration should produce a result
-                        assertEquals(numberOfIterations, data.sent.size() + data.sendInterrupted.size() + data.received.size() + data.receiveInterrupted.value);
+                            for (var ch : chs) {
+                                var chDebug = ch.toString();
+                                var segments = countOccurrences(chDebug, "Segment{");
 
-                        var sentSet = new HashSet<>(data.sent);
-                        var receivedSet = new HashSet<>(data.received);
+                                // In a worst-case scenario, the first thread might close the
+                                // channel (using `done()`): this prevents the
+                                // `sendSegment` reference from advancing. All other threads might
+                                // have started a `send()` just before this,
+                                // so the number of in-flight elements, waiting to be received (at
+                                // the moment of calling `done()`) is
+                                // `numberOfThreads + bufferSize`. Each element might have a
+                                // separate segment (as all other cells might be
+                                // interrupted/broken), so this also is a theoretical number of
+                                // segments. When there are no more `send()`s,
+                                // only `receive()`s, the `sendSegment` won't ever advance.
+                                // This needs to be incremented by the number of in-buffer cells.
+                                // Additionally, they might only start in the
+                                // next segment - if there's a buffer.
+                                // And another +1, as the tail segment might consist of IRs only.
+                                var maxSegments =
+                                        numberOfThreads
+                                                + capacity
+                                                + Math.ceil(
+                                                        (double) capacity / Segment.SEGMENT_SIZE)
+                                                + (capacity > 0 ? 1 : 0)
+                                                + 1;
+                                assertTrue(
+                                        segments <= maxSegments,
+                                        "got: " + segments + " instead of " + maxSegments + ".");
 
-                        // every message should be sent & received once
-                        assertEquals(data.sent.size(), sentSet.size());
-                        assertEquals(data.received.size(), receivedSet.size());
-
-                        allSent.addAll(sentSet);
-                        allReceived.addAll(receivedSet);
-                    }
-
-                    // check received messages
-                    Set<String> receivedNotSent = new HashSet<>(allReceived);
-                    receivedNotSent.removeAll(allSent);
-                    assertEquals(Set.of(), receivedNotSent, "each received message should have been sent");
-
-                    for (var ch : chs) {
-                        List<String> remainingInChannel = drainChannel(ch);
-                        allReceived.addAll(remainingInChannel);
-                        assertTrue(ch.isClosedForReceive());
-                    }
-                    assertEquals(allSent, allReceived, "each sent message should have been received, or drained");
-
-                    for (var ch : chs) {
-                        var chDebug = ch.toString();
-                        var segments = countOccurrences(chDebug, "Segment{");
-
-                        // In a worst-case scenario, the first thread might close the channel (using `done()`): this prevents the
-                        // `sendSegment` reference from advancing. All other threads might have started a `send()` just before this,
-                        // so the number of in-flight elements, waiting to be received (at the moment of calling `done()`) is
-                        // `numberOfThreads + bufferSize`. Each element might have a separate segment (as all other cells might be
-                        // interrupted/broken), so this also is a theoretical number of segments. When there are no more `send()`s,
-                        // only `receive()`s, the `sendSegment` won't ever advance.
-                        // This needs to be incremented by the number of in-buffer cells. Additionally, they might only start in the
-                        // next segment - if there's a buffer.
-                        // And another +1, as the tail segment might consist of IRs only.
-                        var maxSegments = numberOfThreads + capacity + Math.ceil((double) capacity / Segment.SEGMENT_SIZE) + (capacity > 0 ? 1 : 0) + 1;
-                        assertTrue(segments <= maxSegments, "got: " + segments + " instead of " + maxSegments + ".");
-
-                        // there should be no negative counters
-                        assertFalse(chDebug.contains("pointers=-"));
-                        assertFalse(chDebug.contains("notProcessed=-"));
-                        assertFalse(chDebug.contains("notInterrupted=-"));
-                    }
-                });
+                                // there should be no negative counters
+                                assertFalse(chDebug.contains("pointers=-"));
+                                assertFalse(chDebug.contains("notProcessed=-"));
+                                assertFalse(chDebug.contains("notInterrupted=-"));
+                            }
+                        });
             } catch (Exception e) {
                 System.out.println("\nFailed!");
             } finally {
@@ -135,11 +186,19 @@ public class StressTest {
 
     //
 
-    private record StressTestThreadData(StructuredTaskScope<Object> scope, List<Channel<String>> chs, Random random,
-                                        int threadId, boolean direct, List<String> sent, List<String> received,
-                                        List<String> sendInterrupted, Counter receiveInterrupted) {}
+    private record StressTestThreadData(
+            StructuredTaskScope<Object> scope,
+            List<Channel<String>> chs,
+            Random random,
+            int threadId,
+            boolean direct,
+            List<String> sent,
+            List<String> received,
+            List<String> sendInterrupted,
+            Counter receiveInterrupted) {}
 
-    private void stressTestIteration(StressTestThreadData data, int iteration) throws InterruptedException, ExecutionException {
+    private void stressTestIteration(StressTestThreadData data, int iteration)
+            throws InterruptedException, ExecutionException {
         switch (data.random.nextInt(2)) {
             case 0 -> {
                 // send
@@ -152,7 +211,14 @@ public class StressTest {
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
-                    f = forkCancelable(data.scope, () -> selectOrClosed(channels.stream().map(ch -> ch.sendClause(msg)).toArray(SelectClause[]::new)));
+                    f =
+                            forkCancelable(
+                                    data.scope,
+                                    () ->
+                                            selectOrClosed(
+                                                    channels.stream()
+                                                            .map(ch -> ch.sendClause(msg))
+                                                            .toArray(SelectClause[]::new)));
                 }
 
                 Object result;
@@ -186,7 +252,14 @@ public class StressTest {
                 } else {
                     var channels = data.chs;
                     Collections.shuffle(channels);
-                    f = forkCancelable(data.scope, () -> selectOrClosed(channels.stream().map(Channel::receiveClause).toArray(SelectClause[]::new)));
+                    f =
+                            forkCancelable(
+                                    data.scope,
+                                    () ->
+                                            selectOrClosed(
+                                                    channels.stream()
+                                                            .map(Channel::receiveClause)
+                                                            .toArray(SelectClause[]::new)));
                 }
 
                 Object result;

@@ -1,14 +1,15 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.flows.WeightedHeap.HeapNode;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.flows.WeightedHeap.HeapNode;
 
 class WeightedHeapTest {
 
@@ -261,15 +262,19 @@ class WeightedHeapTest {
         // given
         Random random = new SecureRandom();
         WeightedHeap<Integer> heap = new WeightedHeap<>();
-        var initialValues = IntStream.rangeClosed(1, 100)
-                .boxed()
-                .map(_ -> Map.entry(random.nextInt(1000), random.nextLong()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, _) -> a));
+        var initialValues =
+                IntStream.rangeClosed(1, 100)
+                        .boxed()
+                        .map(_ -> Map.entry(random.nextInt(1000), random.nextLong()))
+                        .collect(
+                                Collectors.toMap(
+                                        Map.Entry::getKey, Map.Entry::getValue, (a, _) -> a));
 
-        var elements = initialValues.entrySet().stream()
-                .map(e -> new HeapNode<>(e.getKey(), e.getValue()))
-                .sorted(Comparator.comparingLong(HeapNode::weight))
-                .toList();
+        var elements =
+                initialValues.entrySet().stream()
+                        .map(e -> new HeapNode<>(e.getKey(), e.getValue()))
+                        .sorted(Comparator.comparingLong(HeapNode::weight))
+                        .toList();
 
         // when
         for (HeapNode<Integer> element : elements) {

@@ -6,7 +6,9 @@ import java.util.*;
 class LinesImpl {
 
     static Flow<String> lines(Charset charset, Flow.ByteFlow parentFlow) {
-        return parentFlow.mapStatefulConcat(Optional::<ByteChunk>empty,
+        return parentFlow
+                .mapStatefulConcat(
+                        Optional::<ByteChunk>empty,
                         (buffer, nextChunk) -> {
                             ByteChunk chunk = nextChunk;
                             if (chunk.length() == 0) {
@@ -14,13 +16,16 @@ class LinesImpl {
                                 return Map.entry(Optional.empty(), Collections.emptyList());
                             }
 
-                            // check if chunk contains newline character, if not proceed to the next chunk
+                            // check if chunk contains newline character, if not proceed to the next
+                            // chunk
                             int newLineIndex = chunk.indexWhere(b -> b == '\n');
                             if (newLineIndex == -1) {
                                 if (buffer.isEmpty()) {
                                     return Map.entry(Optional.of(chunk), Collections.emptyList());
                                 }
-                                return Map.entry(Optional.of(buffer.get().concat(chunk)), Collections.emptyList());
+                                return Map.entry(
+                                        Optional.of(buffer.get().concat(chunk)),
+                                        Collections.emptyList());
                             }
 
                             // buffer for lines, if chunk contains more than one newline character
@@ -46,8 +51,7 @@ class LinesImpl {
                             }
                             return Map.entry(Optional.of(chunk), lines);
                         },
-                        buf -> buf
-                )
+                        buf -> buf)
                 .map(chunk -> chunk.convertToString(charset));
     }
 }

@@ -1,7 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.structured.Scopes;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -18,50 +17,55 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.structured.Scopes;
 
 public class FlowIOTest {
 
     @Test
     void returnEmptyInputStreamForEmptySource() throws InterruptedException {
-        Scopes.unsupervised(scope -> {
-            Flow.ByteFlow source = Flows.<byte[]>empty().toByteFlow();
-            try (InputStream stream = source.runToInputStream(scope)) {
-                assertEquals("", inputStreamToString(stream));
-            }
-            return null;
-        });
+        Scopes.unsupervised(
+                scope -> {
+                    Flow.ByteFlow source = Flows.<byte[]>empty().toByteFlow();
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        assertEquals("", inputStreamToString(stream));
+                    }
+                    return null;
+                });
     }
 
     @Test
     void returnInputStreamForSimpleSource() throws InterruptedException {
-        Scopes.unsupervised(scope -> {
-            var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
-            try (InputStream stream = source.runToInputStream(scope)) {
-                assertEquals("chunk1chunk2", inputStreamToString(stream));
-            }
-            return null;
-        });
+        Scopes.unsupervised(
+                scope -> {
+                    var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        assertEquals("chunk1chunk2", inputStreamToString(stream));
+                    }
+                    return null;
+                });
     }
 
     @Test
     void correctlyTrackAvailableBytes() throws InterruptedException {
-        Scopes.unsupervised(scope -> {
-            var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
-            try (InputStream stream = source.runToInputStream(scope)) {
-                assertEquals(0, stream.available());
-                stream.read();
-                assertEquals(5, stream.available());
-                stream.readNBytes(5);
-                assertEquals(0, stream.available());
-                stream.read();
-                stream.read();
-                assertEquals(4, stream.available());
-                stream.readNBytes(5);
-                assertEquals(0, stream.available());
-            }
-            return null;
-        });
+        Scopes.unsupervised(
+                scope -> {
+                    var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        assertEquals(0, stream.available());
+                        stream.read();
+                        assertEquals(5, stream.available());
+                        stream.readNBytes(5);
+                        assertEquals(0, stream.available());
+                        stream.read();
+                        stream.read();
+                        assertEquals(4, stream.available());
+                        stream.readNBytes(5);
+                        assertEquals(0, stream.available());
+                    }
+                    return null;
+                });
     }
 
     @Test
@@ -119,7 +123,8 @@ public class FlowIOTest {
         assertFalse(outputStream.isClosed());
 
         // when & then
-        Exception exception = assertThrows(Exception.class, () -> source.runToOutputStream(outputStream));
+        Exception exception =
+                assertThrows(Exception.class, () -> source.runToOutputStream(outputStream));
         assertTrue(outputStream.isClosed());
         assertEquals("expected failed write", exception.getMessage());
     }
@@ -128,14 +133,15 @@ public class FlowIOTest {
     void runToOutputStream_closeOutputStreamOnError() {
         // given
         TestOutputStream outputStream = TestOutputStream.doNotThrowOnWrite();
-        var source = Flows
-                .fromValues("initial content".getBytes())
-                .concat(Flows.failed(new Exception("expected source error")))
-                .toByteFlow();
+        var source =
+                Flows.fromValues("initial content".getBytes())
+                        .concat(Flows.failed(new Exception("expected source error")))
+                        .toByteFlow();
         assertFalse(outputStream.isClosed());
 
         // when & then
-        Exception exception = assertThrows(Exception.class, () -> source.runToOutputStream(outputStream));
+        Exception exception =
+                assertThrows(Exception.class, () -> source.runToOutputStream(outputStream));
         assertTrue(outputStream.isClosed());
         assertEquals("expected source error", exception.getMessage());
     }
@@ -164,11 +170,14 @@ public class FlowIOTest {
         Path path = Files.createTempFile("jox", "test-writefile2");
         try {
             String sourceContent = "source.toFile test2 content";
-            var source = Flows.fromIterable(
-                            sourceContent.chars().mapToObj(c -> (byte) c)
-                                    .collect(Collectors.groupingBy(equalSizeChunks(4)))
-                                    .values())
-                    .toByteFlow(FlowIOTest::convertToByteArray);
+            var source =
+                    Flows.fromIterable(
+                                    sourceContent
+                                            .chars()
+                                            .mapToObj(c -> (byte) c)
+                                            .collect(Collectors.groupingBy(equalSizeChunks(4)))
+                                            .values())
+                            .toByteFlow(FlowIOTest::convertToByteArray);
 
             // when
             source.runToFile(path);
@@ -221,10 +230,10 @@ public class FlowIOTest {
         // given
         Path path = Files.createTempFile("jox", "test-writefile5");
         try {
-            var source = Flows
-                    .fromValues("initial content".getBytes())
-                    .concat(Flows.failed(new Exception("expected source error")))
-                    .toByteFlow();
+            var source =
+                    Flows.fromValues("initial content".getBytes())
+                            .concat(Flows.failed(new Exception("expected source error")))
+                            .toByteFlow();
 
             // when & then
             Exception exception = assertThrows(Exception.class, () -> source.runToFile(path));

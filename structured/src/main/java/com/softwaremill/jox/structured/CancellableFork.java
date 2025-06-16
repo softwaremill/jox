@@ -14,8 +14,8 @@ public interface CancellableFork<T> extends Fork<T> {
     T cancel() throws InterruptedException, ExecutionException;
 
     /**
-     * Interrupts the fork, and returns immediately, without waiting for the fork to complete. Note that the enclosing scope will only
-     * complete once all forks have completed.
+     * Interrupts the fork, and returns immediately, without waiting for the fork to complete. Note
+     * that the enclosing scope will only complete once all forks have completed.
      */
     void cancelNow();
 }
@@ -38,10 +38,12 @@ class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements Cancel
 
     @Override
     public void cancelNow() {
-        // will cause the scope to end, interrupting the task if it hasn't yet finished (or potentially never starting it)
+        // will cause the scope to end, interrupting the task if it hasn't yet finished (or
+        // potentially never starting it)
         done.release();
         if (!started.getAndSet(true)) {
-            result.completeExceptionally(new InterruptedException("fork was cancelled before it started"));
+            result.completeExceptionally(
+                    new InterruptedException("fork was cancelled before it started"));
         }
     }
 }

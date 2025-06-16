@@ -1,12 +1,11 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.Channel;
-import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
 
 public class FlowInterleaveTest {
 
@@ -17,8 +16,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues();
 
         // when
-        var result = c1.interleave(c2, 1, false, 10)
-                .runToList();
+        var result = c1.interleave(c2, 1, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3), result);
@@ -31,8 +29,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6);
 
         // when
-        var result = c1.interleave(c2, 1, false, 10)
-                .runToList();
+        var result = c1.interleave(c2, 1, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -45,8 +42,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
 
         // when
-        var result = c1.interleave(c2, 1, false, 10)
-                .runToList();
+        var result = c1.interleave(c2, 1, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -59,8 +55,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
 
         // when
-        var result = c1.interleave(c2, 1, false)
-                .runToList();
+        var result = c1.interleave(c2, 1, false).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -73,8 +68,9 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
 
         // when
-        var result = ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 10)
-                .call(() -> c1.interleave(c2, 1, false).runToList());
+        var result =
+                ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 10)
+                        .call(() -> c1.interleave(c2, 1, false).runToList());
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6, 8, 10, 12), result);
@@ -87,8 +83,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(10, 20, 30, 40);
 
         // when
-        var result = c1.interleave(c2, 2, false, 10)
-                .runToList();
+        var result = c1.interleave(c2, 2, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 3, 4, 30, 40), result);
@@ -101,8 +96,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(10, 20, 30, 40);
 
         // when
-        var result = c1.interleave(c2, 2, false, 10)
-                .runToList();
+        var result = c1.interleave(c2, 2, false, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 10, 20, 3, 4, 30, 40, 5, 6, 7), result);
@@ -115,8 +109,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(2, 4, 6, 8, 10, 12);
 
         // when
-        var result = c1.interleave(c2, 1, true, 10)
-                .runToList();
+        var result = c1.interleave(c2, 1, true, 10).runToList();
 
         // then
         assertEquals(List.of(1, 2, 3, 4, 5, 6), result);
@@ -129,8 +122,7 @@ public class FlowInterleaveTest {
         var c2 = Flows.fromValues(1, 2, 3);
 
         // when
-        var s1 = c1.interleave(c2, 1, true, 10)
-                .runToList();
+        var s1 = c1.interleave(c2, 1, true, 10).runToList();
 
         // then
         assertTrue(s1.isEmpty());
