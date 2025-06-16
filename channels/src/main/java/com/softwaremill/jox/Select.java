@@ -2,7 +2,9 @@ package com.softwaremill.jox;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
@@ -101,6 +103,116 @@ public class Select {
             } else {
                 return r;
             }
+        }
+    }
+
+    /**
+     * Select exactly one clause to complete, with a timeout. Each clause should be
+     * created for a different channel.
+     * <p>
+     * If a couple of the clauses can be completed immediately, the select is biased
+     * towards the clauses that appear first.
+     * <p>
+     * If no clauses are given, throws {@link IllegalArgumentException}.
+     * <p>
+     * If the timeout elapses before any clause can be selected, throws
+     * {@link TimeoutException}.
+     *
+     * @param timeout The maximum time to wait for a clause to be selected.
+     * @param clauses The clauses, from which one will be selected. Array must not
+     *                be empty or {@code null} and can't contain {@code null}
+     *                values.
+     * @return The value returned by the selected clause.
+     * @throws TimeoutException     When the timeout elapses before any clause can
+     *                              be selected.
+     * @throws InterruptedException When the current thread is interrupted.
+     */
+    @SafeVarargs
+    public static <U> U selectWithin(Duration timeout, SelectClause<? extends U>... clauses)
+            throws InterruptedException, TimeoutException {
+        var timeoutValue = TimeoutMarker.INSTANCE;
+        var result = selectOrClosedWithin(timeout, timeoutValue, clauses);
+        if (result == timeoutValue) {
+            throw new TimeoutException("Select timed out after " + timeout.toMillis() + " ms");
+        } else if (result instanceof ChannelClosed c) {
+            throw c.toException();
+        } else {
+            // noinspection unchecked
+            return (U) result;
+        }
+    }
+
+    /**
+     * Select exactly one clause to complete, with a timeout. Each clause should be
+     * created for a different channel.
+     * Doesn't throw exceptions when the channel is closed or timeout occurs, but
+     * returns a value.
+     * <p>
+     * If a couple of the clauses can be completed immediately, the select is biased
+     * towards the clauses that appear first.
+     * <p>
+     * If no clauses are given, returns the timeout value.
+     * <p>
+     * If the timeout elapses before any clause can be completed, returns the
+     * timeout value.
+     *
+     * @param timeout      The maximum time to wait for a clause to be selected.
+     * @param timeoutValue The value to return if the timeout elapses.
+     * @param clauses      The clauses, from which one will be selected. Array must
+     *                     not be empty or {@code null} and
+     *                     can't contain {@code null} values.
+     * @return Either the value returned by the selected clause, the timeout value
+     * when timeout occurs, or
+     * {@link ChannelClosed} when any of the channels is closed (done or in
+     * error).
+     * @throws InterruptedException When the current thread is interrupted.
+     */
+    @SafeVarargs
+    public static <U> Object selectOrClosedWithin(Duration timeout, U timeoutValue,
+                                                  SelectClause<? extends U>... clauses) throws InterruptedException {
+        if (timeout.isNegative() || timeout.isZero()) {
+            throw new IllegalArgumentException("Timeout must be positive");
+        }
+
+        // Create a timeout channel and virtual thread to send the timeout signal
+        Channel<TimeoutMarker> timeoutChannel = Channel.newBufferedChannel(1);
+        var timeoutThread = Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(timeout.toMillis());
+                timeoutChannel.sendOrClosed(TimeoutMarker.INSTANCE);
+            } catch (InterruptedException e) {
+                // this might happen - ignore, since we don't want the uncaught exception handler to be called
+            }
+        });
+
+        // Create a new array with the timeout clause appended
+        @SuppressWarnings("unchecked")
+        SelectClause<Object>[] clausesWithTimeout = Arrays.copyOf(clauses, clauses.length + 1, SelectClause[].class);
+        clausesWithTimeout[clauses.length] = timeoutChannel.receiveClause(marker -> timeoutValue);
+
+        try {
+            return selectOrClosed(clausesWithTimeout);
+        } finally {
+            // Always clean up the timeout thread
+            timeoutThread.interrupt();
+            joinUninterruptibly(timeoutThread);
+        }
+    }
+
+    private static void joinUninterruptibly(Thread thread) throws InterruptedException {
+        InterruptedException intercepted = null;
+        while (true) {
+            try {
+                thread.join();
+                break;
+            } catch (InterruptedException e) {
+                if (intercepted == null) intercepted = e;
+                else intercepted.addSuppressed(e);
+            }
+        }
+
+        if (intercepted != null) {
+            throw intercepted;
         }
     }
 
@@ -484,4 +596,8 @@ class StoredSelectClause {
 
 enum RestartSelectMarker {
     RESTART
+}
+
+enum TimeoutMarker {
+    INSTANCE
 }
