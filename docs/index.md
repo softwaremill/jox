@@ -1,7 +1,7 @@
 # Jox
 
 [Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
-for Java 21. Open-source, Apache2 licensed.
+for Java 21+. Open-source, Apache2 licensed.
 
 Jox contains three main modules:
 
@@ -28,7 +28,7 @@ ch3.send(32);
 var received = select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
 ```
 
-A [flow](flows.md) with time-based & parallel processing:
+A push-based, backpressured [flow](flows.md) with time-based & parallel processing:
 
 ```
 var nats =
