@@ -197,6 +197,64 @@ class Demo6 {
 }
 ```
 
+### Select with timeout
+
+You can also select from multiple channels with a timeout using `selectWithin`. If none of the clauses can be completed within the specified timeout, a `TimeoutException` is thrown:
+
+```java
+import com.softwaremill.jox.Channel;
+
+import java.time.Duration;
+import java.util.concurrent.TimeoutException;
+
+import static com.softwaremill.jox.Select.selectWithin;
+
+class Demo7 {
+    public static void main(String[] args) throws InterruptedException {
+        var ch1 = Channel.<Integer>newBufferedChannel(3);
+        var ch2 = Channel.<Integer>newBufferedChannel(3); 
+
+        try {
+            // Wait up to 500 milliseconds for a value to be available
+            var received = selectWithin(Duration.ofMillis(500), ch1.receiveClause(), ch2.receiveClause());
+            System.out.println("Received: " + received);
+        } catch (TimeoutException e) {
+            // prints: Select timed out after 500 ms
+            System.out.println("Select timed out after 500 ms");
+        }
+    }
+}
+```
+
+Alternatively, you can use `selectOrClosedWithin` which returns a timeout value instead of throwing an exception:
+
+```java
+import com.softwaremill.jox.Channel;
+
+import java.time.Duration;
+
+import static com.softwaremill.jox.Select.selectOrClosedWithin;
+
+class Demo8 {
+    public static void main(String[] args) throws InterruptedException {
+        var ch1 = Channel.<Integer>newBufferedChannel(3);
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
+
+        var result = selectOrClosedWithin(Duration.ofMillis(500), "TIMEOUT", 
+                                          ch1.receiveClause(), ch2.receiveClause());
+
+        if (result.equals("TIMEOUT")) {
+            // prints: Select timed out
+            System.out.println("Select timed out");
+        } else {
+            System.out.println("Received: " + result);
+        }
+    }
+}
+```
+
+The timeout is implemented by creating a virtual thread that sends a timeout signal to an internal timeout channel after the specified duration. It's guaranteed that this additional thread will be cleaned up before the select completes.
+
 ## Performance
 
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java
