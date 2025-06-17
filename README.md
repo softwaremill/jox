@@ -84,6 +84,7 @@ Jox uses the spotless maven plugin to format code. The formatting is automatical
 Formatting can be checked using `mvn spotless:check` and applied with `mvn spotless:apply`.
 
 When using VS Code, format-on-save should be disabled (see the pom.xml).
+For IntelliJ, it might be necessary to install the spotless plugin to properly reformat the sources.
 
 ## Copyright
 
