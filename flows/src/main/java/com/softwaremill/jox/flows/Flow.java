@@ -1683,14 +1683,16 @@ public class Flow<T> {
     /**
      * Breaks the input into chunks where the delimiter matches the predicate. The delimiter does not
      * appear in the output. Two adjacent delimiters in the input result in an empty chunk in the output.
-     *
-     * @param delimiter A predicate function that identifies delimiter elements.
-     * @return A flow emitting lists of elements split by the delimiter.
-     * @example
-     * {@code
+     * 
+     * For example:
+     * 
+     * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
      * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
      * }
+     *
+     * @param delimiter A predicate function that identifies delimiter elements.
+     * @return A flow emitting lists of elements split by the delimiter.
      */
     public Flow<List<T>> split(Predicate<T> delimiter) {
         return usingEmit(
@@ -1719,14 +1721,16 @@ public class Flow<T> {
      * does not appear in the output. Two adjacent delimiter sequences in the input result in an empty
      * chunk in the output.
      *
-     * @param delimiter A list of elements that serves as a delimiter. If empty, the entire input is
-     *                 returned as a single chunk.
-     * @return A flow emitting lists of elements split by the delimiter sequence.
-     * @example
-     * {@code
+     * For example:
+     * 
+     * {@snippet :
      * Flows.fromValues(1, 2, 0, 0, 3, 4, 0, 0, 5).splitOn(List.of(0, 0)).runToList()
      * // Returns: [[1, 2], [3, 4], [5]]
      * }
+     * 
+     * @param delimiter A list of elements that serves as a delimiter. If empty, the entire input is
+     *                 returned as a single chunk.
+     * @return A flow emitting lists of elements split by the delimiter sequence.
      */
     public <U> Flow<List<T>> splitOn(List<U> delimiter) {
         if (delimiter.isEmpty()) {

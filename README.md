@@ -81,6 +81,7 @@ We offer commercial development services. [Contact us](https://softwaremill.com)
 ## Building & working on Jox
 
 Jox uses the spotless maven plugin to format code. The formatting is automatically applied during compilation.
+Formatting can be checked using `mvn spotless:check` and applied with `mvn spotless:apply`.
 
 When using VS Code, format-on-save should be disabled (see the pom.xml).
 
