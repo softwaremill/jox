@@ -206,3 +206,53 @@ public class Demo {
 }
 // result = 5
 ```
+
+## Comparing with Java's structured concurrency (JEP 505)
+
+Java 21 and further releases include previews of a structured concurrency API. The latest version of the proposal is in
+[JEP 505](https://openjdk.org/jeps/505). How does it compare with Jox's structured concurrency?
+
+Let's examine a simple example of parallelizing two computations, first using JEP 505:
+
+```java
+Response handle() throws InterruptedException {
+    try (var scope = StructuredTaskScope.open()) {
+        Subtask<String> user = scope.fork(() -> findUser());
+        Subtask<Integer> order = scope.fork(() -> fetchOrder());
+
+        scope.join();
+
+        return new Response(user.get(), order.get());
+    }
+}
+```
+
+and using Jox:
+
+```java
+Response handle() throws InterruptedException {
+    return supervised(scope -> {
+        Fork<String> user = scope.fork(() -> findUser());
+        Fork<Integer> order = scope.fork(() -> fetchOrder());
+
+        return new Response(user.join(), order.join());
+    });
+}
+```
+
+Both implement the same logic: run `findUser` and `fetchOrder` in parallel, and combine their results. Any failure
+interrupts the other tasks, and when they terminate, propagates the exception.
+
+How are they different?
+
+In the JEP variant, an additional `scope.join()` call is needed, which is absent when using the Jox API.
+
+On one hand, this forces structured concurrency usages using the JEP to have a fixed structure: fork - join - get
+results.
+
+The Jox variant can have arbitrary structure (mixed, multiple forks & joins), which is more flexible; and also has one
+less opportunity for misuse (in the JEP, you might forget to call `scope.join()`).
+
+On the other hand, the Jox variant starts an extra virtual thread (a "supervisor") and is less "direct": note that we
+need to return the result of the `supervised` call, while the JEP simply uses try-with-resources and runs the main body
+of the scope on the calling thread.
