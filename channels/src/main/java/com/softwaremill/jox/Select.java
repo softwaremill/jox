@@ -51,7 +51,7 @@ public class Select {
      * <p>If no clauses are given, throws {@link ChannelDoneException}.
      *
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return The value returned by the selected clause.
      * @throws ChannelClosedException When any of the channels is closed (done or in error).
      */
@@ -76,9 +76,9 @@ public class Select {
      * <p>If no clauses are given, returns {@link ChannelDone}.
      *
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any
-     *     of the channels is closed (done or in error).
+     * of the channels is closed (done or in error).
      */
     @SafeVarargs
     public static <U> Object selectOrClosed(SelectClause<? extends U>... clauses)
@@ -122,9 +122,9 @@ public class Select {
      *
      * @param timeout The maximum time to wait for a clause to be selected.
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return The value returned by the selected clause.
-     * @throws TimeoutException When the timeout elapses before any clause can be selected.
+     * @throws TimeoutException     When the timeout elapses before any clause can be selected.
      * @throws InterruptedException When the current thread is interrupted.
      */
     @SafeVarargs
@@ -154,12 +154,12 @@ public class Select {
      *
      * <p>If the timeout elapses before any clause can be completed, returns the timeout value.
      *
-     * @param timeout The maximum time to wait for a clause to be selected.
+     * @param timeout      The maximum time to wait for a clause to be selected.
      * @param timeoutValue The value to return if the timeout elapses.
-     * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     * @param clauses      The clauses, from which one will be selected. Array must not be empty or
+     *                     {@code null} and can't contain {@code null} values.
      * @return Either the value returned by the selected clause, the timeout value when timeout
-     *     occurs, or {@link ChannelClosed} when any of the channels is closed (done or in error).
+     * occurs, or {@link ChannelClosed} when any of the channels is closed (done or in error).
      * @throws InterruptedException When the current thread is interrupted.
      */
     @SafeVarargs
@@ -221,9 +221,8 @@ public class Select {
     private static <U> Object doSelectOrClosed(SelectClause<? extends U>... clauses)
             throws InterruptedException {
         // short-circuiting if any of the channels is in error; otherwise, we might have selected a
-        // clause, for which
-        // a value was available immediately - even though a channel for a clause appearing later
-        // was in error
+        // clause, for which a value was available immediately - even though a channel for a clause
+        // appearing later was in error
         var anyError = getAnyChannelInError(clauses);
         if (anyError != null) {
             return anyError;
@@ -290,9 +289,15 @@ public class Select {
 
 class SelectInstance {
     /**
-     * Possible states: - one of {@link SelectState} - {@link Thread} to wake up - {@link
-     * ChannelClosed} - a {@link List} of clauses to re-register - when selected, {@link
-     * SelectClause} (during registration) or {@link StoredSelectClause} (with suspension)
+     * Possible states:
+     * <ul>
+     *     <li>one of {@link SelectState}</li>
+     *     <li>{@link Thread} to wake up</li>
+     *     <li>{@link ChannelClosed}</li>
+     *     <li>a {@link List} of clauses to re-register - when selected</li>
+     *     <li>{@link SelectClause} (during registration)</li>
+     *     <li>{@link StoredSelectClause} (with suspension)</li>
+     * </ul>
      */
     private volatile Object state = SelectState.REGISTERING;
 
@@ -331,7 +336,7 @@ class SelectInstance {
      * registered.
      *
      * @return {@code true}, if the registration was successful, and the clause has been stored.
-     *     {@code false}, if the channel is closed, or the clause has been immediately selected.
+     * {@code false}, if the channel is closed, or the clause has been immediately selected.
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     <U> boolean register(SelectClause<U> clause) {
@@ -365,18 +370,17 @@ class SelectInstance {
 
     /**
      * @param allRendezvous If channels for all clauses are rendezvous channels. In such a case,
-     *     busy-looping is initially used, instead of blocking.
+     *                      busy-looping is initially used, instead of blocking.
      * @return Either the value returned by the selected clause (which can include {@link
-     *     RestartSelectMarker#RESTART}), or {@link ChannelClosed}, when any of the channels is
-     *     closed.
+     * RestartSelectMarker#RESTART}), or {@link ChannelClosed}, when any of the channels is
+     * closed.
      */
     Object checkStateAndWait(boolean allRendezvous) throws InterruptedException {
         while (true) {
             var currentState = state;
             if (currentState == SelectState.REGISTERING) {
                 // registering done, waiting until a clause is selected - setting the thread to wake
-                // up as the state
-                // we won't leave this case until the state is changed from Thread
+                // up as the state we won't leave this case until the state is changed from Thread
                 var currentThread = Thread.currentThread();
                 if (STATE.compareAndSet(this, SelectState.REGISTERING, currentThread)) {
                     var spinIterations = allRendezvous ? Continuation.RENDEZVOUS_SPINS : 0;
@@ -397,8 +401,8 @@ class SelectInstance {
                                     throw new InterruptedException();
                                 } else {
                                     // another thread already changed the state; setting the
-                                    // interrupt status (so that
-                                    // the next blocking operation throws), and continuing
+                                    // interrupt status (so that the next blocking operation
+                                    // throws), and continuing
                                     Thread.currentThread().interrupt();
                                 }
                             }
@@ -426,8 +430,8 @@ class SelectInstance {
 
                         if (!register(clause)) {
                             // channel is closed, or clause was selected - in both cases, no point
-                            // in further
-                            // re-registrations; the state should be appropriately updated
+                            // in further re-registrations; the state should be appropriately
+                            // updated
                             break;
                         }
                     }
@@ -475,8 +479,8 @@ class SelectInstance {
 
     /**
      * @return {@code true} if the given clause was successfully selected, {@code false} otherwise
-     *     (a channel is closed, another clause is selected, registration is in progress, select is
-     *     interrupted).
+     * (a channel is closed, another clause is selected, registration is in progress, select is
+     * interrupted).
      */
     boolean trySelect(StoredSelectClause storedSelectClause) {
         while (true) {
@@ -527,8 +531,8 @@ class SelectInstance {
 
     /**
      * @return {@code true} when the given {@code channelClosed} has been set as the new state of
-     *     the select. {@code false}, if another clause has already been selected, or if the channel
-     *     is already closed.
+     * the select. {@code false}, if another clause has already been selected, or if the channel
+     * is already closed.
      */
     boolean channelClosed(ChannelClosed channelClosed) {
         while (true) {
