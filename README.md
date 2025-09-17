@@ -33,7 +33,8 @@ ch3.send(32);
 var received = select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
 ```
 
-A push-based, backpressured [flow](https://jox.softwaremill.com/latest/flows.html) with time-based & parallel processing:
+A push-based, backpressured [flow](https://jox.softwaremill.com/latest/flows.html) with time-based & parallel
+processing:
 
 ```
 var nats =
