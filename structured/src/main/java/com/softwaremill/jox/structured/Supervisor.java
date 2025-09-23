@@ -1,67 +1,58 @@
 package com.softwaremill.jox.structured;
 
+import com.softwaremill.jox.Channel;
+
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-sealed interface Supervisor permits NoOpSupervisor, DefaultSupervisor {
-    void forkStarts();
-
-    void forkSuccess();
-
-    boolean forkException(Throwable e);
-}
-
-final class NoOpSupervisor implements Supervisor {
-    @Override
-    public void forkStarts() {}
-
-    @Override
-    public void forkSuccess() {}
-
-    @Override
-    public boolean forkException(Throwable e) {
-        return false;
-    }
-}
-
-final class DefaultSupervisor implements Supervisor {
+class Supervisor {
     private final AtomicInteger running = new AtomicInteger(0);
     private final CompletableFuture<Object> result = new CompletableFuture<>();
     private final Set<Throwable> otherExceptions = ConcurrentHashMap.newKeySet();
+    private final Channel<SupervisorCommand> commands = Channel.newBufferedDefaultChannel();
 
-    @Override
-    public void forkStarts() {
+    void forkStarts() {
         running.incrementAndGet();
     }
 
-    @Override
-    public void forkSuccess() {
+    void forkSuccess() {
         int v = running.decrementAndGet();
         if (v == 0) {
             result.complete(null);
+            commands.done();
         }
     }
 
-    @Override
-    public boolean forkException(Throwable e) {
+    boolean forkException(Throwable e) {
         if (!result.completeExceptionally(e)) {
             otherExceptions.add(e);
+        } else {
+            commands.error(e);
         }
         return true;
     }
 
-    public void join() throws ExecutionException, InterruptedException {
+    void join() throws ExecutionException, InterruptedException {
         result.get();
     }
 
-    public void addSuppressedErrors(Throwable e) {
+    void addSuppressedErrors(Throwable e) {
         for (Throwable e2 : otherExceptions) {
             if (!e.equals(e2)) {
                 e.addSuppressed(e2);
             }
         }
     }
+
+    Channel<SupervisorCommand> getCommands() {
+        return commands;
+    }
 }
+
+sealed interface SupervisorCommand permits RunFork {}
+
+record RunFork<T>(Callable<T> f) implements SupervisorCommand {}

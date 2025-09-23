@@ -8,9 +8,8 @@ public class Util {
      * Prevent {@code f} from being interrupted. Any interrupted exceptions that occur while
      * evaluating {@code f} will be re-thrown once it completes.
      */
-    public static <T> T uninterruptible(Callable<T> f)
-            throws ExecutionException, InterruptedException {
-        return Scopes.unsupervised(
+    public static <T> T uninterruptible(Callable<T> f) throws InterruptedException {
+        return Scopes.supervised(
                 c -> {
                     var fork = c.forkUnsupervised(f);
                     InterruptedException caught = null;

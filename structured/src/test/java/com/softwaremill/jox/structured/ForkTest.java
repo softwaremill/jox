@@ -1,6 +1,6 @@
 package com.softwaremill.jox.structured;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 import java.util.Arrays;
@@ -11,7 +11,7 @@ public class ForkTest {
     @Test
     void testRunTwoForksConcurrently() throws Exception {
         var trail = new Trail();
-        unsupervised(
+        supervised(
                 scope -> {
                     var f1 =
                             scope.forkUnsupervised(
@@ -41,7 +41,7 @@ public class ForkTest {
     @Test
     void testNestedForks() throws Exception {
         Trail trail = new Trail();
-        Scopes.unsupervised(
+        Scopes.supervised(
                 scope -> {
                     var f1 =
                             scope.forkUnsupervised(
@@ -74,7 +74,7 @@ public class ForkTest {
     @Test
     void testInterruptChildForksWhenParentsComplete() throws Exception {
         Trail trail = new Trail();
-        Scopes.unsupervised(
+        Scopes.supervised(
                 scope -> {
                     var f1 =
                             scope.forkUnsupervised(

@@ -122,8 +122,7 @@ public class CancelTest {
     }
 
     @Test
-    void testCancelNowFollowedByJoinEitherCatchesInterruptedExceptionWithWhichForkEnds()
-            throws Exception {
+    void testCancelNowFollowedByJoinEitherCatchesInterruptedExceptionWithWhichForkEnds() {
         assertThrows(
                 JoxScopeExecutionException.class,
                 () ->

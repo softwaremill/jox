@@ -1,42 +1,89 @@
 package com.softwaremill.jox.structured;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.StructuredTaskScope;
+import com.softwaremill.jox.ChannelDone;
+import com.softwaremill.jox.ChannelError;
+
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Capability granted by an {@link Scopes#supervised(Scoped)} or {@link
- * Scopes#unsupervised(ScopedUnsupervised)} concurrency scope.
+ * Capability granted by an {@link Scopes#supervised(Scoped)} concurrency scope.
  *
  * <p>Represents a capability to fork supervised or unsupervised, asynchronously running
  * computations in a concurrency scope. Such forks can be created using {@link Scope#fork}, {@link
- * Scope#forkUser}, {@link UnsupervisedScope#forkCancellable} or {@link
- * UnsupervisedScope#forkUnsupervised}.
- *
- * @see ScopedUnsupervised
+ * Scope#forkUser}, {@link Scope#forkCancellable} or {@link Scope#forkUnsupervised}.
  */
-public class Scope extends UnsupervisedScope {
-
-    private final StructuredTaskScope<Object> scope;
+public class Scope {
+    private final StructuredTaskScope<Object, Void> rawScope;
     private final Supervisor supervisor;
+    private final AtomicBoolean scopeDone;
     private final Lock externalSchedulerLock = new ReentrantLock();
     private volatile ActorRef<ExternalScheduler> externalSchedulerActor;
 
-    Scope(Supervisor supervisor) {
-        this.scope = new DoNothingScope();
-        this.supervisor = supervisor;
+    Scope() {
+        this.scopeDone = new AtomicBoolean(false);
+        this.rawScope = StructuredTaskScope.open(new CancelWhenDoneJoiner(scopeDone));
+        this.supervisor = new Supervisor();
     }
 
-    @Override
-    StructuredTaskScope<Object> getScope() {
-        return scope;
-    }
-
-    @Override
     Supervisor getSupervisor() {
         return supervisor;
+    }
+
+    <T> T run(Scoped<T> f) throws InterruptedException {
+        try {
+            try {
+                try {
+                    var mainBodyFork = forkUser(() -> f.run(this));
+
+                    var loop = true;
+                    while (loop) {
+                        switch (supervisor.getCommands().receiveOrClosed()) {
+                            case RunFork<?> r -> rawScope.fork(r.f());
+                            case ChannelDone _, ChannelError _ -> loop = false;
+                            default -> throw new IllegalStateException();
+                        }
+                    }
+
+                    // might throw if any supervised fork threw
+                    supervisor.join();
+                    // if no exceptions, the main f-fork must be done by now
+                    return mainBodyFork.join();
+                } finally {
+                    cancelAndJoinRawScope();
+                }
+                // join might have been interrupted
+            } finally {
+                rawScope.close();
+            }
+
+            // all forks are guaranteed to have finished: some might have ended up throwing
+            // exceptions (InterruptedException or
+            // others), but only the first one is propagated below. That's why we add all the other
+            // exceptions as suppressed.
+        } catch (ExecutionException e) {
+            // unwrapping execution exception from CompletableFutures to custom exception
+            JoxScopeExecutionException joxScopeExecutionException =
+                    new JoxScopeExecutionException(e.getCause());
+            supervisor.addSuppressedErrors(joxScopeExecutionException);
+            throw joxScopeExecutionException;
+        } catch (Throwable e) {
+            supervisor.addSuppressedErrors(e);
+            throw e;
+        }
+    }
+
+    void cancelAndJoinRawScope() throws InterruptedException {
+        /* the scope is done, now we have to let the structured concurrency API scope let know that
+                     it should cleanup as well. Due to its design, this can only be done by a work-around: setting a
+                     scope-done flag, and forking an empty computation; our joiner implementation will get notified of this,
+                     read the flag, and decide to cancel the "raw" scope.
+                     */
+        scopeDone.set(true);
+        rawScope.fork(() -> {});
+        rawScope.join();
     }
 
     /**
@@ -50,31 +97,26 @@ public class Scope extends UnsupervisedScope {
      *
      * <p>An exception thrown while evaluating {@code f} will cause the fork to fail and the
      * enclosing scope to end (cancelling all other running forks).
-     *
-     * <p>For alternate behaviors regarding ending the scope, see {@link #forkUser}, {@link
-     * UnsupervisedScope#forkCancellable} and {@link UnsupervisedScope#forkUnsupervised}.
      */
-    public <T> Fork<T> fork(Callable<T> f) {
+    public <T> Fork<T> fork(Callable<T> f) throws InterruptedException {
         var result = new CompletableFuture<T>();
-        getScope()
-                .fork(
-                        () -> {
-                            try {
-                                result.complete(f.call());
-                            } catch (Throwable e) {
-                                // we notify the supervisor first, so that if this is the first
-                                // failing fork in the scope, the supervisor will
-                                // get first notified of the exception by the "original" (this) fork
-                                // if the supervisor doesn't end the scope, the exception will be
-                                // thrown when joining the result; otherwise, not
-                                // completing the result; any joins will end up being interrupted
-                                if (!supervisor.forkException(e)) {
-                                    result.completeExceptionally(e);
-                                }
-                            }
-                            return null;
-                        });
-        return new ForkUsingResult(result);
+        supervisor.getCommands().send(new RunFork<T>(() -> {
+            try {
+                result.complete(f.call());
+            } catch (Throwable e) {
+                // we notify the supervisor first, so that if this is the first
+                // failing fork in the scope, the supervisor will
+                // get first notified of the exception by the "original" (this) fork
+                // if the supervisor doesn't end the scope, the exception will be
+                // thrown when joining the result; otherwise, not
+                // completing the result; any joins will end up being interrupted
+                if (!supervisor.forkException(e)) {
+                    result.completeExceptionally(e);
+                }
+            }
+            return null;
+        }));
+        return new ForkUsingResult<>(result);
     }
 
     /**
@@ -87,27 +129,102 @@ public class Scope extends UnsupervisedScope {
      *
      * <p>An exception thrown while evaluating {@code f} will cause the enclosing scope to end
      * (cancelling all other running forks).
-     *
-     * <p>For alternate behaviors regarding ending the scope, see {@link #fork}, {@link
-     * UnsupervisedScope#forkCancellable} and {@link UnsupervisedScope#forkUnsupervised}.
      */
-    public <T> Fork<T> forkUser(Callable<T> f) {
+    public <T> Fork<T> forkUser(Callable<T> f) throws InterruptedException {
         var result = new CompletableFuture<T>();
-        getSupervisor().forkStarts();
-        getScope()
-                .fork(
-                        () -> {
-                            try {
-                                result.complete(f.call());
-                                getSupervisor().forkSuccess();
-                            } catch (Throwable e) {
-                                if (!supervisor.forkException(e)) {
-                                    result.completeExceptionally(e);
-                                }
-                            }
-                            return null;
-                        });
-        return new ForkUsingResult(result);
+        supervisor.forkStarts();
+        supervisor.getCommands().send(new RunFork<T>(() -> {
+            try {
+                result.complete(f.call());
+                supervisor.forkSuccess();
+            } catch (Throwable e) {
+                if (!supervisor.forkException(e)) {
+                    result.completeExceptionally(e);
+                }
+            }
+            return null;
+        }));
+        return new ForkUsingResult<>(result);
+    }
+
+    /**
+     * Starts a fork (logical thread of execution), which is guaranteed to complete before the
+     * enclosing {@link Scopes#supervised(Scoped)} block completes.
+     *
+     * <p>In case an exception is thrown while evaluating {@code f}, it will be thrown when calling
+     * the returned {@link Fork}'s <code>.join()</code> method.
+     *
+     * <p>Success or failure isn't signalled to the enclosing scope, and doesn't influence the
+     * scope's lifecycle.
+     *
+     * <p>For alternate behaviors, see {@link #fork}, {@link #forkUser}, {@link #forkCancellable}.
+     */
+    public <T> Fork<T> forkUnsupervised(Callable<T> f) throws InterruptedException {
+        var result = new CompletableFuture<T>();
+        supervisor.getCommands().send(new RunFork<T>(() -> {
+            try {
+                result.complete(f.call());
+            } catch (Throwable e) {
+                result.completeExceptionally(e);
+            }
+            return null;
+        }));
+        return new ForkUsingResult<>(result);
+    }
+
+    /**
+     * Starts a fork (logical thread of execution), which is guaranteed to complete before the
+     * enclosing {@link Scopes#supervised(Scoped)} block completes, and which can be cancelled
+     * on-demand.
+     *
+     * <p>In case an exception is thrown while evaluating {@code f}, it will be thrown when calling
+     * the returned {@link CancellableFork}'s {@code .join()} method.
+     *
+     * <p>The fork is unsupervised (similarly to {@link #forkUnsupervised(Callable)}), hence success
+     * or failure isn't signalled to the enclosing scope and doesn't influence the scope's
+     * lifecycle.
+     *
+     * <p>For alternate behaviors, see {@link Scope#fork}, {@link Scope#forkUser} and {@link
+     * #forkUnsupervised}.
+     *
+     * <p>Implementation note: a cancellable fork is created by starting a nested scope in a fork,
+     * and then starting a fork there. Hence, it is more expensive than {@link Scope#fork}, as two
+     * virtual threads are started.
+     */
+    public <T> CancellableFork<T> forkCancellable(Callable<T> f) throws InterruptedException {
+        var result = new CompletableFuture<T>();
+        // forks can be never run, if they are cancelled immediately - we need to detect this, not
+        // to await on result.get()
+        var started = new AtomicBoolean(false);
+        // interrupt signal
+        var done = new Semaphore(0);
+        supervisor.getCommands().send(new RunFork<T>(() -> {
+            new Scope().run(
+                    nestedScope -> {
+                        nestedScope
+                                .getSupervisor()
+                                .getCommands().send(new RunFork<T>(() -> {
+                                    // "else" means that the fork is already
+                                    // cancelled, so doing nothing in that
+                                    // case
+                                    if (!started.getAndSet(true)) {
+                                        try {
+                                            result.complete(f.call());
+                                        } catch (Exception e) {
+                                            result.completeExceptionally(e);
+                                        }
+                                    }
+
+                                    done.release(); // the nested scope
+                                    // can now finish
+                                    return null;
+                                }));
+                        done.acquire();
+                        return null;
+                    });
+            return null;
+        }));
+        return new CancellableForkUsingResult<>(result, done, started);
     }
 
     /**
@@ -133,7 +250,7 @@ public class Scope extends UnsupervisedScope {
      *
      * @see ExternalRunner#runAsync(ThrowingConsumer) for running functions within the scope
      */
-    public ExternalRunner externalRunner() {
+    public ExternalRunner externalRunner() throws InterruptedException {
         if (externalSchedulerActor == null) {
             externalSchedulerLock.lock();
             try {
@@ -148,9 +265,19 @@ public class Scope extends UnsupervisedScope {
     }
 }
 
-class DoNothingScope extends StructuredTaskScope<Object> {
-    public DoNothingScope() {
-        super(null, Thread.ofVirtual().factory());
+class CancelWhenDoneJoiner implements StructuredTaskScope.Joiner<Object, Void> {
+    private final AtomicBoolean scopeDone;
+
+    CancelWhenDoneJoiner(AtomicBoolean scopeDone) {this.scopeDone = scopeDone;}
+
+    @Override
+    public Void result() throws Throwable {
+        return null;
+    }
+
+    @Override
+    public boolean onFork(StructuredTaskScope.Subtask<?> subtask) {
+        return scopeDone.get();
     }
 }
 

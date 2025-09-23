@@ -1,6 +1,6 @@
 package com.softwaremill.jox.structured;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.util.ArrayDeque;
 import java.util.List;
@@ -59,27 +59,26 @@ public class Race {
         var exceptions = new ArrayDeque<Exception>();
 
         try {
-            return unsupervised(
+            return supervised(
                     scope -> {
                         var branchResults = new ArrayBlockingQueue<>(fs.size());
-                        fs.forEach(
-                                f -> {
-                                    scope.forkUnsupervised(
-                                            () -> {
-                                                try {
-                                                    var r = f.call();
-                                                    if (r == null) {
-                                                        branchResults.add(new NullWrapperInRace());
-                                                    } else {
-                                                        branchResults.add(r);
-                                                    }
-                                                } catch (Exception e) {
-                                                    branchResults.add(
-                                                            new ExceptionWrapperInRace(e));
-                                                }
-                                                return null;
-                                            });
-                                });
+                        for (Callable<T> f : fs) {
+                            scope.forkUnsupervised(
+                                    () -> {
+                                        try {
+                                            var r = f.call();
+                                            if (r == null) {
+                                                branchResults.add(new NullWrapperInRace());
+                                            } else {
+                                                branchResults.add(r);
+                                            }
+                                        } catch (Exception e) {
+                                            branchResults.add(
+                                                    new ExceptionWrapperInRace(e));
+                                        }
+                                        return null;
+                                    });
+                        }
 
                         var left = fs.size();
                         while (left > 0) {
