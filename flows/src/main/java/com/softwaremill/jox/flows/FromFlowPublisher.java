@@ -122,20 +122,21 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                                     case Request r -> increaseDemand.accept(r.n());
                                     case Cancel _ -> cancel.run();
                                     case DummyError _,
-                                         ChannelDone
-                                                 _ -> {} // impossible as channel done should be
+                                            ChannelDone
+                                                    _ -> {} // impossible as channel done should be
                                     // received only from `data`, and error
                                     // from `errors` is handled in the next
                                     // branch
                                     case ChannelError
-                                                 e -> { // only `errors` can be closed due to an
+                                                    e -> { // only `errors` can be closed due to an
                                         // error
                                         cancel.run();
                                         errorSent.set(true);
                                         subscriber.onError(e.toException());
                                     }
-                                    default -> throw new IllegalStateException(
-                                            "unexpected clause result");
+                                    default ->
+                                            throw new IllegalStateException(
+                                                    "unexpected clause result");
                                 }
                             } else {
                                 switch (selectOrClosed(
@@ -151,7 +152,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                                         subscriber.onComplete(); // 1.5
                                     }
                                     case ChannelError
-                                                 e -> { // only `errors` can be closed due to an
+                                                    e -> { // only `errors` can be closed due to an
                                         // error
                                         cancel.run();
                                         errorSent.set(true);
@@ -174,10 +175,8 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                 });
     }
 
-    private void forkPropagate(
-            Scope scope,
-            Sink<?> propagateExceptionsTo,
-            Callable<Void> runnable) throws InterruptedException {
+    private void forkPropagate(Scope scope, Sink<?> propagateExceptionsTo, Callable<Void> runnable)
+            throws InterruptedException {
         scope.forkUnsupervised(
                 () -> {
                     try {

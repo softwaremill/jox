@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Timeout;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
 
 class FlowsTest {
 

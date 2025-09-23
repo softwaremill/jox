@@ -231,7 +231,7 @@ class GroupByImpl<T, V, U> {
                                             state.shouldReceiveFromParentChannel()
                                                     ? List.of(childOutput, childDone)
                                                     : List.of(
-                                                    childOutput, childDone, parentChannel);
+                                                            childOutput, childDone, parentChannel);
                                     var selectClauses =
                                             pool.stream()
                                                     .map(Source::receiveClause)
@@ -248,7 +248,8 @@ class GroupByImpl<T, V, U> {
                                             assert state.parentDone;
                                             state = doCompleteAll(state);
                                         }
-                                        case ChannelError channelError -> throw channelError.toException();
+                                        case ChannelError channelError ->
+                                                throw channelError.toException();
                                         case Object o -> {
                                             // for some reason compiler shows error when using
                                             // instanceof / switch pattern matching
@@ -281,11 +282,11 @@ class GroupByImpl<T, V, U> {
                                                         childDoneResult.v)) {
                                                     throw new IllegalStateException(
                                                             "Invalid usage of child flows: child"
-                                                                    + " flow was completed as done by"
-                                                                    + " user code (in"
-                                                                    + " childFlowTransform), while this"
-                                                                    + " is not allowed (see"
-                                                                    + " documentation for details)");
+                                                                + " flow was completed as done by"
+                                                                + " user code (in"
+                                                                + " childFlowTransform), while this"
+                                                                + " is not allowed (see"
+                                                                + " documentation for details)");
                                                 }
 
                                                 state =
@@ -308,10 +309,7 @@ class GroupByImpl<T, V, U> {
 
     // Running a pending child flow, after another has completed as done
     private GroupByState runChildIfPending(
-            GroupByState state,
-            Channel<ChildDone> childDone,
-            Channel<U> childOutput,
-            Scope scope)
+            GroupByState state, Channel<ChildDone> childDone, Channel<U> childOutput, Scope scope)
             throws InterruptedException {
         var s = state;
         if (s.pendingFromParent.isPresent()) {

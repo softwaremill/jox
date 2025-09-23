@@ -495,7 +495,8 @@ public final class Flows {
                                 scope -> {
                                     scope.forkUnsupervised(
                                             () -> {
-                                                List<Source<T>> availableSources = new ArrayList<>();
+                                                List<Source<T>> availableSources =
+                                                        new ArrayList<>();
                                                 for (Flow<T> flow : flows) {
                                                     availableSources.add(flow.runToChannel(scope));
                                                 }
@@ -514,7 +515,7 @@ public final class Flows {
                                                         currentSourceIndex =
                                                                 currentSourceIndex == 0
                                                                         ? availableSources.size()
-                                                                        - 1
+                                                                                - 1
                                                                         : currentSourceIndex - 1;
 
                                                         // if all sources are done, or eagerComplete
@@ -528,15 +529,14 @@ public final class Flows {
                                                             currentSourceIndex =
                                                                     (currentSourceIndex + 1)
                                                                             % availableSources
-                                                                            .size();
+                                                                                    .size();
                                                             elementsRead = 0;
                                                         }
                                                     } else if (received
                                                             instanceof
                                                             ChannelError(
                                                                     Throwable cause,
-                                                                    Channel<?> _
-                                                            )) {
+                                                                    Channel<?> _)) {
                                                         // if any source fails, propagate the error
                                                         results.errorOrClosed(cause);
                                                         break;
@@ -551,7 +551,7 @@ public final class Flows {
                                                             currentSourceIndex =
                                                                     (currentSourceIndex + 1)
                                                                             % availableSources
-                                                                            .size();
+                                                                                    .size();
                                                             elementsRead = 0;
                                                         }
                                                         //noinspection unchecked

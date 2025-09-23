@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scopes;
 
 class FlowTest {
 

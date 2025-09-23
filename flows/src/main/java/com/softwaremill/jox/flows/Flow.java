@@ -116,7 +116,8 @@ public class Flow<T> {
         return runToChannelInternal(scope, () -> Channel.newBufferedChannel(bufferCapacity));
     }
 
-    private Source<T> runToChannelInternal(Scope scope, Supplier<Channel<T>> channelProvider) throws InterruptedException {
+    private Source<T> runToChannelInternal(Scope scope, Supplier<Channel<T>> channelProvider)
+            throws InterruptedException {
         if (last instanceof SourceBackedFlowStage<T>(Source<T> source)) {
             return source;
         } else {
@@ -985,13 +986,13 @@ public class Flow<T> {
 
                                             Callable<CancellableFork<Void>>
                                                     sendBufferAndCleanupCost =
-                                                    () -> {
-                                                        outputChannel.send(
-                                                                new ArrayList<>(buffer));
-                                                        buffer.clear();
-                                                        accumulatedCost.set(0);
-                                                        return null;
-                                                    };
+                                                            () -> {
+                                                                outputChannel.send(
+                                                                        new ArrayList<>(buffer));
+                                                                buffer.clear();
+                                                                accumulatedCost.set(0);
+                                                                return null;
+                                                            };
 
                                             boolean shouldRun = true;
                                             while (shouldRun) {
@@ -1010,8 +1011,7 @@ public class Flow<T> {
                                                                 yield false;
                                                             case ChannelError(
                                                                     Throwable cause,
-                                                                    Channel<?> _
-                                                            ):
+                                                                    Channel<?> _):
                                                                 // source returned error, propagate
                                                                 // it and finish
                                                                 if (timeoutFork != null)
@@ -1044,9 +1044,9 @@ public class Flow<T> {
                                                                                             v ->
                                                                                                     v
                                                                                                             + costFn
-                                                                                                            .apply(
-                                                                                                                    (T)
-                                                                                                                            t));
+                                                                                                                    .apply(
+                                                                                                                            (T)
+                                                                                                                                    t));
                                                                     if (timeoutFork == null
                                                                             || cost >= minWeight) {
                                                                         // timeout passed when
@@ -1081,7 +1081,8 @@ public class Flow<T> {
     }
 
     private CancellableFork<GroupingTimeout> forkTimeout(
-            Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration) throws InterruptedException {
+            Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
+            throws InterruptedException {
         return scope.forkCancellable(
                 () -> {
                     sleep(duration);
@@ -1546,13 +1547,13 @@ public class Flow<T> {
                                                                 return null;
                                                             }
                                                             case ChannelError(
-                                                                    Throwable e,
-                                                                    Channel<?> _
-                                                            ) -> throw new IllegalStateException(
-                                                                    "inProgress should"
-                                                                            + " never be closed"
-                                                                            + " with an error",
-                                                                    e);
+                                                                            Throwable e,
+                                                                            Channel<?> _) ->
+                                                                    throw new IllegalStateException(
+                                                                            "inProgress should"
+                                                                                + " never be closed"
+                                                                                + " with an error",
+                                                                            e);
                                                             case Object fork -> {
                                                                 //noinspection unchecked
                                                                 Optional<U> result =
@@ -2136,9 +2137,8 @@ public class Flow<T> {
     // endregion
 
     private void forkPropagate(
-            Scope unsupervisedScope,
-            Sink<?> propagateExceptionsTo,
-            Callable<Void> runnable) throws InterruptedException {
+            Scope unsupervisedScope, Sink<?> propagateExceptionsTo, Callable<Void> runnable)
+            throws InterruptedException {
         unsupervisedScope.forkUnsupervised(
                 () -> {
                     try {
@@ -2151,11 +2151,8 @@ public class Flow<T> {
     }
 
     private <U> Fork<Optional<U>> forkMapping(
-            Scope scope,
-            ThrowingFunction<T, U> f,
-            Semaphore s,
-            T value,
-            Sink<U> results) throws InterruptedException {
+            Scope scope, ThrowingFunction<T, U> f, Semaphore s, T value, Sink<U> results)
+            throws InterruptedException {
         return scope.forkUnsupervised(
                 () -> {
                     try {
@@ -2171,7 +2168,8 @@ public class Flow<T> {
                 });
     }
 
-    private void runLastToChannelAsync(Scope scope, Channel<T> channel) throws InterruptedException {
+    private void runLastToChannelAsync(Scope scope, Channel<T> channel)
+            throws InterruptedException {
         scope.forkUnsupervised(
                 () -> {
                     try {

@@ -13,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
 
 public class FlowRunOperationsTest {
 

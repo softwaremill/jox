@@ -8,7 +8,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.structured.Scopes;
 
 public class FlowSlidingTest {
 

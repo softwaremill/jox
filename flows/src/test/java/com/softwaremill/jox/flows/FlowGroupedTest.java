@@ -18,7 +18,6 @@ import com.softwaremill.jox.ChannelClosedException;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.ChannelErrorException;
 import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scopes;
 
 public class FlowGroupedTest {
 
@@ -219,8 +218,8 @@ public class FlowGroupedTest {
 
     @Test
     void
-    groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode()
-            throws InterruptedException {
+            groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode()
+                    throws InterruptedException {
         supervised(
                 scope -> {
                     // given
@@ -324,8 +323,8 @@ public class FlowGroupedTest {
 
     @Test
     void
-    groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches()
-            throws InterruptedException {
+            groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches()
+                    throws InterruptedException {
         supervised(
                 scope -> {
                     // given
@@ -506,8 +505,8 @@ public class FlowGroupedTest {
 
     @Test
     void
-    groupBy_shouldNotExceedParallelismLimitCompletingEarliestActiveChildFlowsAsDoneWhenNecessary()
-            throws Exception {
+            groupBy_shouldNotExceedParallelismLimitCompletingEarliestActiveChildFlowsAsDoneWhenNecessary()
+                    throws Exception {
         // given
         record Group(int v, List<Integer> values) {}
 
@@ -645,19 +644,20 @@ public class FlowGroupedTest {
         var exception =
                 assertThrows(
                         JoxScopeExecutionException.class,
-                        () -> Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                                .groupBy(
-                                        10,
-                                        i -> i % 10,
-                                        _ ->
-                                                f ->
-                                                        f.tap(
-                                                                i -> {
-                                                                    if (i == 13)
-                                                                        throw new RuntimeException(
-                                                                                "boom!");
-                                                                }))
-                                .runToList());
+                        () ->
+                                Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
+                                        .groupBy(
+                                                10,
+                                                i -> i % 10,
+                                                _ ->
+                                                        f ->
+                                                                f.tap(
+                                                                        i -> {
+                                                                            if (i == 13)
+                                                                                throw new RuntimeException(
+                                                                                        "boom!");
+                                                                        }))
+                                        .runToList());
         assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
 
@@ -705,7 +705,7 @@ public class FlowGroupedTest {
 
     @Test
     void
-    groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
+            groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
         assertThrows(
                 JoxScopeExecutionException.class,
                 () ->
