@@ -28,6 +28,7 @@ public class Race {
         if (result instanceof Timeout) {
             throw new TimeoutException("Computation didn't finish within " + millis + "ms");
         } else {
+            //noinspection unchecked
             return (T) result;
         }
     }
@@ -44,7 +45,8 @@ public class Race {
      * Returns the result of the first computation to complete successfully, or if all fail - throws
      * the first exception.
      */
-    public static <T> T race(Callable<T> f1, Callable<T> f2, Callable<T> f3) throws InterruptedException {
+    public static <T> T race(Callable<T> f1, Callable<T> f2, Callable<T> f3)
+            throws InterruptedException {
         return race(List.of(f1, f2, f3));
     }
 
@@ -70,8 +72,7 @@ public class Race {
                                                 branchResults.add(r);
                                             }
                                         } catch (Exception e) {
-                                            branchResults.add(
-                                                    new ExceptionWrapperInRace(e));
+                                            branchResults.add(new ExceptionWrapperInRace(e));
                                         }
                                         return null;
                                     });
@@ -85,6 +86,7 @@ public class Race {
                             } else if (first instanceof NullWrapperInRace) {
                                 return null;
                             } else {
+                                //noinspection unchecked
                                 return (T) first;
                             }
                             left -= 1;
@@ -113,7 +115,8 @@ public class Race {
      * Returns the result of the first computation to complete (either successfully or with an
      * exception).
      */
-    public static <T> T raceResult(Callable<T> f1, Callable<T> f2, Callable<T> f3) throws InterruptedException {
+    public static <T> T raceResult(Callable<T> f1, Callable<T> f2, Callable<T> f3)
+            throws InterruptedException {
         return raceResult(List.of(f1, f2, f3));
     }
 
@@ -138,6 +141,7 @@ public class Race {
         if (result instanceof ExceptionWrapperInRaceResult(Exception e)) {
             throw new JoxScopeExecutionException(e);
         } else {
+            //noinspection unchecked
             return (T) result;
         }
     }

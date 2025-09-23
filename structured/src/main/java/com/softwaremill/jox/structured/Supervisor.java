@@ -1,13 +1,13 @@
 package com.softwaremill.jox.structured;
 
-import com.softwaremill.jox.Channel;
-
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.softwaremill.jox.Channel;
 
 class Supervisor {
     private final AtomicInteger running = new AtomicInteger(0);

@@ -1,7 +1,6 @@
 package com.softwaremill.jox.structured;
 
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 
 public class Util {
     /**

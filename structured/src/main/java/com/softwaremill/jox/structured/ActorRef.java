@@ -1,14 +1,13 @@
 package com.softwaremill.jox.structured;
 
-import java.util.concurrent.Callable;
+import static com.softwaremill.jox.structured.Util.uninterruptible;
+
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.Sink;
-
-import static com.softwaremill.jox.structured.Scopes.supervised;
 
 public class ActorRef<T> {
 
@@ -62,9 +61,7 @@ public class ActorRef<T> {
         c.send(f);
     }
 
-    /**
-     * The same as {@link ActorRef#create(Scope, Object, Consumer)} but with empty close action.
-     */
+    /** The same as {@link ActorRef#create(Scope, Object, Consumer)} but with empty close action. */
     public static <T> ActorRef<T> create(Scope scope, T logic) throws InterruptedException {
         return create(scope, logic, null);
     }
@@ -84,7 +81,8 @@ public class ActorRef<T> {
      * <p>The actor's mailbox (incoming channel) will have a capacity of {@link
      * Channel#DEFAULT_BUFFER_SIZE}.
      */
-    public static <T> ActorRef<T> create(Scope scope, T logic, Consumer<T> close) throws InterruptedException {
+    public static <T> ActorRef<T> create(Scope scope, T logic, Consumer<T> close)
+            throws InterruptedException {
         Channel<ThrowingConsumer<T>> c = Channel.newBufferedDefaultChannel();
         ActorRef<T> ref = new ActorRef<>(c);
         scope.fork(
@@ -110,26 +108,5 @@ public class ActorRef<T> {
                     }
                 });
         return ref;
-    }
-
-    private static void uninterruptible(Callable<Void> f) throws InterruptedException {
-        supervised(
-                scope -> {
-                    Fork<Void> t = scope.forkUnsupervised(f);
-
-                    ThrowingRunnable joinDespiteInterrupted =
-                            () -> {
-                                while (true) {
-                                    try {
-                                        t.join();
-                                        break;
-                                    } catch (InterruptedException e) {
-                                        // Continue the loop to retry joining
-                                    }
-                                }
-                            };
-                    joinDespiteInterrupted.run();
-                    return null;
-                });
     }
 }

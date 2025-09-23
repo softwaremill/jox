@@ -4,8 +4,8 @@ public class Scopes {
     /**
      * Starts a new concurrency scope, which allows starting forks in the given code block {@code
      * f}. Forks can be started using {@link Scope#fork}, {@link Scope#forkUser}, {@link
-     * Scope#forkCancellable} or {@link Scope#forkUnsupervised}. All forks
-     * are guaranteed to complete before this scope completes.
+     * Scope#forkCancellable} or {@link Scope#forkUnsupervised}. All forks are guaranteed to
+     * complete before this scope completes.
      *
      * <p>The scope is ran in supervised mode, that is:
      *
@@ -27,7 +27,7 @@ public class Scopes {
      * suppressed.
      *
      * @throws JoxScopeExecutionException When the main body, or any of the forks, throw an
-     *                                    exception
+     *     exception
      */
     public static <T> T supervised(Scoped<T> f) throws InterruptedException {
         return new Scope().run(f);

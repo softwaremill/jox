@@ -190,9 +190,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
     private interface DummyError {}
 
-    /**
-     * Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}.
-     */
+    /** Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}. */
     private interface Signal {}
 
     private record Request(long n) implements Signal {}
