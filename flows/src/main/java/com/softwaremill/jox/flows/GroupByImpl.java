@@ -1,6 +1,7 @@
 package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.util.HashMap;
 import java.util.List;
@@ -8,9 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.softwaremill.jox.*;
-import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.ThrowingFunction;
-import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class GroupByImpl<T, V, U> {
 
@@ -185,7 +185,7 @@ class GroupByImpl<T, V, U> {
     public Flow<U> run() {
         return Flows.usingEmit(
                 emit -> {
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 // Channel where all elements emitted by child flows will be sent;
                                 // we use such a collective channel instead of
@@ -231,7 +231,7 @@ class GroupByImpl<T, V, U> {
                                             state.shouldReceiveFromParentChannel()
                                                     ? List.of(childOutput, childDone)
                                                     : List.of(
-                                                            childOutput, childDone, parentChannel);
+                                                    childOutput, childDone, parentChannel);
                                     var selectClauses =
                                             pool.stream()
                                                     .map(Source::receiveClause)
@@ -248,8 +248,7 @@ class GroupByImpl<T, V, U> {
                                             assert state.parentDone;
                                             state = doCompleteAll(state);
                                         }
-                                        case ChannelError channelError ->
-                                                throw channelError.toException();
+                                        case ChannelError channelError -> throw channelError.toException();
                                         case Object o -> {
                                             // for some reason compiler shows error when using
                                             // instanceof / switch pattern matching
@@ -282,11 +281,11 @@ class GroupByImpl<T, V, U> {
                                                         childDoneResult.v)) {
                                                     throw new IllegalStateException(
                                                             "Invalid usage of child flows: child"
-                                                                + " flow was completed as done by"
-                                                                + " user code (in"
-                                                                + " childFlowTransform), while this"
-                                                                + " is not allowed (see"
-                                                                + " documentation for details)");
+                                                                    + " flow was completed as done by"
+                                                                    + " user code (in"
+                                                                    + " childFlowTransform), while this"
+                                                                    + " is not allowed (see"
+                                                                    + " documentation for details)");
                                                 }
 
                                                 state =
@@ -312,7 +311,7 @@ class GroupByImpl<T, V, U> {
             GroupByState state,
             Channel<ChildDone> childDone,
             Channel<U> childOutput,
-            UnsupervisedScope scope)
+            Scope scope)
             throws InterruptedException {
         var s = state;
         if (s.pendingFromParent.isPresent()) {
@@ -337,7 +336,7 @@ class GroupByImpl<T, V, U> {
             T t,
             V v,
             long counter,
-            UnsupervisedScope scope)
+            Scope scope)
             throws InterruptedException {
         var s = state.withChildCounter(v, counter);
 

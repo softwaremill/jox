@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
@@ -7,7 +8,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.structured.Scopes;
 
 public class FlowSplitTest {
 
@@ -107,7 +107,7 @@ public class FlowSplitTest {
     @Test
     void shouldHandleErrorPropagationInSplit() throws Exception {
         RuntimeException exception = new RuntimeException("test error");
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     ChannelError received =
                             (ChannelError)
@@ -266,7 +266,7 @@ public class FlowSplitTest {
     @Test
     void shouldHandleErrorPropagationInSplitOn() throws Exception {
         RuntimeException exception = new RuntimeException("test error");
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     ChannelError received =
                             (ChannelError)

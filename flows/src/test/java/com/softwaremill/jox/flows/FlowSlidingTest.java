@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
@@ -62,7 +63,7 @@ public class FlowSlidingTest {
 
     @Test
     void shouldReturnFailedSourceWhenTheOriginalSourceIsFailed() throws Exception {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     RuntimeException failure = new RuntimeException();
                     ChannelError received =

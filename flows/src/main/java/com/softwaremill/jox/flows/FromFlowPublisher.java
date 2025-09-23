@@ -1,7 +1,7 @@
 package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -16,14 +16,13 @@ import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.structured.ExternalRunner;
 import com.softwaremill.jox.structured.Scope;
-import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
     private final ExternalRunner externalRunner;
     private final FlowStage<T> last;
 
-    FromFlowPublisher(Scope scope, FlowStage<T> last) {
+    FromFlowPublisher(Scope scope, FlowStage<T> last) throws InterruptedException {
         this.externalRunner = scope.externalRunner();
         this.last = last;
     }
@@ -58,7 +57,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
         // (interrupts) any background forks
         // using an unsafe scope for efficiency, we only ever start a single fork where all errors
         // are propagated
-        unsupervised(
+        supervised(
                 scope -> {
                     // processing state: cancelled flag, error sent flag, demand
                     final AtomicBoolean cancelled = new AtomicBoolean(false);
@@ -123,21 +122,20 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                                     case Request r -> increaseDemand.accept(r.n());
                                     case Cancel _ -> cancel.run();
                                     case DummyError _,
-                                            ChannelDone
-                                                    _ -> {} // impossible as channel done should be
+                                         ChannelDone
+                                                 _ -> {} // impossible as channel done should be
                                     // received only from `data`, and error
                                     // from `errors` is handled in the next
                                     // branch
                                     case ChannelError
-                                                    e -> { // only `errors` can be closed due to an
+                                                 e -> { // only `errors` can be closed due to an
                                         // error
                                         cancel.run();
                                         errorSent.set(true);
                                         subscriber.onError(e.toException());
                                     }
-                                    default ->
-                                            throw new IllegalStateException(
-                                                    "unexpected clause result");
+                                    default -> throw new IllegalStateException(
+                                            "unexpected clause result");
                                 }
                             } else {
                                 switch (selectOrClosed(
@@ -153,7 +151,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                                         subscriber.onComplete(); // 1.5
                                     }
                                     case ChannelError
-                                                    e -> { // only `errors` can be closed due to an
+                                                 e -> { // only `errors` can be closed due to an
                                         // error
                                         cancel.run();
                                         errorSent.set(true);
@@ -177,10 +175,10 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
     }
 
     private void forkPropagate(
-            UnsupervisedScope unsupervisedScope,
+            Scope scope,
             Sink<?> propagateExceptionsTo,
-            Callable<Void> runnable) {
-        unsupervisedScope.forkUnsupervised(
+            Callable<Void> runnable) throws InterruptedException {
+        scope.forkUnsupervised(
                 () -> {
                     try {
                         runnable.call();
@@ -193,7 +191,9 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
     private interface DummyError {}
 
-    /** Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}. */
+    /**
+     * Signals sent from a {@link FlowSubscription} to a running {@link Flow.Publisher}.
+     */
     private interface Signal {}
 
     private record Request(long n) implements Signal {}

@@ -24,13 +24,21 @@ public class FlowPublisherTckTest {
                 @Override
                 public Publisher<Integer> createFlowPublisher(long l) {
                     Flow<Integer> flow = Flows.range(1, (int) l, 1);
-                    return flow.toPublisher(scope.get());
+                    try {
+                        return flow.toPublisher(scope.get());
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
 
                 @Override
                 public Publisher<Integer> createFailedFlowPublisher() {
-                    return Flows.<Integer>failed(new RuntimeException("boom"))
-                            .toPublisher(scope.get());
+                    try {
+                        return Flows.<Integer>failed(new RuntimeException("boom"))
+                                .toPublisher(scope.get());
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             };
 

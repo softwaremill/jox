@@ -1,6 +1,7 @@
 package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.structured.Race.timeout;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static java.lang.Thread.sleep;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
@@ -41,7 +42,7 @@ public class FlowGroupedTest {
 
     @Test
     void shouldReturnFailedFlowWhenTheOriginalFlowIsFailed() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     RuntimeException failure = new RuntimeException();
@@ -73,7 +74,7 @@ public class FlowGroupedTest {
 
     @Test
     void shouldReturnFailedFlowWhenCostFunctionThrowsException() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // when
                     ChannelClosedException exception =
@@ -94,7 +95,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWeighted_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed()
             throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     RuntimeException failure = new RuntimeException();
@@ -116,7 +117,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWithin_shouldGroupFirstBatchOfElementsDueToLimitAndSecondBatchDueToTimeout()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     var c = Channel.<Integer>newUnlimitedChannel();
@@ -167,7 +168,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWithin_shouldGroupFirstBatchOfElementsDueToTimeoutAndSecondBatchDueToLimit()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     var c = Channel.<Integer>newUnlimitedChannel();
@@ -218,9 +219,9 @@ public class FlowGroupedTest {
 
     @Test
     void
-            groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode()
-                    throws InterruptedException {
-        Scopes.supervised(
+    groupedWithin_shouldWakeUpOnNewElementAndSendItImmediatelyAfterFirstBatchIsSentAndChannelGoesToTimeoutMode()
+            throws InterruptedException {
+        supervised(
                 scope -> {
                     // given
                     var c = Channel.<Integer>newUnlimitedChannel();
@@ -275,7 +276,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWithin_shouldSendTheGroupOnlyOnceWhenTheChannelIsClosed()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     var c = Channel.<Integer>newUnlimitedChannel();
@@ -305,7 +306,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWithin_shouldReturnFailedSourceWhenTheOriginalSourceIsFailed()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     var failure = new RuntimeException();
@@ -323,9 +324,9 @@ public class FlowGroupedTest {
 
     @Test
     void
-            groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches()
-                    throws InterruptedException {
-        Scopes.supervised(
+    groupedWeightedWithin_shouldGroupElementsOnTimeoutInFirstBatchAndConsiderMaxWeightInRemainingBatches()
+            throws InterruptedException {
+        supervised(
                 scope -> {
                     // given
                     var c = Flow.<Integer>newChannelWithBufferSizeFromScope();
@@ -360,7 +361,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWeightedWithin_shouldReturnFailedSourceWhenCostFunctionThrowsException()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     Flow<List<Integer>> flow =
@@ -384,7 +385,7 @@ public class FlowGroupedTest {
     @Test
     void groupedWeightedWithin_shouldReturnFailedSourceWhenOriginalSourceIsFailed()
             throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     // given
                     var failure = new RuntimeException();
@@ -505,8 +506,8 @@ public class FlowGroupedTest {
 
     @Test
     void
-            groupBy_shouldNotExceedParallelismLimitCompletingEarliestActiveChildFlowsAsDoneWhenNecessary()
-                    throws Exception {
+    groupBy_shouldNotExceedParallelismLimitCompletingEarliestActiveChildFlowsAsDoneWhenNecessary()
+            throws Exception {
         // given
         record Group(int v, List<Integer> values) {}
 
@@ -644,21 +645,19 @@ public class FlowGroupedTest {
         var exception =
                 assertThrows(
                         JoxScopeExecutionException.class,
-                        () -> {
-                            Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
-                                    .groupBy(
-                                            10,
-                                            i -> i % 10,
-                                            _ ->
-                                                    f ->
-                                                            f.tap(
-                                                                    i -> {
-                                                                        if (i == 13)
-                                                                            throw new RuntimeException(
-                                                                                    "boom!");
-                                                                    }))
-                                    .runToList();
-                        });
+                        () -> Flows.fromValues(10, 11, 12, 13, 20, 23, 33, 30)
+                                .groupBy(
+                                        10,
+                                        i -> i % 10,
+                                        _ ->
+                                                f ->
+                                                        f.tap(
+                                                                i -> {
+                                                                    if (i == 13)
+                                                                        throw new RuntimeException(
+                                                                                "boom!");
+                                                                }))
+                                .runToList());
         assertEquals("boom!", exception.getCause().getCause().getMessage());
     }
 
@@ -706,7 +705,7 @@ public class FlowGroupedTest {
 
     @Test
     void
-            groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
+    groupBy_shouldThrowIllegalStateExceptionWhenChildStreamIsCompletedByUserProvidedTransformation() {
         assertThrows(
                 JoxScopeExecutionException.class,
                 () ->

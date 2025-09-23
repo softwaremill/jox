@@ -1,6 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,7 +24,6 @@ import java.util.function.Supplier;
 import com.softwaremill.jox.*;
 import com.softwaremill.jox.flows.Flow.ByteFlow;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.ThrowingConsumer;
 
 public final class Flows {
@@ -174,7 +173,7 @@ public final class Flows {
      * intervals pass between send invocations, only one tick will be sent.
      *
      * @param interval The temporal spacing between subsequent ticks.
-     * @param value The element to emitted on every tick.
+     * @param value    The element to emitted on every tick.
      */
     public static <T> Flow<T> tick(Duration interval, T value) {
         return usingEmit(
@@ -195,7 +194,9 @@ public final class Flows {
                 });
     }
 
-    /** Creates a flow, which emits the given `element` repeatedly. */
+    /**
+     * Creates a flow, which emits the given `element` repeatedly.
+     */
     public static <T> Flow<T> repeat(T element) {
         return repeatEval(() -> element);
     }
@@ -244,7 +245,9 @@ public final class Flows {
                 });
     }
 
-    /** Create a flow which sleeps for the given `timeout` and then completes as done. */
+    /**
+     * Create a flow which sleeps for the given `timeout` and then completes as done.
+     */
     public static <T> Flow<T> timeout(Duration timeout) {
         return usingEmit(_ -> Thread.sleep(timeout.toMillis()));
     }
@@ -264,7 +267,9 @@ public final class Flows {
                 });
     }
 
-    /** Creates an empty flow, which emits no elements and completes immediately. */
+    /**
+     * Creates an empty flow, which emits no elements and completes immediately.
+     */
     public static <T> Flow<T> empty() {
         return usingEmit(_ -> {});
     }
@@ -338,7 +343,7 @@ public final class Flows {
         return usingEmit(
                 emit -> {
                     // using an unsafe scope for efficiency
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 Channel<T> channel = Flow.newChannelWithBufferSizeFromScope();
                                 int capacity =
@@ -444,11 +449,11 @@ public final class Flows {
      * determined by the {@link Flow#CHANNEL_BUFFER_SIZE} that is in scope, or default {@link
      * Channel#DEFAULT_BUFFER_SIZE} is used.
      *
-     * @param flows The flows whose elements will be interleaved.
-     * @param segmentSize The number of elements sent from each flow before switching to the next
-     *     one.
+     * @param flows         The flows whose elements will be interleaved.
+     * @param segmentSize   The number of elements sent from each flow before switching to the next
+     *                      one.
      * @param eagerComplete If `true`, the returned flow is completed as soon as any of the flows
-     *     completes. If `false`, the interleaving continues with the remaining non-completed flows.
+     *                      completes. If `false`, the interleaving continues with the remaining non-completed flows.
      */
     public static <T> Flow<T> interleaveAll(
             List<Flow<T>> flows, int segmentSize, boolean eagerComplete) {
@@ -470,11 +475,11 @@ public final class Flows {
      *
      * <p>The provided flows are run concurrently and asynchronously.
      *
-     * @param flows The flows whose elements will be interleaved.
-     * @param segmentSize The number of elements sent from each flow before switching to the next
-     *     one.
+     * @param flows         The flows whose elements will be interleaved.
+     * @param segmentSize   The number of elements sent from each flow before switching to the next
+     *                      one.
      * @param eagerComplete If `true`, the returned flow is completed as soon as any of the flows
-     *     completes. If `false`, the interleaving continues with the remaining non-completed flows.
+     *                      completes. If `false`, the interleaving continues with the remaining non-completed flows.
      */
     public static <T> Flow<T> interleaveAll(
             List<Flow<T>> flows, int segmentSize, boolean eagerComplete, int bufferCapacity) {
@@ -486,19 +491,14 @@ public final class Flows {
             return usingEmit(
                     emit -> {
                         Channel<T> results = Channel.newBufferedChannel(bufferCapacity);
-                        unsupervised(
+                        supervised(
                                 scope -> {
                                     scope.forkUnsupervised(
                                             () -> {
-                                                List<Source<T>> availableSources =
-                                                        new ArrayList<>(
-                                                                flows.stream()
-                                                                        .map(
-                                                                                flow ->
-                                                                                        flow
-                                                                                                .runToChannel(
-                                                                                                        scope))
-                                                                        .toList());
+                                                List<Source<T>> availableSources = new ArrayList<>();
+                                                for (Flow<T> flow : flows) {
+                                                    availableSources.add(flow.runToChannel(scope));
+                                                }
                                                 int currentSourceIndex = 0;
                                                 int elementsRead = 0;
 
@@ -508,13 +508,13 @@ public final class Flows {
                                                                     .get(currentSourceIndex)
                                                                     .receiveOrClosed();
                                                     if (received instanceof ChannelDone) {
-                                                        ///  channel is done, remove it from the
+                                                        //  channel is done, remove it from the
                                                         // list of available sources
                                                         availableSources.remove(currentSourceIndex);
                                                         currentSourceIndex =
                                                                 currentSourceIndex == 0
                                                                         ? availableSources.size()
-                                                                                - 1
+                                                                        - 1
                                                                         : currentSourceIndex - 1;
 
                                                         // if all sources are done, or eagerComplete
@@ -528,14 +528,15 @@ public final class Flows {
                                                             currentSourceIndex =
                                                                     (currentSourceIndex + 1)
                                                                             % availableSources
-                                                                                    .size();
+                                                                            .size();
                                                             elementsRead = 0;
                                                         }
                                                     } else if (received
                                                             instanceof
                                                             ChannelError(
                                                                     Throwable cause,
-                                                                    Channel<?> _)) {
+                                                                    Channel<?> _
+                                                            )) {
                                                         // if any source fails, propagate the error
                                                         results.errorOrClosed(cause);
                                                         break;
@@ -550,7 +551,7 @@ public final class Flows {
                                                             currentSourceIndex =
                                                                     (currentSourceIndex + 1)
                                                                             % availableSources
-                                                                                    .size();
+                                                                            .size();
                                                             elementsRead = 0;
                                                         }
                                                         //noinspection unchecked
@@ -573,9 +574,9 @@ public final class Flows {
     /**
      * Converts a {@link java.io.InputStream} into {@link ByteFlow}.
      *
-     * @param is an `InputStream` to read bytes from.
+     * @param is        an `InputStream` to read bytes from.
      * @param chunkSize maximum number of bytes to read from the underlying `InputStream` before
-     *     emitting a new chunk.
+     *                  emitting a new chunk.
      */
     public static ByteFlow fromInputStream(InputStream is, int chunkSize) {
         return Flows.<ByteChunk>usingEmit(
@@ -600,7 +601,7 @@ public final class Flows {
     /**
      * Creates a {@link ByteFlow} read from a file.
      *
-     * @param path path the file to read from.
+     * @param path      path the file to read from.
      * @param chunkSize maximum number of bytes to read from the file before emitting a new chunk.
      */
     public static ByteFlow fromFile(Path path, int chunkSize) {
