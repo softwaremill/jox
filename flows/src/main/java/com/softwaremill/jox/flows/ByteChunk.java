@@ -245,7 +245,24 @@ public class ByteChunk {
 
     /** Checks if this starts with chunk b */
     public boolean startsWith(ByteChunk other) {
-        return Arrays.equals(this.take(other.length()).toArray(), other.toArray());
+        if (other.totalLength > this.totalLength) {
+            return false;
+        }
+
+        if (other.totalLength == 0) {
+            return true;
+        }
+
+        Iterator<Byte> thisIterator = this.iterator();
+        Iterator<Byte> otherIterator = other.iterator();
+
+        while (otherIterator.hasNext()) {
+            if (!thisIterator.hasNext() || !thisIterator.next().equals(otherIterator.next())) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     @Override
