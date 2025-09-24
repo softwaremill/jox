@@ -425,6 +425,17 @@ public class FlowGroupedTest {
     }
 
     @Test
+    void groupBy_shouldHandleSingleElementFlowStressTest() throws Exception {
+        // Stress test to validate the data race fix - run the same single-element flow grouping
+        // many times
+        for (int i = 0; i < 100000; i++) {
+            List<Integer> result =
+                    Flows.fromValues(42).groupBy(10, x -> x % 10, _ -> f -> f).runToList();
+            assertEquals(List.of(42), result);
+        }
+    }
+
+    @Test
     void groupBy_shouldCreateSimpleGroupsWithoutReachingParallelismLimit() throws Exception {
         // given
         record Group(int v, List<Integer> values) {}
