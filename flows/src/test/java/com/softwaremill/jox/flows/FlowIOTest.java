@@ -68,6 +68,141 @@ public class FlowIOTest {
     }
 
     @Test
+    void supportBulkReadOperationsWithReadByteArray() throws InterruptedException {
+        supervised(
+                scope -> {
+                    String content = "Hello, World! This is a test for bulk reading operations.";
+                    var source = Flows.fromByteArrays(content.getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[20];
+                        int bytesRead = stream.read(buffer);
+                        assertEquals(20, bytesRead);
+                        assertEquals("Hello, World! This i", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(20, bytesRead);
+                        assertEquals("s a test for bulk re", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(17, bytesRead);
+                        assertEquals("ading operations.", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(-1, bytesRead);
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleBulkReadOperationsAcrossMultipleChunks() throws InterruptedException {
+        supervised(
+                scope -> {
+                    String chunk1 = "Hello, ";
+                    String chunk2 = "World! ";
+                    String chunk3 = "This is a test.";
+                    var source =
+                            Flows.fromByteArrays(
+                                    chunk1.getBytes(), chunk2.getBytes(), chunk3.getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[10];
+                        StringBuilder result = new StringBuilder();
+                        int bytesRead;
+
+                        while ((bytesRead = stream.read(buffer)) != -1) {
+                            result.append(new String(buffer, 0, bytesRead));
+                        }
+
+                        assertEquals("Hello, World! This is a test.", result.toString());
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleConsistencyBetweenSingleByteAndBulkReads() throws InterruptedException {
+        supervised(
+                scope -> {
+                    String content = "Test content for mixed reading";
+                    var source = Flows.fromByteArrays(content.getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        // Read first few bytes individually
+                        assertEquals('T', stream.read());
+                        assertEquals('e', stream.read());
+                        assertEquals('s', stream.read());
+                        assertEquals('t', stream.read());
+                        assertEquals(' ', stream.read());
+
+                        // Read bulk
+                        byte[] buffer = new byte[8];
+                        int bytesRead = stream.read(buffer);
+                        assertEquals(8, bytesRead);
+                        assertEquals("content ", new String(buffer, 0, bytesRead));
+
+                        // Read remaining individually and bulk mixed
+                        assertEquals('f', stream.read());
+
+                        buffer = new byte[20];
+                        bytesRead = stream.read(buffer);
+                        assertEquals(16, bytesRead);
+                        assertEquals("or mixed reading", new String(buffer, 0, bytesRead));
+
+                        assertEquals(-1, stream.read());
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleBulkReadWithOffsetAndLength() throws InterruptedException {
+        supervised(
+                scope -> {
+                    String content = "Testing offset and length parameters";
+                    var source = Flows.fromByteArrays(content.getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[50];
+
+                        // Read with offset
+                        int bytesRead = stream.read(buffer, 10, 7);
+                        assertEquals(7, bytesRead);
+                        assertEquals("Testing", new String(buffer, 10, bytesRead));
+
+                        // Read remaining with different offset
+                        bytesRead = stream.read(buffer, 0, 20);
+                        assertEquals(20, bytesRead);
+                        assertEquals(" offset and length p", new String(buffer, 0, bytesRead));
+
+                        // Read final part
+                        bytesRead = stream.read(buffer, 5, 15);
+                        assertEquals(9, bytesRead);
+                        assertEquals("arameters", new String(buffer, 5, bytesRead));
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleEmptyChunksInStream() throws InterruptedException {
+        supervised(
+                scope -> {
+                    var source =
+                            Flows.fromByteArrays(
+                                    "Hello".getBytes(),
+                                    new byte[0], // empty chunk
+                                    ", ".getBytes(),
+                                    new byte[0], // another empty chunk
+                                    "World!".getBytes());
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[20];
+                        int bytesRead = stream.read(buffer);
+                        assertEquals(13, bytesRead);
+                        assertEquals("Hello, World!", new String(buffer, 0, bytesRead));
+                    }
+                    return null;
+                });
+    }
+
+    @Test
     void runToOutputStream_writeSingleChunkToOutputStream() throws Exception {
         // given
         TestOutputStream outputStream = TestOutputStream.doNotThrowOnWrite();
