@@ -1733,12 +1733,6 @@ public class Flow<T> {
      *
      * <p>
      *
-     * <p>
-     *
-     * <p>
-     *
-     * <p>
-     *
      * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
      * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
@@ -1775,12 +1769,6 @@ public class Flow<T> {
      * in an empty chunk in the output.
      *
      * <p>For example:
-     *
-     * <p>
-     *
-     * <p>
-     *
-     * <p>
      *
      * <p>
      *
