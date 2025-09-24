@@ -1737,6 +1737,8 @@ public class Flow<T> {
      *
      * <p>
      *
+     * <p>
+     *
      * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
      * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
@@ -1773,6 +1775,8 @@ public class Flow<T> {
      * in an empty chunk in the output.
      *
      * <p>For example:
+     *
+     * <p>
      *
      * <p>
      *
@@ -2057,31 +2061,105 @@ public class Flow<T> {
             Source<ByteChunk> ch = this.runToChannel(scope);
 
             return new InputStream() {
-                private ByteArrayIterator currentChunk = ByteArrayIterator.empty();
+                private List<byte[]> currentArrays = List.of();
+                private int currentArrayIndex = 0;
+                private int currentByteIndex = 0;
+                private int availableBytes = 0;
+                private boolean isEndOfStream = false;
 
-                @Override
-                public int read() {
-                    try {
-                        if (!currentChunk.hasNext()) {
+                private boolean ensureDataAvailable() {
+                    while (currentArrayIndex < currentArrays.size()) {
+                        byte[] currentArray = currentArrays.get(currentArrayIndex);
+                        if (currentByteIndex < currentArray.length) {
+                            return true;
+                        }
+                        currentArrayIndex++;
+                        currentByteIndex = 0;
+                    }
+
+                    if (!isEndOfStream) {
+                        try {
                             Object result = ch.receiveOrClosed();
                             if (result instanceof ChannelDone) {
-                                return -1;
+                                isEndOfStream = true;
+                                availableBytes = 0;
+                                return false;
                             } else if (result instanceof ChannelError error) {
                                 throw error.toException();
                             } else {
                                 var chunk = (ByteChunk) result;
-                                currentChunk = new ByteArrayIterator(chunk.toArray());
+                                currentArrays = chunk.getArrays();
+                                currentArrayIndex = 0;
+                                currentByteIndex = 0;
+                                availableBytes =
+                                        currentArrays.stream().mapToInt(arr -> arr.length).sum();
+                                return ensureDataAvailable();
                             }
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
                         }
-                        return currentChunk.next() & 0xff; // Convert to unsigned
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
                     }
+                    return false;
+                }
+
+                @Override
+                public int read() {
+                    if (!ensureDataAvailable()) {
+                        return -1;
+                    }
+                    byte b = currentArrays.get(currentArrayIndex)[currentByteIndex++];
+                    availableBytes--;
+                    return b & 0xff; // Convert to unsigned
+                }
+
+                @Override
+                public int read(byte[] b, int off, int len) {
+                    if (b == null) {
+                        throw new NullPointerException();
+                    }
+                    if (off < 0 || len < 0 || len > b.length - off) {
+                        throw new IndexOutOfBoundsException();
+                    }
+                    if (len == 0) {
+                        return 0;
+                    }
+
+                    if (!ensureDataAvailable()) {
+                        return -1;
+                    }
+
+                    int totalBytesRead = 0;
+                    int remainingToRead = len;
+
+                    while (remainingToRead > 0 && ensureDataAvailable()) {
+                        byte[] currentArray = currentArrays.get(currentArrayIndex);
+                        int availableInCurrentArray = currentArray.length - currentByteIndex;
+                        int bytesToRead = Math.min(remainingToRead, availableInCurrentArray);
+
+                        System.arraycopy(
+                                currentArray,
+                                currentByteIndex,
+                                b,
+                                off + totalBytesRead,
+                                bytesToRead);
+
+                        currentByteIndex += bytesToRead;
+                        totalBytesRead += bytesToRead;
+                        remainingToRead -= bytesToRead;
+                        availableBytes -= bytesToRead;
+
+                        if (currentByteIndex >= currentArray.length) {
+                            currentArrayIndex++;
+                            currentByteIndex = 0;
+                        }
+                    }
+
+                    return totalBytesRead;
                 }
 
                 @Override
                 public int available() {
-                    return currentChunk.available();
+                    return availableBytes;
                 }
             };
         }
@@ -2094,7 +2172,12 @@ public class Flow<T> {
          */
         public void runToOutputStream(OutputStream outputStream) throws Exception {
             try {
-                last.run(t -> outputStream.write(t.toArray()));
+                last.run(
+                        t -> {
+                            for (byte[] array : t.getArrays()) {
+                                outputStream.write(array);
+                            }
+                        });
                 close(outputStream, null);
             } catch (Exception e) {
                 close(outputStream, e);
@@ -2116,7 +2199,9 @@ public class Flow<T> {
                 runForeach(
                         chunk -> {
                             try {
-                                channel.write(ByteBuffer.wrap(chunk.toArray()));
+                                for (byte[] array : chunk.getArrays()) {
+                                    channel.write(ByteBuffer.wrap(array));
+                                }
                             } catch (IOException e) {
                                 throw new RuntimeException(e);
                             }

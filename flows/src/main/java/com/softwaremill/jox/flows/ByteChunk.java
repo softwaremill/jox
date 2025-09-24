@@ -146,7 +146,7 @@ public class ByteChunk {
         List<byte[]> newArrays = new java.util.ArrayList<>();
 
         // Add the partial first array if needed
-        if (startOffset > 0 && startArrayIndex < arrays.size()) {
+        if (startOffset > 0) {
             byte[] firstArray = arrays.get(startArrayIndex);
             if (startOffset < firstArray.length) {
                 byte[] partialArray =
