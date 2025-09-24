@@ -970,9 +970,11 @@ public class Flow<T> {
                                         () -> {
                                             List<T> buffer = new ArrayList<>();
                                             final AtomicLong accumulatedCost = new AtomicLong(0);
+                                            final var timeouts = new GroupWeightedWithinTimeouts();
 
                                             CancellableFork<GroupingTimeout> timeoutFork =
-                                                    forkTimeout(scope, timerChannel, duration);
+                                                    timeouts.forkTimeout(
+                                                            scope, timerChannel, duration);
 
                                             Callable<CancellableFork<Void>>
                                                     sendBufferAndCleanupCost =
@@ -1008,22 +1010,30 @@ public class Flow<T> {
                                                                     timeoutFork.cancelNow();
                                                                 outputChannel.error(cause);
                                                                 yield false;
-                                                            case GroupingTimeout _:
-                                                                timeoutFork =
-                                                                        null; // enter 'timed out
-                                                                // state', may stay in
-                                                                // this state if
-                                                                // buffer is empty
-                                                                if (!buffer.isEmpty()) {
-                                                                    sendBufferAndCleanupCost.call();
-                                                                    // cancel existing timeout and
-                                                                    // start a new one
-                                                                    timeoutFork =
-                                                                            forkTimeout(
-                                                                                    scope,
-                                                                                    timerChannel,
-                                                                                    duration);
+                                                            case GroupingTimeout timeout:
+                                                                if (timeout.generation()
+                                                                        == timeouts
+                                                                                .getGeneration()) {
+                                                                    // enter 'timed out state', may
+                                                                    // stay in this state if buffer
+                                                                    // is empty
+                                                                    timeoutFork = null;
+                                                                    if (!buffer.isEmpty()) {
+                                                                        sendBufferAndCleanupCost
+                                                                                .call();
+                                                                        // cancel existing timeout
+                                                                        // and
+                                                                        // start a new one
+                                                                        timeoutFork =
+                                                                                timeouts
+                                                                                        .forkTimeout(
+                                                                                                scope,
+                                                                                                timerChannel,
+                                                                                                duration);
+                                                                    }
                                                                 }
+                                                                // If timeout is from an old
+                                                                // generation, ignore it
                                                                 yield true;
                                                             case Object t:
                                                                 buffer.add((T) t);
@@ -1049,10 +1059,11 @@ public class Flow<T> {
                                                                         if (timeoutFork != null)
                                                                             timeoutFork.cancelNow();
                                                                         timeoutFork =
-                                                                                forkTimeout(
-                                                                                        scope,
-                                                                                        timerChannel,
-                                                                                        duration);
+                                                                                timeouts
+                                                                                        .forkTimeout(
+                                                                                                scope,
+                                                                                                timerChannel,
+                                                                                                duration);
                                                                     }
                                                                     yield true;
                                                                 } catch (Exception e) {
@@ -1070,20 +1081,27 @@ public class Flow<T> {
                 });
     }
 
-    private CancellableFork<GroupingTimeout> forkTimeout(
-            Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
-            throws InterruptedException {
-        return scope.forkCancellable(
-                () -> {
-                    sleep(duration);
-                    timerChannel.sendOrClosed(GroupingTimeout.INSTANCE);
-                    return null;
-                });
+    private static class GroupWeightedWithinTimeouts {
+        private long generation;
+
+        long getGeneration() {
+            return generation;
+        }
+
+        CancellableFork<GroupingTimeout> forkTimeout(
+                Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
+                throws InterruptedException {
+            generation += 1;
+            return scope.forkCancellable(
+                    () -> {
+                        sleep(duration);
+                        timerChannel.sendOrClosed(new GroupingTimeout(generation));
+                        return null;
+                    });
+        }
     }
 
-    private enum GroupingTimeout {
-        INSTANCE
-    }
+    private record GroupingTimeout(long generation) {}
 
     /**
      * Chunks up the elements into groups of the specified size. The last group may be smaller due
@@ -1733,6 +1751,8 @@ public class Flow<T> {
      *
      * <p>
      *
+     * <p>
+     *
      * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
      * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
@@ -1769,6 +1789,8 @@ public class Flow<T> {
      * in an empty chunk in the output.
      *
      * <p>For example:
+     *
+     * <p>
      *
      * <p>
      *
