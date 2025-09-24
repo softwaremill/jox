@@ -5,9 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import java.util.Optional;
 
-import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import org.junit.jupiter.api.Test;
 
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 import com.softwaremill.jox.structured.ThrowingFunction;
 
 class FlowRecoverTest {
@@ -52,9 +52,7 @@ class FlowRecoverTest {
 
         // when & then
         IllegalArgumentException thrown =
-                assertThrows(
-                        IllegalArgumentException.class,
-                        flow::runToList);
+                assertThrows(IllegalArgumentException.class, flow::runToList);
         assertEquals("test error", thrown.getMessage());
     }
 
