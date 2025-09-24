@@ -34,13 +34,11 @@ class GroupByImpl<T, V, U> {
         }
     }
 
-    private class ChildDone {
-        private final V v;
+    private sealed interface ChildOutput<U, V> permits ChildValue, ChildDone {}
 
-        public ChildDone(V v) {
-            this.v = v;
-        }
-    }
+    private record ChildValue<U, V>(U value) implements ChildOutput<U, V> {}
+
+    private record ChildDone<U, V>(V v) implements ChildOutput<U, V> {}
 
     private final Flow<T> parent;
     private final int parallelism;
@@ -188,17 +186,14 @@ class GroupByImpl<T, V, U> {
                     supervised(
                             scope -> {
                                 // Channel where all elements emitted by child flows will be sent;
-                                // we use such a collective channel instead of
-                                // enumerating all child channels in the main `select`, as `select`s
-                                // don't scale well with the number of
-                                // clauses. The elements from this channel are then emitted by the
-                                // returned flow.
-                                Channel<U> childOutput = Flow.newChannelWithBufferSizeFromScope();
-
-                                // Channel where completion of children is signalled (because the
-                                // parent is complete, or the parallelism limit
-                                // is reached).
-                                Channel<ChildDone> childDone = Channel.newUnlimitedChannel();
+                                // we use such a collective channel instead of enumerating all
+                                // child channels in the main `select`, as `select`s don't scale
+                                // well with the number of clauses. The elements from this channel
+                                // are then emitted by the returned flow. Completion of children
+                                // (when the parent is complete, or the parallelism limit is
+                                // reached) is signalled on this channel as well.
+                                Channel<ChildOutput<U, V>> childOutput =
+                                        Channel.newUnlimitedChannel();
 
                                 // Parent channel, from which we receive as long as it's not done,
                                 // and only when a child flow isn't pending
@@ -221,17 +216,15 @@ class GroupByImpl<T, V, U> {
                                     // We do not receive from the parent when it's done, or when
                                     // there's already a pending child flow to create
                                     // (but can't be created because of `parallelism` limit); we
-                                    // always receive from child output & child done
-                                    // signals. In case of parent's error, the error is also
-                                    // propagated above to `childOutput`, so that it's
-                                    // quickly received. Receiving from child output has priority
-                                    // over child done signals, to receive all child
-                                    // values before marking a child as done.
+                                    // always receive from child output (which includes both values
+                                    // and completion signals). In case of parent's error, the error
+                                    // is also
+                                    // propagated above to `childOutput`, so that it's quickly
+                                    // received.
                                     List<Source<?>> pool =
                                             state.shouldReceiveFromParentChannel()
-                                                    ? List.of(childOutput, childDone)
-                                                    : List.of(
-                                                            childOutput, childDone, parentChannel);
+                                                    ? List.of(childOutput)
+                                                    : List.of(childOutput, parentChannel);
                                     var selectClauses =
                                             pool.stream()
                                                     .map(Source::receiveClause)
@@ -260,44 +253,53 @@ class GroupByImpl<T, V, U> {
                                                 state =
                                                         sendToChildOrRunChildOrBuffer(
                                                                 state,
-                                                                childDone,
                                                                 childOutput,
                                                                 fromParent.v,
                                                                 predicate.apply(fromParent.v),
                                                                 state.fromParentCounter,
                                                                 scope);
-                                            } else if (ChildDone.class.isInstance(o)) {
+                                            } else if (ChildOutput.class.isInstance(o)) {
                                                 //noinspection unchecked
-                                                ChildDone childDoneResult = (ChildDone) o;
-                                                state = state.withChildRemoved(childDoneResult.v);
-                                                // Children should only be done because their
-                                                // `childChannel` was completed as done by
-                                                // `sendToChild_orRunChild_orBuffer`, then
-                                                // `childMostRecentCounters` should have `v`
-                                                // removed.
-                                                // If it's still present, this indicates that the
-                                                // child flow was completed as done while the source
-                                                // child channel is not, which is invalid usage.
-                                                if (state.childMostRecentCounters.contains(
-                                                        childDoneResult.v)) {
-                                                    throw new IllegalStateException(
-                                                            "Invalid usage of child flows: child"
-                                                                + " flow was completed as done by"
-                                                                + " user code (in"
-                                                                + " childFlowTransform), while this"
-                                                                + " is not allowed (see"
-                                                                + " documentation for details)");
-                                                }
+                                                ChildOutput<U, V> childOutputResult =
+                                                        (ChildOutput<U, V>) o;
+                                                switch (childOutputResult) {
+                                                    case ChildValue<U, V> childValue -> {
+                                                        //noinspection unchecked
+                                                        emit.apply(childValue.value);
+                                                    }
+                                                    case ChildDone<U, V> childDone -> {
+                                                        state = state.withChildRemoved(childDone.v);
+                                                        // Children should only be done because
+                                                        // their
+                                                        // `childChannel` was completed as done by
+                                                        // `sendToChild_orRunChild_orBuffer`, then
+                                                        // `childMostRecentCounters` should have `v`
+                                                        // removed.
+                                                        // If it's still present, this indicates
+                                                        // that the
+                                                        // child flow was completed as done while
+                                                        // the source
+                                                        // child channel is not, which is invalid
+                                                        // usage.
+                                                        if (state.childMostRecentCounters.contains(
+                                                                childDone.v)) {
+                                                            throw new IllegalStateException(
+                                                                    "Invalid usage of child flows:"
+                                                                        + " child flow was"
+                                                                        + " completed as done by"
+                                                                        + " user code (in"
+                                                                        + " childFlowTransform),"
+                                                                        + " while this is not"
+                                                                        + " allowed (see"
+                                                                        + " documentation for"
+                                                                        + " details)");
+                                                        }
 
-                                                state =
-                                                        runChildIfPending(
-                                                                state,
-                                                                childDone,
-                                                                childOutput,
-                                                                scope);
-                                            } else {
-                                                //noinspection unchecked
-                                                emit.apply((U) o); // forwarding from `childOutput`
+                                                        state =
+                                                                runChildIfPending(
+                                                                        state, childOutput, scope);
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -309,7 +311,7 @@ class GroupByImpl<T, V, U> {
 
     // Running a pending child flow, after another has completed as done
     private GroupByState runChildIfPending(
-            GroupByState state, Channel<ChildDone> childDone, Channel<U> childOutput, Scope scope)
+            GroupByState state, Channel<ChildOutput<U, V>> childOutput, Scope scope)
             throws InterruptedException {
         var s = state;
         if (s.pendingFromParent.isPresent()) {
@@ -317,7 +319,6 @@ class GroupByImpl<T, V, U> {
             s =
                     sendToChildOrRunChildOrBuffer(
                             s.withPendingFromParent(Optional.empty()),
-                            childDone,
                             childOutput,
                             pending.t,
                             pending.v,
@@ -329,8 +330,7 @@ class GroupByImpl<T, V, U> {
 
     private GroupByState sendToChildOrRunChildOrBuffer(
             GroupByState state,
-            Channel<ChildDone> childDone,
-            Channel<U> childOutput,
+            Channel<ChildOutput<U, V>> childOutput,
             T t,
             V v,
             long counter,
@@ -342,10 +342,8 @@ class GroupByImpl<T, V, U> {
             s.children.get(v).send(t);
         } else if (s.children.size() < parallelism) {
             // Starting a new child flow, running in the background; the child flow receives values
-            // via a channel,
-            // and feeds its output to `childOutput`. Done signals are forwarded to `childDone`;
-            // elements & errors
-            // are propagated to `childOutput`.
+            // via a channel, and feeds its output to `childOutput`. Done signals are propagated as
+            // values, errors are propagated as channel errors.
             Channel<T> childChannel = Flow.newChannelWithBufferSizeFromScope();
             s = s.withChildAdded(v, childChannel);
 
@@ -357,7 +355,7 @@ class GroupByImpl<T, V, U> {
                                 .onDone(
                                         () -> {
                                             try {
-                                                childDone.sendOrClosed(new ChildDone(v));
+                                                childOutput.sendOrClosed(new ChildDone<>(v));
                                             } catch (InterruptedException e) {
                                                 throw new RuntimeException(e);
                                             }
@@ -370,6 +368,7 @@ class GroupByImpl<T, V, U> {
                                 // no-op.
                                 .onDone(childChannel::doneOrClosed)
                                 .onError(childChannel::errorOrClosed)
+                                .map(value -> (ChildOutput<U, V>) new ChildValue<U, V>(value))
                                 .runPipeToSink(childOutput, false);
                         return null;
                     });
@@ -381,7 +380,7 @@ class GroupByImpl<T, V, U> {
 
             // Completing as done the child flow which didn't receive an element for the longest
             // time. After
-            // the flow completes, it will send `ChildDone` to `childDone`.
+            // the flow completes, it will send `ChildDone` to `childOutput`.
             Map.Entry<Optional<V>, GroupByState> result = s.withoutLongestInactiveChild();
             if (result.getKey().isPresent()) {
                 s.children.get(result.getKey().get()).done();
