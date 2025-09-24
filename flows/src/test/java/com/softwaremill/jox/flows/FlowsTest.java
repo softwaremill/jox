@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayInputStream;
@@ -24,7 +25,6 @@ import org.junit.jupiter.api.Timeout;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
 
 class FlowsTest {
 
@@ -35,7 +35,7 @@ class FlowsTest {
 
     @Test
     void shouldCreateFlowFromFork() throws Exception {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     Fork<Integer> f = scope.forkUnsupervised(() -> 1);
                     Flow<Integer> c = Flows.fromFork(f);
@@ -62,7 +62,7 @@ class FlowsTest {
 
     @Test
     public void shouldFailOnReceive() throws Exception {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // when
                     Flow<String> s = Flows.failed(new RuntimeException("boom"));
@@ -104,7 +104,7 @@ class FlowsTest {
 
     @Test
     void shouldReturnFuturesSourceValues() throws Exception {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     CompletableFuture<Source<Integer>> completableFuture =
@@ -177,7 +177,7 @@ class FlowsTest {
     @Test
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
     void shouldTickRegularly() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     var c = Flows.tick(Duration.ofMillis(100), 1L).runToChannel(scope);
                     var start = System.currentTimeMillis();
@@ -201,7 +201,7 @@ class FlowsTest {
     @Timeout(value = 1, unit = TimeUnit.SECONDS)
     void shouldTickImmediatelyInCaseOfSlowConsumerAndThenResumeNormal()
             throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     var c = Flows.tick(Duration.ofMillis(100), 1L).runToChannel(scope);
                     var start = System.currentTimeMillis();

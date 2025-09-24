@@ -1,16 +1,16 @@
 # Jox
 
 [Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
-for Java 21+. Open-source, Apache2 licensed.
+for Java. Open-source, Apache2 licensed.
 
 Jox contains three main modules:
 
-* Fast & scalable, completable [channels](channels.md), with Go-like `select`s
-* Programmer-friendly [structured concurrency](structured.md)
+* Fast & scalable, completable [channels](channels.md), with Go-like `select`s (Java 21+)
+* Programmer-friendly [structured concurrency](structured.md) (Java 25 only)
 * Finite & infinite streaming using [flows](flows.md), with reactive streams compatibility, (blocking) I/O integration
-  and a high-level, "functional" API
+  and a high-level, "functional" API (Java 25 only)
 
-Source code is [avaiable on GitHub](https://github.com/softwaremill/jox).
+Source code is [available on GitHub](https://github.com/softwaremill/jox).
 
 ## A tour of Jox
 
@@ -43,7 +43,7 @@ Flows.range(1, 100, 1)
   })
   .filter(i -> i % 2 == 0)
   .zip(nats)
-  .runForeach(System.out::println);
+  .runForeach(IO::println);
 ```
 
 [Sructured concurrency](structured.md) scope:
@@ -60,7 +60,7 @@ var result = supervised(scope -> {
     });
     return f1.join() + f2.join();
 });
-System.out.println("result = " + result);
+IO.println("result = " + result);
 ```
 
 ## Sponsors
@@ -86,6 +86,7 @@ Articles:
 * [Programmer-friendly structured concurrency for Java](https://softwaremill.com/programmer-friendly-structured-concurrency-for-java/)
 * [Java data processing using modern concurrent programming](https://softwaremill.com/java-data-processing-using-modern-concurrent-programming/)
 * [Flows - simple Java asynchronous data processing in action](https://softwaremill.com/flows-simple-java-asynchronous-data-processing-in-action/)
+* [Comparing Java Streams with Jox Flows](https://softwaremill.com/comparing-java-streams-with-jox-flows/)
 
 Videos:
 

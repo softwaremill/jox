@@ -1,59 +1,59 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+  <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>com.softwaremill.jox</groupId>
-        <artifactId>parent</artifactId>
-        <version>1.0.1</version>
-    </parent>
-
-    <artifactId>channels</artifactId>
+  <parent>
+    <groupId>com.softwaremill.jox</groupId>
+    <artifactId>parent</artifactId>
     <version>1.0.1</version>
-    <packaging>jar</packaging>
-    <name>${project.groupId}:${project.artifactId}</name>
+  </parent>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.awaitility</groupId>
-            <artifactId>awaitility</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
+  <artifactId>channels</artifactId>
+  <version>1.0.1</version>
+  <packaging>jar</packaging>
+  <name>${project.groupId}:${project.artifactId}</name>
 
-    <build>
-        <plugins>
-            <!-- Binary compatibility checking for public API -->
-            <plugin>
-                <groupId>com.github.siom79.japicmp</groupId>
-                <artifactId>japicmp-maven-plugin</artifactId>
-                <configuration>
-                    <parameter>
-                        <onlyBinaryIncompatible>true</onlyBinaryIncompatible>
-                        <includeSynthetic>true</includeSynthetic>
-                        <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
-                    </parameter>
-                    <skip>false</skip>
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>cmp</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>com.diffplug.spotless</groupId>
-                <artifactId>spotless-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Binary compatibility checking for public API -->
+      <plugin>
+        <groupId>com.github.siom79.japicmp</groupId>
+        <artifactId>japicmp-maven-plugin</artifactId>
+        <configuration>
+          <parameter>
+            <onlyBinaryIncompatible>true</onlyBinaryIncompatible>
+            <includeSynthetic>true</includeSynthetic>
+            <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
+          </parameter>
+          <skip>false</skip>
+        </configuration>
+        <executions>
+          <execution>
+            <phase>verify</phase>
+            <goals>
+              <goal>cmp</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
 </project>

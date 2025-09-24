@@ -6,14 +6,14 @@
 [![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/channels/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/channels)
 
 [Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
-for Java 21+.
+for Java.
 
 Includes:
 
-* Fast & scalable, completable channels, with Go-like `select`s
-* Programmer-friendly structured concurrency
+* Fast & scalable, completable channels, with Go-like `select`s (Java 21+)
+* Programmer-friendly structured concurrency (Java 25 only)
 * Finite & infinite streaming using flows, with reactive streams compatibility, (blocking) I/O integration and a
-  high-level, “functional” API
+  high-level, “functional” API (Java 25 only)
 
 Find out more in the documentation available at [jox.softwaremill.com](https://jox.softwaremill.com/).
 
@@ -33,7 +33,8 @@ ch3.send(32);
 var received = select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
 ```
 
-A push-based, backpressured [flow](https://jox.softwaremill.com/latest/flows.html) with time-based & parallel processing:
+A push-based, backpressured [flow](https://jox.softwaremill.com/latest/flows.html) with time-based & parallel
+processing:
 
 ```
 var nats =
@@ -48,7 +49,7 @@ Flows.range(1, 100, 1)
   })
   .filter(i -> i % 2 == 0)
   .zip(nats)
-  .runForeach(System.out::println);
+  .runForeach(IO::println);
 ```
 
 [Sructured concurrency](https://jox.softwaremill.com/latest/structured.html) scope:
@@ -65,7 +66,7 @@ var result = supervised(scope -> {
     });
     return f1.join() + f2.join();
 });
-System.out.println("result = " + result);
+IO.println("result = " + result);
 ```
 
 ## Feedback

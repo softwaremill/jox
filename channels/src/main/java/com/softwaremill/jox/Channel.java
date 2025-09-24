@@ -224,9 +224,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         return new Channel<>(capacity);
     }
 
-    /**
-     * Creates a new buffered channel, with the default buffer size (16).
-     */
+    /** Creates a new buffered channel, with the default buffer size (16). */
     public static <T> Channel<T> newBufferedDefaultChannel() {
         return new Channel<>(DEFAULT_BUFFER_SIZE);
     }
@@ -256,8 +254,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     /**
      * @return If {@code select} & {@code selectClause} is {@code null}: {@code null} when the value
-     * was sent, or {@link ChannelClosed}, when the channel is closed. Otherwise, might also
-     * return {@link StoredSelectClause}.
+     *     was sent, or {@link ChannelClosed}, when the channel is closed. Otherwise, might also
+     *     return {@link StoredSelectClause}.
      */
     private Object doSend(T value, SelectInstance select, SelectClause<?> selectClause)
             throws InterruptedException {
@@ -336,11 +334,11 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     /**
      * @param segment The segment which stores the cell's state.
-     * @param i       The index within the {@code segment}.
-     * @param s       Global index of the reserved cell.
-     * @param value   The value to send.
+     * @param i The index within the {@code segment}.
+     * @param s Global index of the reserved cell.
+     * @param value The value to send.
      * @return One of {@link SendResult}, or {@link StoredSelectClause} if {@code select} is not
-     * {@code null}.
+     *     {@code null}.
      */
     private Object updateCellSend(
             Segment segment,
@@ -455,8 +453,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     /**
      * @return If {@code select} & {@code selectClause} is {@code null}: the received value, or
-     * {@link ChannelClosed}, when the channel is closed. Otherwise, might also return {@link
-     * StoredSelectClause}.
+     *     {@link ChannelClosed}, when the channel is closed. Otherwise, might also return {@link
+     *     StoredSelectClause}.
      */
     private Object doReceive(SelectInstance select, SelectClause<?> selectClause)
             throws InterruptedException {
@@ -523,12 +521,12 @@ public final class Channel<T> implements Source<T>, Sink<T> {
      * <p>This method might suspend (and be interrupted) only if {@code select} is {@code null}.
      *
      * @param segment The segment which stores the cell's state.
-     * @param i       The index within the {@code segment}.
-     * @param r       Index of the reserved cell.
-     * @param select  The select instance of which this receive is part of, or {@code null} (along
-     *                with {@code selectClause}) if this is a direct receive call.
+     * @param i The index within the {@code segment}.
+     * @param r Index of the reserved cell.
+     * @param select The select instance of which this receive is part of, or {@code null} (along
+     *     with {@code selectClause}) if this is a direct receive call.
      * @return Either a state-result ({@link ReceiveResult}), {@link StoredSelectClause} in case
-     * {@code select} is not {@code null}, or the received value.
+     *     {@code select} is not {@code null}, or the received value.
      */
     private Object updateCellReceive(
             Segment segment, int i, long r, SelectInstance select, SelectClause<?> selectClause)
@@ -1217,9 +1215,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 }
 
-/**
- * Possible return values of {@code Channel#updateCellSend}: one of the enum constants below.
- */
+/** Possible return values of {@code Channel#updateCellSend}: one of the enum constants below. */
 enum SendResult {
     AWAITED,
     BUFFERED,
@@ -1239,9 +1235,7 @@ enum ReceiveResult {
 
 record SelectStored(Segment segment, int i) {}
 
-/**
- * Possible return values of {@code Channel#expandBuffer}: one of the enum constants below
- */
+/** Possible return values of {@code Channel#expandBuffer}: one of the enum constants below */
 enum ExpandBufferResult {
     DONE,
     FAILED,
@@ -1305,7 +1299,7 @@ final class Continuation {
      *
      * @param value Should not be {@code null}.
      * @return {@code true} if the continuation was resumed successfully. {@code false} if it was
-     * interrupted.
+     *     interrupted.
      */
     boolean tryResume(Object value) {
         var result = Continuation.DATA.compareAndSet(this, null, value);
@@ -1316,9 +1310,9 @@ final class Continuation {
     /**
      * Await for the continuation to be resumed.
      *
-     * @param segment   The segment in which the cell is located.
+     * @param segment The segment in which the cell is located.
      * @param cellIndex The index of the cell for which to change the state to interrupted, if
-     *                  interruption happens.
+     *     interruption happens.
      * @return The value with which the continuation was resumed.
      */
     Object await(Segment segment, int cellIndex, boolean isRendezvous) throws InterruptedException {

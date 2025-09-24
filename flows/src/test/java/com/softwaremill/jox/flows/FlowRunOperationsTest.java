@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -12,7 +13,6 @@ import org.junit.jupiter.api.Test;
 
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.Scopes;
 
 public class FlowRunOperationsTest {
 
@@ -43,7 +43,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runToChannel_shouldRun() throws Throwable {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     Flow<Integer> flow = Flows.fromValues(1, 2, 3);
@@ -61,7 +61,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runToChannel_shouldReturnOriginalSourceWhenRunningASourcedBackedFlow() throws Throwable {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     Channel<Integer> channel = Channel.newUnlimitedChannel();
@@ -81,7 +81,7 @@ public class FlowRunOperationsTest {
         ScopedValue.where(Flow.CHANNEL_BUFFER_SIZE, 2)
                 .call(
                         () -> {
-                            Scopes.unsupervised(
+                            supervised(
                                     scope -> {
                                         // given
                                         Flow<Integer> flow = Flows.fromValues(1, 2, 3);
@@ -101,7 +101,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runToChannelWithBufferCapacity_shouldRun() throws Throwable {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     Flow<Integer> flow = Flows.fromValues(1, 2, 3);
@@ -120,7 +120,7 @@ public class FlowRunOperationsTest {
     @Test
     void runToChannelWithBufferCapacity_shouldReturnOriginalSourceWhenRunningASourcedBackedFlow()
             throws Throwable {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     // given
                     Channel<Integer> channel = Channel.newUnlimitedChannel();
@@ -346,7 +346,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runPipeToSink_pipeOneSourceToAnother() throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
                     Channel<Integer> c2 = Channel.newRendezvousChannel();
@@ -365,7 +365,7 @@ public class FlowRunOperationsTest {
 
     @Test
     void runPipeToSink_pipeOneSourceToAnotherWithDonePropagation() throws InterruptedException {
-        Scopes.supervised(
+        supervised(
                 scope -> {
                     Flow<Integer> c1 = Flows.fromValues(1, 2, 3);
                     Channel<Integer> c2 = Channel.newRendezvousChannel();

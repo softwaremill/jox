@@ -5,35 +5,40 @@ import java.util.List;
 import java.util.concurrent.*;
 
 public class TestUtil {
-    public static void scoped(ConsumerWithException<StructuredTaskScope<Object>> f)
+    public static void scoped(ConsumerWithException<VirtualThreadScope> f)
             throws InterruptedException, ExecutionException {
-        try (var scope = new StructuredTaskScope.ShutdownOnFailure()) {
-            // making sure everything runs in a VT
-            scope.fork(
-                    () -> {
-                        f.accept(scope);
-                        return null;
-                    });
-            scope.join().throwIfFailed();
-        }
+        var scope = new VirtualThreadScope();
+        // Run the test logic in a virtual thread
+        var mainTask =
+                Thread.ofVirtual()
+                        .start(
+                                () -> {
+                                    try {
+                                        f.accept(scope);
+                                    } catch (Exception e) {
+                                        scope.completeExceptionally(e);
+                                    }
+                                });
+        mainTask.join();
+        scope.waitForCompletion();
     }
 
-    public static <T> Future<T> fork(StructuredTaskScope<Object> scope, Callable<T> c) {
+    public static <T> Future<T> fork(VirtualThreadScope scope, Callable<T> c) {
         var f = new CompletableFuture<T>();
-        scope.fork(
-                () -> {
-                    try {
-                        f.complete(c.call());
-                    } catch (Exception ex) {
-                        f.completeExceptionally(ex);
-                    }
-                    return null;
-                });
+        Thread.ofVirtual()
+                .start(
+                        () -> {
+                            try {
+                                f.complete(c.call());
+                            } catch (Exception ex) {
+                                f.completeExceptionally(ex);
+                            }
+                        });
+        scope.addThread(f);
         return f;
     }
 
-    public static Fork<Void> forkCancelable(
-            StructuredTaskScope<Object> scope, RunnableWithException c) {
+    public static Fork<Void> forkCancelable(VirtualThreadScope scope, RunnableWithException c) {
         return forkCancelable(
                 scope,
                 () -> {
@@ -42,7 +47,7 @@ public class TestUtil {
                 });
     }
 
-    public static <T> Fork<T> forkCancelable(StructuredTaskScope<Object> scope, Callable<T> c) {
+    public static <T> Fork<T> forkCancelable(VirtualThreadScope scope, Callable<T> c) {
         var f = new CompletableFuture<T>();
         var t =
                 Thread.ofVirtual()
@@ -54,22 +59,7 @@ public class TestUtil {
                                         f.completeExceptionally(ex);
                                     }
                                 });
-        // supervisor
-        scope.fork(
-                () -> {
-                    try {
-                        f.get();
-                    } catch (InterruptedException e) {
-                        t.interrupt();
-                    } catch (ExecutionException e) {
-                        if (!(e.getCause() instanceof InterruptedException)) {
-                            throw e;
-                        } // else ignore, already interrupted
-                    } finally {
-                        t.join();
-                    }
-                    return null;
-                });
+
         return new Fork<>() {
             @Override
             public T get() throws ExecutionException, InterruptedException {
@@ -95,14 +85,49 @@ public class TestUtil {
         };
     }
 
-    public static Future<Void> forkVoid(
-            StructuredTaskScope<Object> scope, RunnableWithException r) {
+    public static Future<Void> forkVoid(VirtualThreadScope scope, RunnableWithException r) {
         return fork(
                 scope,
                 () -> {
                     r.run();
                     return null;
                 });
+    }
+
+    // Simple scope implementation that tracks virtual threads
+    // Once StructuredTaskScope is stabilized, we'll use that
+    public static class VirtualThreadScope {
+        private final List<CompletableFuture<?>> futures = new ArrayList<>();
+        private volatile Exception exception;
+
+        public synchronized void addThread(CompletableFuture<?> future) {
+            futures.add(future);
+        }
+
+        public void completeExceptionally(Exception e) {
+            this.exception = e;
+        }
+
+        public void waitForCompletion() throws InterruptedException, ExecutionException {
+            if (exception != null) {
+                throw new ExecutionException(exception);
+            }
+            // Wait for all futures to complete
+            synchronized (this) {
+                for (CompletableFuture<?> future : futures) {
+                    try {
+                        future.get();
+                    } catch (ExecutionException e) {
+                        if (exception == null) {
+                            exception = (Exception) e.getCause();
+                        }
+                    }
+                }
+            }
+            if (exception != null) {
+                throw new ExecutionException(exception);
+            }
+        }
     }
 
     @FunctionalInterface

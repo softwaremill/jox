@@ -1,7 +1,7 @@
 package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -16,14 +16,13 @@ import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Sink;
 import com.softwaremill.jox.structured.ExternalRunner;
 import com.softwaremill.jox.structured.Scope;
-import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class FromFlowPublisher<T> implements Flow.Publisher<T> {
 
     private final ExternalRunner externalRunner;
     private final FlowStage<T> last;
 
-    FromFlowPublisher(Scope scope, FlowStage<T> last) {
+    FromFlowPublisher(Scope scope, FlowStage<T> last) throws InterruptedException {
         this.externalRunner = scope.externalRunner();
         this.last = last;
     }
@@ -58,7 +57,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
         // (interrupts) any background forks
         // using an unsafe scope for efficiency, we only ever start a single fork where all errors
         // are propagated
-        unsupervised(
+        supervised(
                 scope -> {
                     // processing state: cancelled flag, error sent flag, demand
                     final AtomicBoolean cancelled = new AtomicBoolean(false);
@@ -176,11 +175,9 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
                 });
     }
 
-    private void forkPropagate(
-            UnsupervisedScope unsupervisedScope,
-            Sink<?> propagateExceptionsTo,
-            Callable<Void> runnable) {
-        unsupervisedScope.forkUnsupervised(
+    private void forkPropagate(Scope scope, Sink<?> propagateExceptionsTo, Callable<Void> runnable)
+            throws InterruptedException {
+        scope.forkUnsupervised(
                 () -> {
                     try {
                         runnable.call();

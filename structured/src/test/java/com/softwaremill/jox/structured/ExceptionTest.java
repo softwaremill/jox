@@ -23,7 +23,7 @@ public class ExceptionTest {
     void testUnsupervisedThrowsExceptionThrownByJoinedFork() throws InterruptedException {
         Trail trail = new Trail();
         try {
-            Scopes.unsupervised(
+            Scopes.supervised(
                     scope -> {
                         scope.forkUnsupervised(
                                         () -> {

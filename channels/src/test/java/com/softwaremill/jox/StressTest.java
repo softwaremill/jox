@@ -187,7 +187,7 @@ public class StressTest {
     //
 
     private record StressTestThreadData(
-            StructuredTaskScope<Object> scope,
+            TestUtil.VirtualThreadScope scope,
             List<Channel<String>> chs,
             Random random,
             int threadId,

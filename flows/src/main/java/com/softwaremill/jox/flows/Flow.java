@@ -4,7 +4,6 @@ import static com.softwaremill.jox.Select.defaultClause;
 import static com.softwaremill.jox.Select.selectOrClosed;
 import static com.softwaremill.jox.flows.Flows.usingEmit;
 import static com.softwaremill.jox.structured.Scopes.supervised;
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
 import static java.lang.Thread.sleep;
 
 import java.io.IOException;
@@ -96,7 +95,7 @@ public class Flow<T> {
      *
      * @param scope Required for creating async forks responsible for writing to channel
      */
-    public Source<T> runToChannel(UnsupervisedScope scope) {
+    public Source<T> runToChannel(Scope scope) throws InterruptedException {
         return runToChannelInternal(scope, Flow::newChannelWithBufferSizeFromScope);
     }
 
@@ -111,12 +110,12 @@ public class Flow<T> {
      * @param scope Required for creating async forks responsible for writing to channel
      * @param bufferCapacity Specifies buffer capacity of created channel
      */
-    public Source<T> runToChannel(UnsupervisedScope scope, int bufferCapacity) {
+    public Source<T> runToChannel(Scope scope, int bufferCapacity) throws InterruptedException {
         return runToChannelInternal(scope, () -> Channel.newBufferedChannel(bufferCapacity));
     }
 
-    private Source<T> runToChannelInternal(
-            UnsupervisedScope scope, Supplier<Channel<T>> channelProvider) {
+    private Source<T> runToChannelInternal(Scope scope, Supplier<Channel<T>> channelProvider)
+            throws InterruptedException {
         if (last instanceof SourceBackedFlowStage<T>(Source<T> source)) {
             return source;
         } else {
@@ -272,7 +271,7 @@ public class Flow<T> {
         return usingEmit(
                 emit -> {
                     Channel<T> ch = Channel.newBufferedChannel(bufferCapacity);
-                    unsupervised(
+                    supervised(
                             scope -> {
                                 runLastToChannelAsync(scope, ch);
                                 FlowEmit.channelToEmit(ch, emit);
@@ -560,7 +559,7 @@ public class Flow<T> {
     public <U> Flow<Map.Entry<T, U>> zip(Flow<U> other) {
         return Flows.usingEmit(
                 emit -> {
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 Source<T> s1 = this.runToChannel(scope);
                                 Source<U> s2 = other.runToChannel(scope);
@@ -606,7 +605,7 @@ public class Flow<T> {
     public <U> Flow<Map.Entry<T, U>> zipAll(Flow<U> other, T thisDefault, U otherDefault) {
         return Flows.usingEmit(
                 emit -> {
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 Source<T> s1 = this.runToChannel(scope);
                                 Source<U> s2 = other.runToChannel(scope);
@@ -717,7 +716,7 @@ public class Flow<T> {
                             }
                             final class ChildDone {}
 
-                            unsupervised(
+                            supervised(
                                     scope -> {
                                         Channel<U> childOutputChannel =
                                                 newChannelWithBufferSizeFromScope();
@@ -957,7 +956,7 @@ public class Flow<T> {
 
         return usingEmit(
                 emit -> {
-                    unsupervised(
+                    supervised(
                             scope -> {
                                 Source<T> flowSource = runToChannel(scope);
                                 Channel<List<T>> outputChannel =
@@ -1072,7 +1071,8 @@ public class Flow<T> {
     }
 
     private CancellableFork<GroupingTimeout> forkTimeout(
-            UnsupervisedScope scope, Channel<GroupingTimeout> timerChannel, Duration duration) {
+            Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
+            throws InterruptedException {
         return scope.forkCancellable(
                 () -> {
                     sleep(duration);
@@ -1330,7 +1330,7 @@ public class Flow<T> {
     public Flow<T> merge(Flow<T> other, boolean propagateDoneLeft, boolean propagateDoneRight) {
         return usingEmit(
                 emit -> {
-                    unsupervised(
+                    supervised(
                             scope -> {
                                 Source<T> c1 = this.runToChannel(scope);
                                 Source<T> c2 = other.runToChannel(scope);
@@ -1491,7 +1491,7 @@ public class Flow<T> {
                     // that is without closing the main scope; any error management must be done in
                     // the forks, as the scope is
                     // unsupervised
-                    unsupervised(
+                    supervised(
                             scope -> {
                                 // a fork which runs the `last` pipeline, and for each emitted
                                 // element creates a fork
@@ -1589,7 +1589,7 @@ public class Flow<T> {
                 emit -> {
                     Channel<U> results = newChannelWithBufferSizeFromScope();
                     Semaphore s = new Semaphore(parallelism);
-                    unsupervised(
+                    supervised(
                             unsupervisedScope -> { // the outer scope, used for the fork which runs
                                 // the `last` pipeline
                                 forkPropagate(
@@ -1681,10 +1681,13 @@ public class Flow<T> {
     }
 
     /**
-     * Breaks the input into chunks where the delimiter matches the predicate. The delimiter does not
-     * appear in the output. Two adjacent delimiters in the input result in an empty chunk in the output.
+     * Breaks the input into chunks where the delimiter matches the predicate. The delimiter does
+     * not appear in the output. Two adjacent delimiters in the input result in an empty chunk in
+     * the output.
      *
-     * For example:
+     * <p>For example:
+     *
+     * <p>
      *
      * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
@@ -1717,11 +1720,13 @@ public class Flow<T> {
     }
 
     /**
-     * Breaks the input into chunks delimited by the given sequence of elements. The delimiter sequence
-     * does not appear in the output. Two adjacent delimiter sequences in the input result in an empty
-     * chunk in the output.
+     * Breaks the input into chunks delimited by the given sequence of elements. The delimiter
+     * sequence does not appear in the output. Two adjacent delimiter sequences in the input result
+     * in an empty chunk in the output.
      *
-     * For example:
+     * <p>For example:
+     *
+     * <p>
      *
      * {@snippet :
      * Flows.fromValues(1, 2, 0, 0, 3, 4, 0, 0, 5).splitOn(List.of(0, 0)).runToList()
@@ -1729,7 +1734,7 @@ public class Flow<T> {
      * }
      *
      * @param delimiter A list of elements that serves as a delimiter. If empty, the entire input is
-     *                 returned as a single chunk.
+     *     returned as a single chunk.
      * @return A flow emitting lists of elements split by the delimiter sequence.
      */
     public <U> Flow<List<T>> splitOn(List<U> delimiter) {
@@ -1880,7 +1885,7 @@ public class Flow<T> {
      *
      * <p>The returned publisher implements the JDK 9+ {@code Flow.Publisher} API.
      */
-    public Publisher<T> toPublisher(Scope scope) {
+    public Publisher<T> toPublisher(Scope scope) throws InterruptedException {
         return new FromFlowPublisher<>(scope, last);
     }
 
@@ -1996,7 +2001,7 @@ public class Flow<T> {
          * <p>Buffer capacity can be set via scoped value {@link Flow#CHANNEL_BUFFER_SIZE}. If not
          * specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
          */
-        public InputStream runToInputStream(UnsupervisedScope scope) {
+        public InputStream runToInputStream(Scope scope) throws InterruptedException {
             Source<ByteChunk> ch = this.runToChannel(scope);
 
             return new InputStream() {
@@ -2119,9 +2124,8 @@ public class Flow<T> {
     // endregion
 
     private void forkPropagate(
-            UnsupervisedScope unsupervisedScope,
-            Sink<?> propagateExceptionsTo,
-            Callable<Void> runnable) {
+            Scope unsupervisedScope, Sink<?> propagateExceptionsTo, Callable<Void> runnable)
+            throws InterruptedException {
         unsupervisedScope.forkUnsupervised(
                 () -> {
                     try {
@@ -2134,11 +2138,8 @@ public class Flow<T> {
     }
 
     private <U> Fork<Optional<U>> forkMapping(
-            UnsupervisedScope scope,
-            ThrowingFunction<T, U> f,
-            Semaphore s,
-            T value,
-            Sink<U> results) {
+            Scope scope, ThrowingFunction<T, U> f, Semaphore s, T value, Sink<U> results)
+            throws InterruptedException {
         return scope.forkUnsupervised(
                 () -> {
                     try {
@@ -2154,7 +2155,8 @@ public class Flow<T> {
                 });
     }
 
-    private void runLastToChannelAsync(UnsupervisedScope scope, Channel<T> channel) {
+    private void runLastToChannelAsync(Scope scope, Channel<T> channel)
+            throws InterruptedException {
         scope.forkUnsupervised(
                 () -> {
                     try {

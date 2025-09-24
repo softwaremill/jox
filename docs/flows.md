@@ -3,7 +3,7 @@
 Finite & infinite streaming using flows, with reactive streams compatibility, (blocking) I/O integration, and a
 high-level, "functional" API.
 
-Requires the current LTS release of Java - JDK 21 (won't work with newer versions).
+Requires Java 25 (current LTS).
 
 Javadocs: [https://javadoc.io](https://javadoc.io/doc/com.softwaremill.jox/flows).
 
@@ -43,13 +43,10 @@ import java.time.Duration;
 
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) {
-        Flows.fromValues(1, 2, 3); // a finite flow
-        Flows.tick(Duration.ofSeconds(1), "x"); // an infinite flow emitting "x" every second
-        Flows.iterate(0, i -> i + 1); // an infinite flow iterating from 0
-    }
+void main(String[] args) {
+    Flows.fromValues(1, 2, 3); // a finite flow
+    Flows.tick(Duration.ofSeconds(1), "x"); // an infinite flow emitting "x" every second
+    Flows.iterate(0, i -> i + 1); // an infinite flow iterating from 0
 }
 ```
 
@@ -59,29 +56,24 @@ elements are emitted and any effects that are part of the flow's stages happen.
 Flows can also be created using `Channel` `Source`s:
 
 ```java
-import java.util.concurrent.ExecutionException;
-
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.flows.Flows;
 import com.softwaremill.jox.structured.Scopes;
 
-public class Demo {
-
-    public static void main(String[] args) throws ExecutionException, InterruptedException {
-        Channel<Integer> ch = Channel.<Integer>newBufferedDefaultChannel();
-        Scopes.supervised(scope -> {
-            scope.fork(() -> {
-                ch.send(1);
-                ch.send(15);
-                ch.send(-2);
-                ch.done();
-                return null;
-            });
-
-            Flows.fromSource(ch); // TODO: transform the flow further & run
+void main() throws InterruptedException {
+    Channel<Integer> ch = Channel.newBufferedDefaultChannel();
+    Scopes.supervised(scope -> {
+        scope.fork(() -> {
+            ch.send(1);
+            ch.send(15);
+            ch.send(-2);
+            ch.done();
             return null;
         });
-    }
+
+        Flows.fromSource(ch); // TODO: transform the flow further & run
+        return null;
+    });
 }
 ```
 
@@ -90,17 +82,14 @@ Finally, flows can be created by providing arbitrary element-emitting logic:
 ```java
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) {
-        Flows.usingEmit(emit -> {
-            emit.apply(21);
-            for (int i = 0; i < 5; i++) {
-                emit.apply(i);
-            }
-            emit.apply(37);
-        });
-    }
+void main() {
+    Flows.usingEmit(emit -> {
+        emit.apply(21);
+        for (int i = 0; i < 5; i++) {
+            emit.apply(i);
+        }
+        emit.apply(37);
+    });
 }
 ```
 
@@ -123,20 +112,15 @@ extended pipeline. As before, no elements are emitted or transformed until the f
 number of pre-defined transformation stages:
 
 ```java
-import java.util.Map;
-
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) {
-        Flows.fromValues(1, 2, 3, 5, 6)
-                .map(i -> i * 2)
-                .filter(i -> i % 2 == 0)
-                .take(3)
-                .zip(Flows.repeat("a number"))
-                .interleave(Flows.repeat(Map.entry(0, "also a number")), 1, false);
-    }
+void main() {
+    Flows.fromValues(1, 2, 3, 5, 6)
+            .map(i -> i * 2)
+            .filter(i -> i % 2 == 0)
+            .take(3)
+            .zip(Flows.repeat("a number"))
+            .interleave(Flows.repeat(Map.entry(0, "also a number")), 1, false);
 }
 ```
 
@@ -148,17 +132,12 @@ You can also define arbitrary element-emitting logic, using each incoming elemen
 Flows have to be run, for any processing to happen. This can be done with one of the `.run...` methods. For example:
 
 ```java
-import java.time.Duration;
-
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) throws Exception {
-        Flows.fromValues(1, 2, 3).runToList(); // List(1, 2, 3)
-        Flows.fromValues(1, 2, 3).runForeach(System.out::println);
-        Flows.tick(Duration.ofSeconds(1), "x").runDrain(); // never finishes
-    }
+void main() throws Exception {
+    Flows.fromValues(1, 2, 3).runToList(); // List(1, 2, 3)
+    Flows.fromValues(1, 2, 3).runForeach(System.out::println);
+    Flows.tick(Duration.ofSeconds(1), "x").runDrain(); // never finishes
 }
 ```
 
@@ -168,14 +147,11 @@ below), the entire processing happens on the calling thread. For example such a 
 ```java
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) throws Exception {
-        Flows.fromValues(1, 2, 3, 5, 6)
-                .map(i -> i * 2)
-                .filter(i -> i % 2 == 0)
-                .runToList();
-    }
+void main() throws Exception {
+    Flows.fromValues(1, 2, 3, 5, 6)
+            .map(i -> i * 2)
+            .filter(i -> i % 2 == 0)
+            .runToList();
 }
 ```
 
@@ -205,24 +181,19 @@ producer should buffer up elements.
 Flows can be created from channels, and run to channels. For example:
 
 ```java
-import java.util.Arrays;
-
 import com.softwaremill.jox.Channel;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.flows.Flows;
 import com.softwaremill.jox.structured.Scopes;
 
-public class Demo {
-
-    public static void main(String[] args) throws Exception {
-        Source<String> ch = getSource(args); // provide a source
-        Scopes.supervised(scope -> {
-            Source<String> output = ScopedValue.getWhere(Channel.BUFFER_SIZE, 5, () -> Flows.fromSource(ch)
-                    .mapConcat(v -> Arrays.asList(v.split(" ")))
-                    .filter(v -> v.startsWith("example"))
-                    .runToChannel(scope));
-        });
-    }
+void main(String[] args) throws Exception {
+    Source<String> ch = getSource(args); // provide a source
+    Scopes.supervised(scope -> {
+        Source<String> output = ScopedValue.getWhere(Channel.BUFFER_SIZE, 5, () -> Flows.fromSource(ch)
+                .mapConcat(v -> Arrays.asList(v.split(" ")))
+                .filter(v -> v.startsWith("example"))
+                .runToChannel(scope));
+    });
 }
 ```
 
@@ -247,7 +218,7 @@ or transform into `ByteFlow`. It can be created via `Flows.fromByteArray` or `Fl
 
 ### I/O Operations
 
-* `runToInputStream(UnsupervisedScope scope)` runs given flow asynchronously into returned `InputStream`
+* `runToInputStream(Scope scope)` runs given flow asynchronously into returned `InputStream`
 * `runToOutputStream(OutputStream outputStream)` runs given flow into provided `OutputStream`
 * `runToFile(Path path)` runs given flow into file. If file does not exist, it's created.
 
@@ -261,13 +232,10 @@ using the `.tap` method:
 ```java
 import com.softwaremill.jox.flows.Flows;
 
-public class Demo {
-
-    public static void main(String[] args) throws Exception {
-        Flows.fromValues(1, 2, 3)
-                .tap(n -> System.out.printf("Received: %d%n", n))
-                .runToList();
-    }
+void main() throws Exception {
+    Flows.fromValues(1, 2, 3)
+            .tap(n -> System.out.printf("Received: %d%n", n))
+            .runToList();
 }
 ```
 

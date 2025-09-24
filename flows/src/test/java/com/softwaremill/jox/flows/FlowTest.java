@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import com.softwaremill.jox.ChannelError;
 import com.softwaremill.jox.Source;
 import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import com.softwaremill.jox.structured.Scopes;
 
 class FlowTest {
 
@@ -581,7 +581,7 @@ class FlowTest {
         Flow<Integer> flow = Flows.<Integer>failed(failure).orElse(Flows.fromValues(2, 3));
 
         // when & then
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     Source<Integer> source = flow.runToChannel(scope);
                     assertEquals(failure, ((ChannelError) source.receiveOrClosed()).cause());

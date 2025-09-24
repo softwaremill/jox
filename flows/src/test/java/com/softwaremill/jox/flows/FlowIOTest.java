@@ -1,5 +1,6 @@
 package com.softwaremill.jox.flows;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.io.ByteArrayOutputStream;
@@ -19,13 +20,11 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
-import com.softwaremill.jox.structured.Scopes;
-
 public class FlowIOTest {
 
     @Test
     void returnEmptyInputStreamForEmptySource() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     Flow.ByteFlow source = Flows.<byte[]>empty().toByteFlow();
                     try (InputStream stream = source.runToInputStream(scope)) {
@@ -37,7 +36,7 @@ public class FlowIOTest {
 
     @Test
     void returnInputStreamForSimpleSource() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
                     try (InputStream stream = source.runToInputStream(scope)) {
@@ -49,7 +48,7 @@ public class FlowIOTest {
 
     @Test
     void correctlyTrackAvailableBytes() throws InterruptedException {
-        Scopes.unsupervised(
+        supervised(
                 scope -> {
                     var source = Flows.fromByteArrays("chunk1".getBytes(), "chunk2".getBytes());
                     try (InputStream stream = source.runToInputStream(scope)) {

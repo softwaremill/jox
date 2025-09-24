@@ -1,6 +1,7 @@
 package com.softwaremill.jox.flows;
 
 import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.util.HashMap;
 import java.util.List;
@@ -8,9 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import com.softwaremill.jox.*;
-import com.softwaremill.jox.structured.Scopes;
+import com.softwaremill.jox.structured.Scope;
 import com.softwaremill.jox.structured.ThrowingFunction;
-import com.softwaremill.jox.structured.UnsupervisedScope;
 
 class GroupByImpl<T, V, U> {
 
@@ -185,7 +185,7 @@ class GroupByImpl<T, V, U> {
     public Flow<U> run() {
         return Flows.usingEmit(
                 emit -> {
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 // Channel where all elements emitted by child flows will be sent;
                                 // we use such a collective channel instead of
@@ -309,10 +309,7 @@ class GroupByImpl<T, V, U> {
 
     // Running a pending child flow, after another has completed as done
     private GroupByState runChildIfPending(
-            GroupByState state,
-            Channel<ChildDone> childDone,
-            Channel<U> childOutput,
-            UnsupervisedScope scope)
+            GroupByState state, Channel<ChildDone> childDone, Channel<U> childOutput, Scope scope)
             throws InterruptedException {
         var s = state;
         if (s.pendingFromParent.isPresent()) {
@@ -337,7 +334,7 @@ class GroupByImpl<T, V, U> {
             T t,
             V v,
             long counter,
-            UnsupervisedScope scope)
+            Scope scope)
             throws InterruptedException {
         var s = state.withChildCounter(v, counter);
 

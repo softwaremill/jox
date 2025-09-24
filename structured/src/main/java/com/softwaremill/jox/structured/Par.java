@@ -16,7 +16,10 @@ public class Par {
     public static <T> List<T> par(List<Callable<T>> fs) throws InterruptedException {
         return supervised(
                 scope -> {
-                    var forks = fs.stream().map(f -> scope.fork(f)).toList();
+                    var forks = new ArrayList<Fork<T>>();
+                    for (Callable<T> f : fs) {
+                        forks.add(scope.fork(f));
+                    }
                     var results = new ArrayList<T>();
                     for (Fork<T> fork : forks) {
                         results.add(fork.join());
@@ -36,22 +39,21 @@ public class Par {
         return supervised(
                 scope -> {
                     var s = new Semaphore(parallelism);
-                    var forks =
-                            fs.stream()
-                                    .map(
-                                            f ->
-                                                    scope.fork(
-                                                            () -> {
-                                                                s.acquire();
-                                                                var r = f.call();
-                                                                // no try-finally as there's no
-                                                                // point in releasing in case of an
-                                                                // exception, as any newly started
-                                                                // forks will be interrupted
-                                                                s.release();
-                                                                return r;
-                                                            }))
-                                    .toList();
+                    var forks = new ArrayList<Fork<T>>();
+                    for (Callable<T> f : fs) {
+                        forks.add(
+                                scope.fork(
+                                        () -> {
+                                            s.acquire();
+                                            var r = f.call();
+                                            // no try-finally as there's no
+                                            // point in releasing in case of an
+                                            // exception, as any newly started
+                                            // forks will be interrupted
+                                            s.release();
+                                            return r;
+                                        }));
+                    }
                     var results = new ArrayList<T>();
                     for (Fork<T> fork : forks) {
                         results.add(fork.join());

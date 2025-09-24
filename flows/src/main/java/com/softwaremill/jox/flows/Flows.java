@@ -1,6 +1,6 @@
 package com.softwaremill.jox.flows;
 
-import static com.softwaremill.jox.structured.Scopes.unsupervised;
+import static com.softwaremill.jox.structured.Scopes.supervised;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,7 +24,6 @@ import java.util.function.Supplier;
 import com.softwaremill.jox.*;
 import com.softwaremill.jox.flows.Flow.ByteFlow;
 import com.softwaremill.jox.structured.Fork;
-import com.softwaremill.jox.structured.Scopes;
 import com.softwaremill.jox.structured.ThrowingConsumer;
 
 public final class Flows {
@@ -338,7 +337,7 @@ public final class Flows {
         return usingEmit(
                 emit -> {
                     // using an unsafe scope for efficiency
-                    Scopes.unsupervised(
+                    supervised(
                             scope -> {
                                 Channel<T> channel = Flow.newChannelWithBufferSizeFromScope();
                                 int capacity =
@@ -486,19 +485,15 @@ public final class Flows {
             return usingEmit(
                     emit -> {
                         Channel<T> results = Channel.newBufferedChannel(bufferCapacity);
-                        unsupervised(
+                        supervised(
                                 scope -> {
                                     scope.forkUnsupervised(
                                             () -> {
                                                 List<Source<T>> availableSources =
-                                                        new ArrayList<>(
-                                                                flows.stream()
-                                                                        .map(
-                                                                                flow ->
-                                                                                        flow
-                                                                                                .runToChannel(
-                                                                                                        scope))
-                                                                        .toList());
+                                                        new ArrayList<>();
+                                                for (Flow<T> flow : flows) {
+                                                    availableSources.add(flow.runToChannel(scope));
+                                                }
                                                 int currentSourceIndex = 0;
                                                 int elementsRead = 0;
 
@@ -508,7 +503,7 @@ public final class Flows {
                                                                     .get(currentSourceIndex)
                                                                     .receiveOrClosed();
                                                     if (received instanceof ChannelDone) {
-                                                        ///  channel is done, remove it from the
+                                                        //  channel is done, remove it from the
                                                         // list of available sources
                                                         availableSources.remove(currentSourceIndex);
                                                         currentSourceIndex =
