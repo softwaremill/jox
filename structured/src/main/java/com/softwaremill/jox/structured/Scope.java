@@ -43,9 +43,13 @@ public class Scope {
                             case RunFork<?> r -> rawScope.fork(r.f());
                             case ChannelDone _ -> {
                                 // if no exceptions, the main f-fork must be done by now
-                                return mainBodyFork.join();
+                                try {
+                                    return mainBodyFork.join();
+                                } catch (ExecutionException e) {
+                                    throw new JoxScopeExecutionException(e.getCause());
+                                }
                             }
-                            case ChannelError e -> throw new ExecutionException(e.cause());
+                            case ChannelError e -> throw new JoxScopeExecutionException(e.cause());
                             default -> throw new IllegalStateException();
                         }
                     }
@@ -61,12 +65,6 @@ public class Scope {
             // all forks are guaranteed to have finished: some might have ended up throwing
             // exceptions (InterruptedException or others), but only the first one is propagated
             // below. That's why we add all the other exceptions as suppressed.
-        } catch (ExecutionException e) {
-            // unwrapping execution exception from CompletableFutures to custom exception
-            JoxScopeExecutionException joxScopeExecutionException =
-                    new JoxScopeExecutionException(e.getCause());
-            supervisor.addSuppressedErrors(joxScopeExecutionException);
-            throw joxScopeExecutionException;
         } catch (Throwable e) {
             supervisor.addSuppressedErrors(e);
             throw e;
