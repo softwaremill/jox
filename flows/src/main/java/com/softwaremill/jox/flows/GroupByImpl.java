@@ -241,7 +241,8 @@ class GroupByImpl<T, V, U> {
                                             assert state.parentDone;
                                             state = doCompleteAll(state);
                                         }
-                                        case ChannelError channelError -> throw channelError.toException();
+                                        case ChannelError channelError ->
+                                                throw channelError.toException();
                                         case Object o -> {
                                             // for some reason compiler shows error when using
                                             // instanceof / switch pattern matching
@@ -284,14 +285,14 @@ class GroupByImpl<T, V, U> {
                                                                 childDone.v)) {
                                                             throw new IllegalStateException(
                                                                     "Invalid usage of child flows:"
-                                                                            + " child flow was"
-                                                                            + " completed as done by"
-                                                                            + " user code (in"
-                                                                            + " childFlowTransform),"
-                                                                            + " while this is not"
-                                                                            + " allowed (see"
-                                                                            + " documentation for"
-                                                                            + " details)");
+                                                                        + " child flow was"
+                                                                        + " completed as done by"
+                                                                        + " user code (in"
+                                                                        + " childFlowTransform),"
+                                                                        + " while this is not"
+                                                                        + " allowed (see"
+                                                                        + " documentation for"
+                                                                        + " details)");
                                                         }
 
                                                         state =
