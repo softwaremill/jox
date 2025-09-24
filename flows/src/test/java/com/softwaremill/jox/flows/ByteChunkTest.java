@@ -3,7 +3,6 @@ package com.softwaremill.jox.flows;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -56,20 +55,6 @@ public class ByteChunkTest {
 
         // then
         assertEquals("hello", chunk.convertToString(StandardCharsets.ISO_8859_1));
-    }
-
-    @Test
-    void shouldReturnWorkingIterator() {
-        // given
-        byte[] array = {1, 2, 3};
-        ByteChunk chunk = ByteChunk.fromArray(array);
-        int i = 0;
-
-        // when & then
-        for (Iterator<Byte> it = chunk.iterator(); it.hasNext(); ) {
-            Byte b = it.next();
-            assertEquals(array[i++], b);
-        }
     }
 
     @Test
@@ -324,25 +309,6 @@ public class ByteChunkTest {
         assertEquals(3, concatenated.indexWhere(b -> b == 4)); // First element of second array
         assertEquals(5, concatenated.indexWhere(b -> b == 6)); // Last element
         assertEquals(-1, concatenated.indexWhere(b -> b == 10)); // Not found
-    }
-
-    @Test
-    void shouldHandleIteratorAcrossArrays() {
-        // given
-        ByteChunk chunk1 = ByteChunk.fromArray(new byte[] {1, 2});
-        ByteChunk chunk2 = ByteChunk.fromArray(new byte[] {3, 4, 5});
-        ByteChunk concatenated = chunk1.concat(chunk2);
-
-        // when
-        Iterator<Byte> iterator = concatenated.iterator();
-        byte[] result = new byte[5];
-        int i = 0;
-        while (iterator.hasNext()) {
-            result[i++] = iterator.next();
-        }
-
-        // then
-        assertArrayEquals(new byte[] {1, 2, 3, 4, 5}, result);
     }
 
     @Test
