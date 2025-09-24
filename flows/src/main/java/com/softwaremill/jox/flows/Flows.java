@@ -566,6 +566,15 @@ public final class Flows {
     }
 
     /**
+     * Converts a {@link java.io.InputStream} into {@link ByteFlow} using the default chunk size.
+     *
+     * @param is an `InputStream` to read bytes from.
+     */
+    public static ByteFlow fromInputStream(InputStream is) {
+        return fromInputStream(is, 8192);
+    }
+
+    /**
      * Converts a {@link java.io.InputStream} into {@link ByteFlow}.
      *
      * @param is an `InputStream` to read bytes from.
@@ -590,6 +599,15 @@ public final class Flows {
                             }
                         })
                 .toByteFlow();
+    }
+
+    /**
+     * Creates a {@link ByteFlow} read from a file using the default chunk size.
+     *
+     * @param path path the file to read from.
+     */
+    public static ByteFlow fromFile(Path path) {
+        return fromFile(path, 8192);
     }
 
     /**
