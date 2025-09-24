@@ -38,20 +38,19 @@ public class Scope {
                 try {
                     var mainBodyFork = forkUser(() -> f.run(this));
 
-                    var loop = true;
-                    while (loop) {
+                    while (true) {
                         switch (supervisor.getCommands().receiveOrClosed()) {
                             case RunFork<?> r -> rawScope.fork(r.f());
-                            case ChannelDone _, ChannelError _ -> loop = false;
+                            case ChannelDone _ -> {
+                                // if no exceptions, the main f-fork must be done by now
+                                return mainBodyFork.join();
+                            }
+                            case ChannelError e -> throw new ExecutionException(e.cause());
                             default -> throw new IllegalStateException();
                         }
                     }
-
-                    // might throw if any supervised fork threw
-                    supervisor.join();
-                    // if no exceptions, the main f-fork must be done by now
-                    return mainBodyFork.join();
                 } finally {
+                    // there might be non-user forks still running, we have to cancel them
                     cancelAndJoinRawScope();
                 }
                 // join might have been interrupted
@@ -136,7 +135,7 @@ public class Scope {
      */
     public <T> Fork<T> forkUser(Callable<T> f) throws InterruptedException {
         var result = new CompletableFuture<T>();
-        supervisor.forkStarts();
+        supervisor.forkUserStarts();
         supervisor
                 .getCommands()
                 .send(
@@ -144,7 +143,7 @@ public class Scope {
                                 () -> {
                                     try {
                                         result.complete(f.call());
-                                        supervisor.forkSuccess();
+                                        supervisor.forkUserSuccess();
                                     } catch (Throwable e) {
                                         if (!supervisor.forkException(e)) {
                                             result.completeExceptionally(e);

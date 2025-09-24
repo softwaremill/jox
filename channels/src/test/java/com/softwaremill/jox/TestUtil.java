@@ -146,9 +146,7 @@ public class TestUtil {
         T get(long timeout, TimeUnit unit)
                 throws ExecutionException, InterruptedException, TimeoutException;
 
-        /**
-         * Either an exception, or T. Waits for the fork to complete.
-         */
+        /** Either an exception, or T. Waits for the fork to complete. */
         Object cancel() throws InterruptedException, ExecutionException;
     }
 

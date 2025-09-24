@@ -4,23 +4,23 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.softwaremill.jox.Channel;
 
 class Supervisor {
-    private final AtomicInteger running = new AtomicInteger(0);
+    private final AtomicInteger runningUserForks = new AtomicInteger(0);
+    // used a single-complete cell to record the first exception (or success)
     private final CompletableFuture<Object> result = new CompletableFuture<>();
     private final Set<Throwable> otherExceptions = ConcurrentHashMap.newKeySet();
     private final Channel<SupervisorCommand> commands = Channel.newBufferedDefaultChannel();
 
-    void forkStarts() {
-        running.incrementAndGet();
+    void forkUserStarts() {
+        runningUserForks.incrementAndGet();
     }
 
-    void forkSuccess() {
-        int v = running.decrementAndGet();
+    void forkUserSuccess() {
+        int v = runningUserForks.decrementAndGet();
         if (v == 0) {
             result.complete(null);
             commands.done();
@@ -34,10 +34,6 @@ class Supervisor {
             commands.error(e);
         }
         return true;
-    }
-
-    void join() throws ExecutionException, InterruptedException {
-        result.get();
     }
 
     void addSuppressedErrors(Throwable e) {
