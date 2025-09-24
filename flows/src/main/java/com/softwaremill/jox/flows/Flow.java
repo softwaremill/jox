@@ -955,135 +955,124 @@ public class Flow<T> {
             throw new IllegalArgumentException("requirement failed: duration must be > 0");
 
         return usingEmit(
-                emit -> {
-                    supervised(
-                            scope -> {
-                                Source<T> flowSource = runToChannel(scope);
-                                Channel<List<T>> outputChannel =
-                                        newChannelWithBufferSizeFromScope();
-                                Channel<GroupingTimeout> timerChannel =
-                                        newChannelWithBufferSizeFromScope();
-
-                                forkPropagate(
-                                        scope,
-                                        outputChannel,
-                                        () -> {
-                                            List<T> buffer = new ArrayList<>();
-                                            final AtomicLong accumulatedCost = new AtomicLong(0);
-
-                                            CancellableFork<GroupingTimeout> timeoutFork =
-                                                    forkTimeout(scope, timerChannel, duration);
-
-                                            Callable<CancellableFork<Void>>
-                                                    sendBufferAndCleanupCost =
-                                                            () -> {
-                                                                outputChannel.send(
-                                                                        new ArrayList<>(buffer));
-                                                                buffer.clear();
-                                                                accumulatedCost.set(0);
-                                                                return null;
-                                                            };
-
-                                            boolean shouldRun = true;
-                                            while (shouldRun) {
-                                                shouldRun =
-                                                        switch (selectOrClosed(
-                                                                flowSource.receiveClause(),
-                                                                timerChannel.receiveClause())) {
-                                                            case ChannelDone _:
-                                                                // source is done, emit the buffer
-                                                                // and finish
-                                                                if (timeoutFork != null)
-                                                                    timeoutFork.cancelNow();
-                                                                if (!buffer.isEmpty())
-                                                                    outputChannel.send(buffer);
-                                                                outputChannel.done();
-                                                                yield false;
-                                                            case ChannelError(
-                                                                    Throwable cause,
-                                                                    Channel<?> _):
-                                                                // source returned error, propagate
-                                                                // it and finish
-                                                                if (timeoutFork != null)
-                                                                    timeoutFork.cancelNow();
-                                                                outputChannel.error(cause);
-                                                                yield false;
-                                                            case GroupingTimeout _:
-                                                                timeoutFork =
-                                                                        null; // enter 'timed out
-                                                                // state', may stay in
-                                                                // this state if
-                                                                // buffer is empty
-                                                                if (!buffer.isEmpty()) {
-                                                                    sendBufferAndCleanupCost.call();
-                                                                    // cancel existing timeout and
-                                                                    // start a new one
-                                                                    timeoutFork =
-                                                                            forkTimeout(
-                                                                                    scope,
-                                                                                    timerChannel,
-                                                                                    duration);
-                                                                }
-                                                                yield true;
-                                                            case Object t:
-                                                                buffer.add((T) t);
-                                                                try {
-                                                                    long cost =
-                                                                            accumulatedCost
-                                                                                    .updateAndGet(
-                                                                                            v ->
-                                                                                                    v
-                                                                                                            + costFn
-                                                                                                                    .apply(
-                                                                                                                            (T)
-                                                                                                                                    t));
-                                                                    if (timeoutFork == null
-                                                                            || cost >= minWeight) {
-                                                                        // timeout passed when
-                                                                        // buffer was empty or
-                                                                        // buffer full
-                                                                        sendBufferAndCleanupCost
-                                                                                .call();
-                                                                        // cancel existing timeout
-                                                                        // and start a new one
-                                                                        if (timeoutFork != null)
-                                                                            timeoutFork.cancelNow();
-                                                                        timeoutFork =
-                                                                                forkTimeout(
-                                                                                        scope,
-                                                                                        timerChannel,
-                                                                                        duration);
-                                                                    }
-                                                                    yield true;
-                                                                } catch (Exception e) {
-                                                                    if (timeoutFork != null)
-                                                                        timeoutFork.cancelNow();
-                                                                    throw e;
-                                                                }
-                                                        };
-                                            }
-                                            return null;
-                                        });
-                                FlowEmit.channelToEmit(outputChannel, emit);
-                                return null;
-                            });
-                });
+                emit ->
+                        supervised(
+                                scope ->
+                                        groupedWeightedWithinImpl(
+                                                scope, minWeight, duration, costFn, emit)));
     }
 
-    private CancellableFork<GroupingTimeout> forkTimeout(
-            Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
-            throws InterruptedException {
-        return scope.forkCancellable(
+    private Void groupedWeightedWithinImpl(
+            Scope scope,
+            long minWeight,
+            Duration duration,
+            Function<T, Long> costFn,
+            FlowEmit<List<T>> emit)
+            throws Exception {
+        Source<T> flowSource = runToChannel(scope);
+        Channel<List<T>> outputChannel = newChannelWithBufferSizeFromScope();
+        Channel<GroupingTimeout> timerChannel = newChannelWithBufferSizeFromScope();
+
+        forkPropagate(
+                scope,
+                outputChannel,
                 () -> {
-                    sleep(duration);
-                    timerChannel.sendOrClosed(GroupingTimeout.INSTANCE);
+                    List<T> buffer = new ArrayList<>();
+                    final AtomicLong accumulatedCost = new AtomicLong(0);
+                    final var timeouts = new GroupWeightedWithinTimeouts();
+
+                    CancellableFork<GroupingTimeout> timeoutFork =
+                            timeouts.forkTimeout(scope, timerChannel, duration);
+
+                    Callable<CancellableFork<Void>> sendBufferAndCleanupCost =
+                            () -> {
+                                outputChannel.send(new ArrayList<>(buffer));
+                                buffer.clear();
+                                accumulatedCost.set(0);
+                                return null;
+                            };
+
+                    boolean shouldRun = true;
+                    while (shouldRun) {
+                        shouldRun =
+                                switch (selectOrClosed(
+                                        flowSource.receiveClause(), timerChannel.receiveClause())) {
+                                    case ChannelDone _:
+                                        // source is done, emit the buffer and finish
+                                        if (timeoutFork != null) timeoutFork.cancelNow();
+                                        if (!buffer.isEmpty()) outputChannel.send(buffer);
+                                        outputChannel.done();
+                                        yield false;
+                                    case ChannelError(Throwable cause, Channel<?> _):
+                                        // source returned error, propagate it and finish
+                                        if (timeoutFork != null) timeoutFork.cancelNow();
+                                        outputChannel.error(cause);
+                                        yield false;
+                                    case GroupingTimeout timeout:
+                                        if (timeout.generation() == timeouts.getGeneration()) {
+                                            // enter 'timed out state', may stay in this state if
+                                            // buffer is empty
+                                            timeoutFork = null;
+                                            if (!buffer.isEmpty()) {
+                                                sendBufferAndCleanupCost.call();
+                                                // cancel existing timeout and start a new one
+                                                timeoutFork =
+                                                        timeouts.forkTimeout(
+                                                                scope, timerChannel, duration);
+                                            }
+                                        }
+                                        // If timeout is from an old generation, ignore it
+                                        yield true;
+                                    case Object t:
+                                        buffer.add((T) t);
+                                        try {
+                                            long cost =
+                                                    accumulatedCost.updateAndGet(
+                                                            v -> v + costFn.apply((T) t));
+                                            if (timeoutFork == null || cost >= minWeight) {
+                                                // timeout passed when buffer was empty or buffer
+                                                // full
+                                                sendBufferAndCleanupCost.call();
+                                                // cancel existing timeout and start a new one
+                                                if (timeoutFork != null) timeoutFork.cancelNow();
+                                                timeoutFork =
+                                                        timeouts.forkTimeout(
+                                                                scope, timerChannel, duration);
+                                            }
+                                            yield true;
+                                        } catch (Exception e) {
+                                            if (timeoutFork != null) timeoutFork.cancelNow();
+                                            throw e;
+                                        }
+                                };
+                    }
                     return null;
                 });
+        FlowEmit.channelToEmit(outputChannel, emit);
+        return null;
     }
 
-    private enum GroupingTimeout {
-        INSTANCE
+    private static class GroupWeightedWithinTimeouts {
+        private long generation;
+
+        long getGeneration() {
+            return generation;
+        }
+
+        CancellableFork<GroupingTimeout> forkTimeout(
+                Scope scope, Channel<GroupingTimeout> timerChannel, Duration duration)
+                throws InterruptedException {
+            generation += 1;
+            return scope.forkCancellable(
+                    () -> {
+                        sleep(duration);
+                        timerChannel.sendOrClosed(new GroupingTimeout(generation));
+                        return null;
+                    });
+        }
     }
+
+    private record GroupingTimeout(long generation) {}
 
     /**
      * Chunks up the elements into groups of the specified size. The last group may be smaller due
@@ -1733,6 +1722,12 @@ public class Flow<T> {
      *
      * <p>
      *
+     * <p>
+     *
+     * <p>
+     *
+     * <p>
+     *
      * {@snippet :
      * Flows.fromValues(0, 1, 2, 3, 4, 5, 6, 7, 8, 9).split(x -> x % 4 == 0).runToList()
      * // Returns: [[], [1, 2, 3], [5, 6, 7], [9]]
@@ -1769,6 +1764,12 @@ public class Flow<T> {
      * in an empty chunk in the output.
      *
      * <p>For example:
+     *
+     * <p>
+     *
+     * <p>
+     *
+     * <p>
      *
      * <p>
      *
