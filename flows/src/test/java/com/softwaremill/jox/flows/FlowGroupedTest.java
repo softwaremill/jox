@@ -426,8 +426,11 @@ public class FlowGroupedTest {
 
     @Test
     void groupBy_shouldHandleSingleElementFlowStressTest() throws Exception {
-        // Stress test to validate the data race fix - run the same single-element flow grouping
-        // many times
+        // this test failed with a previous implementation which used separate channels for
+        // receiving child elements
+        // (childOutput) and for signalling children completion; the select then sometimes chose the
+        // done clause before
+        // the value clause, which resulted in dropping the value
         for (int i = 0; i < 100000; i++) {
             List<Integer> result =
                     Flows.fromValues(42).groupBy(10, x -> x % 10, _ -> f -> f).runToList();

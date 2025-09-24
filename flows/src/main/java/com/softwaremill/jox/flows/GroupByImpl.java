@@ -36,21 +36,9 @@ class GroupByImpl<T, V, U> {
 
     private sealed interface ChildOutput<U, V> permits ChildValue, ChildDone {}
 
-    private static final class ChildValue<U, V> implements ChildOutput<U, V> {
-        private final U value;
+    private record ChildValue<U, V>(U value) implements ChildOutput<U, V> {}
 
-        public ChildValue(U value) {
-            this.value = value;
-        }
-    }
-
-    private static final class ChildDone<U, V> implements ChildOutput<U, V> {
-        private final V v;
-
-        public ChildDone(V v) {
-            this.v = v;
-        }
-    }
+    private record ChildDone<U, V>(V v) implements ChildOutput<U, V> {}
 
     private final Flow<T> parent;
     private final int parallelism;
@@ -197,9 +185,13 @@ class GroupByImpl<T, V, U> {
                 emit -> {
                     supervised(
                             scope -> {
-                                // Channel where both child outputs and completion signals are sent;
-                                // unifying these channels eliminates the data race between child
-                                // output and completion signalling.
+                                // Channel where all elements emitted by child flows will be sent;
+                                // we use such a collective channel instead of enumerating all
+                                // child channels in the main `select`, as `select`s don't scale
+                                // well with the number of clauses. The elements from this channel
+                                // are then emitted by the returned flow. Completion of children
+                                // (when the parent is complete, or the parallelism limit is
+                                // reached) is signalled on this channel as well.
                                 Channel<ChildOutput<U, V>> childOutput =
                                         Channel.newUnlimitedChannel();
 
@@ -249,8 +241,7 @@ class GroupByImpl<T, V, U> {
                                             assert state.parentDone;
                                             state = doCompleteAll(state);
                                         }
-                                        case ChannelError channelError ->
-                                                throw channelError.toException();
+                                        case ChannelError channelError -> throw channelError.toException();
                                         case Object o -> {
                                             // for some reason compiler shows error when using
                                             // instanceof / switch pattern matching
@@ -293,14 +284,14 @@ class GroupByImpl<T, V, U> {
                                                                 childDone.v)) {
                                                             throw new IllegalStateException(
                                                                     "Invalid usage of child flows:"
-                                                                        + " child flow was"
-                                                                        + " completed as done by"
-                                                                        + " user code (in"
-                                                                        + " childFlowTransform),"
-                                                                        + " while this is not"
-                                                                        + " allowed (see"
-                                                                        + " documentation for"
-                                                                        + " details)");
+                                                                            + " child flow was"
+                                                                            + " completed as done by"
+                                                                            + " user code (in"
+                                                                            + " childFlowTransform),"
+                                                                            + " while this is not"
+                                                                            + " allowed (see"
+                                                                            + " documentation for"
+                                                                            + " details)");
                                                         }
 
                                                         state =
@@ -350,9 +341,8 @@ class GroupByImpl<T, V, U> {
             s.children.get(v).send(t);
         } else if (s.children.size() < parallelism) {
             // Starting a new child flow, running in the background; the child flow receives values
-            // via a channel,
-            // and feeds its output to `childOutput`. Done signals are forwarded to `childOutput`;
-            // elements & errors are propagated to `childOutput`.
+            // via a channel, and feeds its output to `childOutput`. Done signals are propagated as
+            // values, errors are propagated as channel errors.
             Channel<T> childChannel = Flow.newChannelWithBufferSizeFromScope();
             s = s.withChildAdded(v, childChannel);
 
