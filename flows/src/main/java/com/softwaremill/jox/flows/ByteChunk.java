@@ -3,6 +3,7 @@ package com.softwaremill.jox.flows;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -62,6 +63,13 @@ public class ByteChunk {
      */
     public String convertToString(Charset charset) {
         return new String(toArray(), charset);
+    }
+
+    /**
+     * @return Iterator over the elements of the Chunk
+     */
+    public Iterator<Byte> iterator() {
+        return new MultiArrayIterator(arrays);
     }
 
     /**
