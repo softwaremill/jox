@@ -52,7 +52,7 @@ Flows.range(1, 100, 1)
   .runForeach(IO::println);
 ```
 
-[Sructured concurrency](https://jox.softwaremill.com/latest/structured.html) scope:
+[Structured concurrency](https://jox.softwaremill.com/latest/structured.html) scope:
 
 ```
 var result = supervised(scope -> {
