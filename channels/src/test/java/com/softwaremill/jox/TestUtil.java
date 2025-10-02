@@ -17,6 +17,10 @@ public class TestUtil {
                                         f.accept(scope);
                                     } catch (Exception e) {
                                         scope.completeExceptionally(e);
+                                    } catch (Throwable tr) {
+                                        System.out.println("Throwable in main task");
+                                        tr.printStackTrace();
+                                        System.exit(1);
                                     }
                                 });
         mainTask.join();
@@ -32,6 +36,10 @@ public class TestUtil {
                                 f.complete(c.call());
                             } catch (Exception ex) {
                                 f.completeExceptionally(ex);
+                            } catch (Throwable tr) {
+                                System.out.println("Throwable in fork");
+                                tr.printStackTrace();
+                                System.exit(1);
                             }
                         });
         scope.addThread(f);
@@ -53,10 +61,19 @@ public class TestUtil {
                 Thread.ofVirtual()
                         .start(
                                 () -> {
+                                    System.out.println(
+                                            "Starting " + Thread.currentThread().threadId());
                                     try {
                                         f.complete(c.call());
                                     } catch (Exception ex) {
                                         f.completeExceptionally(ex);
+                                    } catch (Throwable tr) {
+                                        System.out.println("Throwable in forkCancelable");
+                                        tr.printStackTrace();
+                                        System.exit(1);
+                                    } finally {
+                                        System.out.println(
+                                                "Exit " + Thread.currentThread().threadId());
                                     }
                                 });
 
@@ -75,7 +92,26 @@ public class TestUtil {
             @Override
             public Object cancel() throws InterruptedException, ExecutionException {
                 t.interrupt();
-                t.join();
+                System.out.println(
+                        "Joining on thread: "
+                                + t.threadId()
+                                + " from "
+                                + Thread.currentThread().threadId());
+                try {
+                    t.join();
+                } catch (Throwable tr) {
+                    System.out.println(
+                            "Exception "
+                                    + tr.getClass()
+                                    + " when joining on thread: "
+                                    + t.threadId());
+                    throw tr;
+                }
+                System.out.println(
+                        "Joined on thread: "
+                                + t.threadId()
+                                + " from "
+                                + Thread.currentThread().threadId());
                 if (f.isCompletedExceptionally()) {
                     return f.exceptionNow();
                 } else {

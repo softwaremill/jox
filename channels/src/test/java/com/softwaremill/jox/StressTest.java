@@ -7,13 +7,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import java.util.concurrent.*;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 public class StressTest {
-    @TestWithCapacities
-    @Timeout(600)
-    void testMultipleOperationsDirect(int capacity) throws Exception {
-        testAndVerify(capacity, true);
+    // @TestWithCapacities
+    // @Timeout(600)
+    @Test
+    void testMultipleOperationsDirect() throws Exception {
+        for (int i = 0; i < 100_000; i++) {
+            System.out.println("----- START -----");
+            testAndVerify(1, true);
+            System.out.println("----- DONE -----");
+        }
     }
 
     @TestWithCapacities
@@ -174,6 +180,7 @@ public class StressTest {
                         });
             } catch (Exception e) {
                 System.out.println("\nFailed!");
+                throw e;
             } finally {
                 System.out.println("\nChannel state:");
                 for (var ch : chs) {
