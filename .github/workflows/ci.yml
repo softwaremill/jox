@@ -5,6 +5,8 @@ on:
   push:
     branches: [ main ]
     tags: [ v* ]
+permissions:
+  contents: write        # release-drafter requirement
 jobs:
   ci:
     runs-on: ubuntu-24.04
@@ -20,7 +22,7 @@ jobs:
       - name: Test
         run: mvn --batch-mode --update-snapshots verify
       - name: Prepare release notes
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5 # v6, specifically v6.1.0
         with:
           config-name: release-drafter.yml
         env:
@@ -44,7 +46,7 @@ jobs:
           version=${GITHUB_REF/refs\/tags\/v/}
           echo "VERSION=$version" >> $GITHUB_ENV
       - name: Publish release notes
-        uses: release-drafter/release-drafter@v6
+        uses: release-drafter/release-drafter@b1476f6e6eb133afa41ed8589daba6dc69b4d3f5 # v6, specifically v6.1.0
         with:
           config-name: release-drafter.yml
           publish: true
