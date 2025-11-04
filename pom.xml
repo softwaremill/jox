@@ -20,6 +20,7 @@
     <module>structured</module>
     <module>bench</module>
     <module>flows</module>
+    <module>channels-fray-tests</module>
   </modules>
 
   <!-- Deployment metadata -->
@@ -124,15 +125,11 @@
   <dependencyManagement>
     <dependencies>
       <dependency>
-        <groupId>org.junit.jupiter</groupId>
-        <artifactId>junit-jupiter</artifactId>
-        <version>6.0.0</version>
-      </dependency>
-      <dependency>
         <groupId>org.awaitility</groupId>
         <artifactId>awaitility</artifactId>
         <version>4.3.0</version>
       </dependency>
+      <!-- junit version is not centrally managed until fray upgrades from junit 5 to junit 6 -->
     </dependencies>
   </dependencyManagement>
 

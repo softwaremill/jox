@@ -9,51 +9,50 @@
     <version>1.0.1</version>
   </parent>
 
-  <artifactId>channels</artifactId>
+  <artifactId>channels-fray-tests</artifactId>
   <version>1.0.1</version>
   <packaging>jar</packaging>
   <name>${project.groupId}:${project.artifactId}</name>
 
   <dependencies>
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>6.0.0</version>
+      <groupId>com.softwaremill.jox</groupId>
+      <artifactId>channels</artifactId>
+      <version>1.0.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.awaitility</groupId>
-      <artifactId>awaitility</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.11.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.pastalab.fray</groupId>
+      <artifactId>fray-junit</artifactId>
+      <version>0.6.9-SNAPSHOT</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
 
   <build>
     <plugins>
-      <!-- Binary compatibility checking for public API -->
-      <plugin>
-        <groupId>com.github.siom79.japicmp</groupId>
-        <artifactId>japicmp-maven-plugin</artifactId>
-        <configuration>
-          <parameter>
-            <onlyBinaryIncompatible>true</onlyBinaryIncompatible>
-            <includeSynthetic>true</includeSynthetic>
-            <breakBuildOnBinaryIncompatibleModifications>true</breakBuildOnBinaryIncompatibleModifications>
-          </parameter>
-          <skip>false</skip>
-        </configuration>
-        <executions>
-          <execution>
-            <phase>verify</phase>
-            <goals>
-              <goal>cmp</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
       <plugin>
         <groupId>com.diffplug.spotless</groupId>
         <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.pastalab.fray.maven</groupId>
+        <artifactId>fray-plugins-maven</artifactId>
+        <version>0.6.9-SNAPSHOT</version>
+        <executions>
+          <execution>
+            <id>prepare-fray</id>
+            <goals>
+              <goal>prepare-fray</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
