@@ -40,7 +40,7 @@ public final class Scope {
 
                     while (true) {
                         switch (supervisor.getCommands().receiveOrClosed()) {
-                            case RunFork<?> r -> rawScope.fork(r.f());
+                            case RunFork<?> r -> rawScope.fork(r);
                             case ChannelDone _ -> {
                                 // if no exceptions, the main f-fork must be done by now
                                 try {
@@ -99,7 +99,7 @@ public final class Scope {
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -116,7 +116,7 @@ public final class Scope {
                                         }
                                     }
                                     return null;
-                                }));
+                                });
         return result;
     }
 
@@ -137,7 +137,7 @@ public final class Scope {
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -148,7 +148,7 @@ public final class Scope {
                                         }
                                     }
                                     return null;
-                                }));
+                                });
         return result;
     }
 
@@ -169,7 +169,7 @@ public final class Scope {
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -177,7 +177,7 @@ public final class Scope {
                                         result.completeExceptionally(e);
                                     }
                                     return null;
-                                }));
+                                });
         return result;
     }
 
@@ -209,7 +209,7 @@ public final class Scope {
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     new Scope()
                                             .run(
@@ -217,7 +217,7 @@ public final class Scope {
                                                             forkCancellableNestedScope(
                                                                     nestedScope, done, result, f));
                                     return null;
-                                }));
+                                });
         return result;
     }
 
@@ -228,7 +228,7 @@ public final class Scope {
                 .getSupervisor()
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     // "else" means that the fork is already cancelled, so doing
                                     // nothing in that case
@@ -243,7 +243,7 @@ public final class Scope {
                                     // the nested scope can now finish
                                     done.release();
                                     return null;
-                                }));
+                                });
         done.acquire();
         return null;
     }
