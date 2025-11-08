@@ -144,11 +144,11 @@ public final class Race {
         }
     }
 
-    private static final Serializable NULL_WRAPPER_IN_RACE = "NULL_WRAPPER_IN_RACE";
+    private static final Serializable NULL_WRAPPER_IN_RACE = "$Race$NULL_WRAPPER_IN_RACE";
 
     private record ExceptionWrapperInRace(Exception e) {}
 
     private record ExceptionWrapperInRaceResult(Exception e) {}
 
-    private static final Serializable TIMEOUT = "TIMEOUT";
+    private static final Serializable TIMEOUT = "$Race$TIMEOUT";
 }
