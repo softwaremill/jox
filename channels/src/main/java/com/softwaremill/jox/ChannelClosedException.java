@@ -3,7 +3,7 @@ package com.softwaremill.jox;
 /**
  * Thrown by {@link Channel#send(Object)} and {@link Channel#receive()} when the channel is closed.
  */
-public sealed class ChannelClosedException extends RuntimeException
+public abstract sealed class ChannelClosedException extends RuntimeException
         permits ChannelDoneException, ChannelErrorException {
     public ChannelClosedException() {}
 
