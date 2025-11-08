@@ -96,7 +96,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
     private final int capacity;
     final boolean isRendezvous;
-    private final boolean isUnlimited;
+
+    // final boolean isUnlimited = capacity < 0; !isUnlimited = capacity >= 0
 
     // mutable state
 
@@ -163,15 +164,14 @@ public final class Channel<T> implements Source<T>, Sink<T> {
      * capacity is 0.
      */
     private Channel(int capacity) {
-        if (capacity < UNLIMITED_CAPACITY) {
+        if (capacity < UNLIMITED_CAPACITY)
             throw new IllegalArgumentException(
                     "Capacity must be 0 (rendezvous), positive (buffered) or -1 (unlimited"
                             + " channels).");
-        }
 
         this.capacity = capacity;
         isRendezvous = capacity == 0L;
-        isUnlimited = capacity == UNLIMITED_CAPACITY;
+        boolean isUnlimited = capacity == UNLIMITED_CAPACITY;
         var isRendezvousOrUnlimited = isRendezvous || isUnlimited;
 
         var firstSegment =
@@ -198,8 +198,9 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
         var currentSegment = bufferEndSegment;
         // the number of segments where all cells are processed, or some are processed (last segment
-        // of the buffer)
-        var segmentsToProcess = (int) Math.ceil((double) capacity / Segment.SEGMENT_SIZE);
+        // of the buffer) = Math.ceil((double) capacity / Segment.SEGMENT_SIZE)
+        int segmentsToProcess = capacity <= 0 ? 0
+                : (int)((capacity + Segment.SEGMENT_SIZE - 1L) / Segment.SEGMENT_SIZE);
 
         for (int segmentId = 0; segmentId < segmentsToProcess; segmentId++) {
             currentSegment =
@@ -353,8 +354,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             var state = segment.getCell(i);
 
             if (state == null) {
-                // reading the buffer end & receiver's counter if needed
-                if (!isUnlimited && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
+                // reading the buffer end & receiver's counter if needed: !isUnlimited
+                if (capacity >= 0 && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
                     // cell is empty, and no receiver, not in buffer -> suspend
                     if (select != null) {
                         // cell is empty, no receiver, and we are in a select -> store the select
@@ -634,7 +635,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     // ****************
 
     private void expandBuffer() {
-        if (isRendezvous || isUnlimited) return;
+        if (capacity <= 0) return; // isRendezvous || isUnlimited
         while (true) {
             // reading the segment before the counter increment - this is needed to find the
             // required segment later
