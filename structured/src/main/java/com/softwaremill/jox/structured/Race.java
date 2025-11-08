@@ -2,6 +2,7 @@ package com.softwaremill.jox.structured;
 
 import static com.softwaremill.jox.structured.Scopes.supervised;
 
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -26,7 +27,7 @@ public final class Race {
                             return TIMEOUT;
                         });
 
-        if (result instanceof Timeout) {
+        if (result == TIMEOUT) {
             throw new TimeoutException("Computation didn't finish within " + millis + "ms");
         } else {
             //noinspection unchecked
@@ -77,17 +78,16 @@ public final class Race {
                         }
 
                         int left = fs.size();
-                        while (left > 0) {
+                        while (left-- > 0) {
                             var first = branchResults.receive();
                             if (first instanceof ExceptionWrapperInRace(Exception e)) {
                                 exceptions.add(e);
-                            } else if (first instanceof NullWrapperInRace) {
+                            } else if (first == NULL_WRAPPER_IN_RACE) {
                                 return null;
                             } else {
                                 //noinspection unchecked
                                 return (T) first;
                             }
-                            left--;
                         }
 
                         // if we get here, there must be an exception
@@ -144,15 +144,11 @@ public final class Race {
         }
     }
 
-    private record NullWrapperInRace() {}
-
-    private static final NullWrapperInRace NULL_WRAPPER_IN_RACE = new NullWrapperInRace();
+    private static final Serializable NULL_WRAPPER_IN_RACE = "NULL_WRAPPER_IN_RACE";
 
     private record ExceptionWrapperInRace(Exception e) {}
 
     private record ExceptionWrapperInRaceResult(Exception e) {}
 
-    private record Timeout() {}
-
-    private static final Timeout TIMEOUT = new Timeout();
+    private static final Serializable TIMEOUT = "TIMEOUT";
 }

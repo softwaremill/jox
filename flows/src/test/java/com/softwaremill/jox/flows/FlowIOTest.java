@@ -395,7 +395,7 @@ public class FlowIOTest {
         Path path = folder.resolve("not-existing-file.txt");
         var source = Flows.fromByteArrays(new byte[0]);
 
-        // when & then
+        // when & then  Linux: NoSuchFileException
         assertThrows(FileSystemException.class, () -> source.runToFile(path));
     }
 
