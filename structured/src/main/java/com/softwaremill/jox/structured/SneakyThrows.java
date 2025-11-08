@@ -1,13 +1,13 @@
 package com.softwaremill.jox.structured;
 
+/** Allows bypassing compiler errors about checked exceptions. */
 class SneakyThrows {
-    /** Allows to bypass compiler errors about checked exceptions. */
-    static <E extends Exception> void sneakyThrows(ThrowingRunnable f) throws E {
-        try {
-            f.run();
-        } catch (Exception e) {
-            // noinspection unchecked
-            throw (E) e;
-        }
+    static AssertionError sneakyThrow(Throwable checked) /*throws Throwable*/ {
+        throw sneakyThrow0(checked);
+    }
+
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
+    private static <E extends Throwable> E sneakyThrow0(Throwable throwable) throws E {
+        throw (E) throwable;
     }
 }

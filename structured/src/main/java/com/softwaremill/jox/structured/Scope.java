@@ -15,7 +15,7 @@ import com.softwaremill.jox.ChannelError;
  * computations in a concurrency scope. Such forks can be created using {@link Scope#fork}, {@link
  * Scope#forkUser}, {@link Scope#forkCancellable} or {@link Scope#forkUnsupervised}.
  */
-public class Scope {
+public final class Scope {
     private final StructuredTaskScope<Object, Void> rawScope;
     private final Supervisor supervisor;
     private final AtomicBoolean scopeDone;
@@ -95,7 +95,7 @@ public class Scope {
      * enclosing scope to end (cancelling all other running forks).
      */
     public <T> Fork<T> fork(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor
                 .getCommands()
                 .send(
@@ -117,7 +117,7 @@ public class Scope {
                                     }
                                     return null;
                                 }));
-        return new ForkUsingResult<>(result);
+        return result;
     }
 
     /**
@@ -132,7 +132,7 @@ public class Scope {
      * (cancelling all other running forks).
      */
     public <T> Fork<T> forkUser(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor.forkUserStarts();
         supervisor
                 .getCommands()
@@ -149,7 +149,7 @@ public class Scope {
                                     }
                                     return null;
                                 }));
-        return new ForkUsingResult<>(result);
+        return result;
     }
 
     /**
@@ -165,7 +165,7 @@ public class Scope {
      * <p>For alternate behaviors, see {@link #fork}, {@link #forkUser}, {@link #forkCancellable}.
      */
     public <T> Fork<T> forkUnsupervised(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor
                 .getCommands()
                 .send(
@@ -178,7 +178,7 @@ public class Scope {
                                     }
                                     return null;
                                 }));
-        return new ForkUsingResult<>(result);
+        return result;
     }
 
     /**
@@ -201,12 +201,12 @@ public class Scope {
      * virtual threads are started.
      */
     public <T> CancellableFork<T> forkCancellable(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
         // forks can be never run, if they are cancelled immediately - we need to detect this, not
         // to await on result.get()
         var started = new AtomicBoolean(false);
         // interrupt signal
         var done = new Semaphore(0);
+        var result = new CancellableForkUsingResult<T>(done, started);
         supervisor
                 .getCommands()
                 .send(
@@ -223,7 +223,7 @@ public class Scope {
                                                                     f));
                                     return null;
                                 }));
-        return new CancellableForkUsingResult<>(result, done, started);
+        return result;
     }
 
     private static <T> Void forkCancellableNestedScope(
@@ -308,6 +308,7 @@ public class Scope {
     }
 }
 
+@FunctionalInterface
 interface ExternalScheduler {
     void run(ThrowingConsumer<Scope> r) throws Exception;
 }

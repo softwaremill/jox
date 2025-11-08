@@ -1,6 +1,5 @@
 package com.softwaremill.jox.structured;
 
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,12 +19,11 @@ public interface CancellableFork<T> extends Fork<T> {
     void cancelNow();
 }
 
-class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
+final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
     private final Semaphore done;
-    private final AtomicBoolean started;
+    private final AtomicBoolean started; // ? byte & varHandle
 
-    CancellableForkUsingResult(CompletableFuture<T> result, Semaphore done, AtomicBoolean started) {
-        super(result);
+    CancellableForkUsingResult(Semaphore done, AtomicBoolean started) {
         this.done = done;
         this.started = started;
     }
@@ -33,7 +31,7 @@ class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements Cancel
     @Override
     public T cancel() throws InterruptedException, ExecutionException {
         cancelNow();
-        return join();
+        return join(); // ForkUsingResult#join throws InterruptedException,ExecutionException
     }
 
     @Override
@@ -42,8 +40,7 @@ class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements Cancel
         // potentially never starting it)
         done.release();
         if (!started.getAndSet(true)) {
-            result.completeExceptionally(
-                    new InterruptedException("fork was cancelled before it started"));
+            completeExceptionally(new InterruptedException("fork was cancelled before it started"));
         }
     }
 }
