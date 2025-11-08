@@ -24,10 +24,10 @@ public final class Race {
                         f::call,
                         () -> {
                             Thread.sleep(millis);
-                            return TIMEOUT;
+                            return MagicConstants.TIMEOUT;
                         });
 
-        if (result == TIMEOUT) {
+        if (result == MagicConstants.TIMEOUT) {
             throw new TimeoutException("Computation didn't finish within " + millis + "ms");
         } else {
             //noinspection unchecked
@@ -68,8 +68,9 @@ public final class Race {
                                     () -> {
                                         try {
                                             T r = f.call();
-                                            branchResults.send(
-                                                    r == null ? NULL_WRAPPER_IN_RACE : r);
+                                            branchResults.send(r == null
+                                                    ? MagicConstants.NULL_WRAPPER_IN_RACE
+                                                    : r);
                                         } catch (Exception e) {
                                             branchResults.send(new ExceptionWrapperInRace(e));
                                         }
@@ -82,7 +83,7 @@ public final class Race {
                             var first = branchResults.receive();
                             if (first instanceof ExceptionWrapperInRace(Exception e)) {
                                 exceptions.add(e);
-                            } else if (first == NULL_WRAPPER_IN_RACE) {
+                            } else if (first == MagicConstants.NULL_WRAPPER_IN_RACE) {
                                 return null;
                             } else {
                                 //noinspection unchecked
@@ -144,11 +145,11 @@ public final class Race {
         }
     }
 
-    private static final Serializable NULL_WRAPPER_IN_RACE = "$Race$NULL_WRAPPER_IN_RACE";
-
     private record ExceptionWrapperInRace(Exception e) {}
 
     private record ExceptionWrapperInRaceResult(Exception e) {}
-
-    private static final Serializable TIMEOUT = "$Race$TIMEOUT";
+}
+enum MagicConstants {
+    NULL_WRAPPER_IN_RACE,
+    TIMEOUT
 }
