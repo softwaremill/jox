@@ -21,8 +21,9 @@ public interface CancellableFork<T> extends Fork<T> {
 }
 
 final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
-    private final Semaphore done;
-    // Manual AtomicBoolean: 0 = initially false, 1 = true
+    /// interrupt signal
+    final Semaphore done = new Semaphore(0);
+    /// Manual AtomicBoolean: 0 = initially false, 1 = true
     private volatile byte started;
     private static final byte TRUE = 1;
 
@@ -37,10 +38,6 @@ final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements 
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
-    }
-
-    CancellableForkUsingResult(Semaphore done) {
-        this.done = done;
     }
 
     @Override

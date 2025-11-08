@@ -203,26 +203,20 @@ public final class Scope {
     public <T> CancellableFork<T> forkCancellable(Callable<T> f) throws InterruptedException {
         // forks can be never run, if they are cancelled immediately - we need to detect this, not
         // to await on result.get()
-        // interrupt signal
-        var done = new Semaphore(0);
-        var result = new CancellableForkUsingResult<T>(done);
+        var result = new CancellableForkUsingResult<T>();
         supervisor
                 .getCommands()
-                .send(
-                        (RunFork<T>)
-                                () -> {
-                                    new Scope()
-                                            .run(
-                                                    nestedScope ->
-                                                            forkCancellableNestedScope(
-                                                                    nestedScope, done, result, f));
-                                    return null;
-                                });
+                .send((RunFork<T>)() -> {
+                        new Scope().run(nestedScope ->
+                                forkCancellableNestedScope(
+                                        nestedScope, result, f));
+                        return null;
+                    });
         return result;
     }
 
     private static <T> Void forkCancellableNestedScope(
-            Scope nestedScope, Semaphore done, CancellableForkUsingResult<T> result, Callable<T> f)
+            Scope nestedScope, CancellableForkUsingResult<T> result, Callable<T> f)
             throws InterruptedException {
         nestedScope
                 .getSupervisor()
@@ -241,10 +235,10 @@ public final class Scope {
                                     }
 
                                     // the nested scope can now finish
-                                    done.release();
+                                    result.done.release();
                                     return null;
                                 });
-        done.acquire();
+        result.done.acquire();
         return null;
     }
 
