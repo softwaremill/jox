@@ -1,8 +1,9 @@
 package com.softwaremill.jox.structured;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public interface CancellableFork<T> extends Fork<T> {
     /**
@@ -21,11 +22,25 @@ public interface CancellableFork<T> extends Fork<T> {
 
 final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
     private final Semaphore done;
-    private final AtomicBoolean started; // ? byte & varHandle
+    // Manual AtomicBoolean: 0 = initially false, 1 = true
+    private volatile byte started;
+    private static final byte TRUE = 1;
 
-    CancellableForkUsingResult(Semaphore done, AtomicBoolean started) {
+    // VarHandle for atomic operations on the 'started' field
+    private static final VarHandle STARTED;
+    static {
+        try {
+            MethodHandles.Lookup l = // MethodHandles.lookup()
+                    MethodHandles.privateLookupIn(
+                            CancellableForkUsingResult.class, MethodHandles.lookup());
+            STARTED = l.findVarHandle(CancellableForkUsingResult.class, "started", byte.class);
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    CancellableForkUsingResult(Semaphore done) {
         this.done = done;
-        this.started = started;
     }
 
     @Override
@@ -39,8 +54,12 @@ final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements 
         // will cause the scope to end, interrupting the task if it hasn't yet finished (or
         // potentially never starting it)
         done.release();
-        if (!started.getAndSet(true)) {
+        if (checkNotStartedThenStart()) { // !started.getAndSet(true)
             completeExceptionally(new InterruptedException("fork was cancelled before it started"));
         }
+    }
+
+    boolean checkNotStartedThenStart() {
+        return (byte) STARTED.getAndSet(this, TRUE) == 0;
     }
 }

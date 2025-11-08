@@ -203,10 +203,9 @@ public final class Scope {
     public <T> CancellableFork<T> forkCancellable(Callable<T> f) throws InterruptedException {
         // forks can be never run, if they are cancelled immediately - we need to detect this, not
         // to await on result.get()
-        var started = new AtomicBoolean(false);
         // interrupt signal
         var done = new Semaphore(0);
-        var result = new CancellableForkUsingResult<T>(done, started);
+        var result = new CancellableForkUsingResult<T>(done);
         supervisor
                 .getCommands()
                 .send(
@@ -216,22 +215,14 @@ public final class Scope {
                                             .run(
                                                     nestedScope ->
                                                             forkCancellableNestedScope(
-                                                                    nestedScope,
-                                                                    started,
-                                                                    done,
-                                                                    result,
-                                                                    f));
+                                                                    nestedScope, done, result, f));
                                     return null;
                                 }));
         return result;
     }
 
     private static <T> Void forkCancellableNestedScope(
-            Scope nestedScope,
-            AtomicBoolean started,
-            Semaphore done,
-            CompletableFuture<T> result,
-            Callable<T> f)
+            Scope nestedScope, Semaphore done, CancellableForkUsingResult<T> result, Callable<T> f)
             throws InterruptedException {
         nestedScope
                 .getSupervisor()
@@ -241,10 +232,10 @@ public final class Scope {
                                 () -> {
                                     // "else" means that the fork is already cancelled, so doing
                                     // nothing in that case
-                                    if (!started.getAndSet(true)) {
+                                    if (result.checkNotStartedThenStart()) {
                                         try {
                                             result.complete(f.call());
-                                        } catch (Exception e) {
+                                        } catch (Throwable e) {
                                             result.completeExceptionally(e);
                                         }
                                     }
