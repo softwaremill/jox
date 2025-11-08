@@ -17,11 +17,11 @@ public class Par {
     public static <T> List<T> par(List<Callable<T>> fs) throws InterruptedException {
         return supervised(
                 scope -> {
-                    var forksAndResults = new ArrayList<>(fs.size());
+                    var forks = new ArrayList<>(fs.size());
                     for (Callable<T> f : fs) {
-                        forksAndResults.add(scope.fork(f));
+                        forks.add(scope.fork(f));
                     }
-                    return collect(forksAndResults);
+                    return collect(forks);
                 });
     }
 
@@ -46,9 +46,9 @@ public class Par {
         return supervised(
                 scope -> {
                     var s = new Semaphore(parallelism);
-                    var forksAndResults = new ArrayList<>(fs.size());
+                    var forks = new ArrayList<>(fs.size());
                     for (Callable<T> f : fs) {
-                        forksAndResults.add(
+                        forks.add(
                                 scope.fork(
                                         () -> {
                                             s.acquire();
@@ -61,7 +61,7 @@ public class Par {
                                             return r;
                                         }));
                     }
-                    return collect(forksAndResults);
+                    return collect(forks);
                 });
     }
 }
