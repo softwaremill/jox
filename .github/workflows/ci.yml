@@ -43,6 +43,8 @@ jobs:
           distribution: 'zulu'
           java-version: '25'
           cache: 'maven'
+      - name: Install current Jox # so that latest channels code is available
+        run: mvn install -DskipTests=true
       - name: Run Fray tests (CHANNEL_SIZE=${{ matrix.channel_size }}, JOX_SEGMENT_SIZE=${{ matrix.segment_size }})
         run: mvn --batch-mode verify -Pintegration-tests -pl channels-fray-tests
         env:
