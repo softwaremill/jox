@@ -103,6 +103,10 @@ The concurrency tests are only run when the `integration-tests` profile is enabl
 - `mvn integration-test -Pintegration-tests` - Tests run during the integration-test phase
 - `mvn verify -Pintegration-tests` - Tests run during the integration-test phase
 
+The test runs can be parametrized using the `CHANNEL_SIZE` and `JOX_SEGMENT_SIZE` environment variables. By default,
+these have the values 16 and 32. Note that the segment size affects not only the tests, but all channels, so be careful
+to change it only for scoped test runs.
+
 ## Copyright
 
 Copyright (C) 2023-2025 SoftwareMill [https://softwaremill.com](https://softwaremill.com).
