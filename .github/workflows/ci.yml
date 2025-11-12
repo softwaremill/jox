@@ -28,9 +28,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  fray-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        channel_size: [ 0, 1, 10 ]
+        segment_size: [ 4, 32 ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'zulu'
+          java-version: '25'
+          cache: 'maven'
+      - name: Run Fray tests (CHANNEL_SIZE=${{ matrix.channel_size }}, JOX_SEGMENT_SIZE=${{ matrix.segment_size }})
+        run: mvn --batch-mode verify -Pintegration-tests -pl channels-fray-tests
+        env:
+          CHANNEL_SIZE: ${{ matrix.channel_size }}
+          JOX_SEGMENT_SIZE: ${{ matrix.segment_size }}
+
   publishReleaseNotes:
     name: Publish release notes
-    needs: [ ci ]
+    needs: [ ci, fray-tests ]
     runs-on: ubuntu-24.04
     if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v'))
     steps:
