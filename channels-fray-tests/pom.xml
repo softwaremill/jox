@@ -30,7 +30,7 @@
     <dependency>
       <groupId>org.pastalab.fray</groupId>
       <artifactId>fray-junit</artifactId>
-      <version>0.6.9-SNAPSHOT</version>
+      <version>0.6.9</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -51,7 +51,7 @@
       <plugin>
         <groupId>org.pastalab.fray.maven</groupId>
         <artifactId>fray-plugins-maven</artifactId>
-        <version>0.6.9-SNAPSHOT</version>
+        <version>0.6.9</version>
         <executions>
           <execution>
             <id>prepare-fray</id>
