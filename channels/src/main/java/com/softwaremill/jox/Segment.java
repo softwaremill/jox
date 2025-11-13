@@ -11,9 +11,7 @@ final class Segment {
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
     /** Used in {@code next} to indicate that the segment is closed. */
-    private enum State {
-        CLOSED
-    }
+    private static final Segment CLOSED = new Segment(-1, null, 0, false);
 
     // immutable state
 
@@ -24,8 +22,8 @@ final class Segment {
 
     private final Object[] data = new Object[SEGMENT_SIZE];
 
-    /** Possible values: {@code Segment} or {@code State.CLOSED} (union type). */
-    private volatile Object next = null;
+    /** Possible values: {@code Segment} or {@link #CLOSED} (union type). */
+    private volatile Segment next;
 
     private volatile Segment prev;
 
@@ -56,7 +54,7 @@ final class Segment {
             MethodHandles.Lookup l =
                     MethodHandles.privateLookupIn(Segment.class, MethodHandles.lookup());
             DATA = MethodHandles.arrayElementVarHandle(Object[].class);
-            NEXT = l.findVarHandle(Segment.class, "next", Object.class);
+            NEXT = l.findVarHandle(Segment.class, "next", Segment.class);
             PREV = l.findVarHandle(Segment.class, "prev", Segment.class);
             POINTERS_NOT_PROCESSED_NOT_INTERRUPTED =
                     l.findVarHandle(
@@ -88,7 +86,7 @@ final class Segment {
 
     Segment getNext() {
         var s = next;
-        return s == State.CLOSED ? null : (Segment) s;
+        return s == CLOSED ? null : s;
     }
 
     Segment getPrev() {
@@ -255,21 +253,21 @@ final class Segment {
 
     /**
      * Closes the segment chain - sets the {@code next} pointer of the last segment to {@code
-     * State.CLOSED}, and returns the last segment.
+     * CLOSED}, and returns the last segment.
      */
     Segment close() {
         var s = this;
         while (true) {
             var n = s.next;
             if (n == null) { // this is the tail segment
-                if (NEXT.compareAndSet(s, null, State.CLOSED)) {
+                if (NEXT.compareAndSet(s, null, CLOSED)) {
                     return s;
                 }
                 // else: try again
-            } else if (n == State.CLOSED) {
+            } else if (n == CLOSED) {
                 return s;
             } else {
-                s = (Segment) n;
+                s = n;
             }
         }
     }
@@ -284,9 +282,9 @@ final class Segment {
 
     /** Should only be called, if this is not the tail segment. */
     private Segment aliveSegmentRight() {
-        var n = (Segment) next; // this is not the tail, so there's a next segment
+        var n = next; // this is not the tail, so there's a next segment
         while (n.isRemoved() && !n.isTail()) {
-            n = (Segment) n.next; // again, not tail
+            n = n.next; // again, not tail
         }
         return n;
     }
@@ -323,7 +321,7 @@ final class Segment {
         var current = start;
         while (current.getId() < id || current.isRemoved()) {
             var n = current.next;
-            if (n == State.CLOSED) {
+            if (n == CLOSED) {
                 // segment chain is closed, so we can't create a new segment
                 return null;
             } else if (n == null) {
@@ -339,7 +337,7 @@ final class Segment {
                 }
                 // else: try again with current
             } else {
-                current = (Segment) n;
+                current = n;
             }
         }
         return current;
@@ -396,7 +394,7 @@ final class Segment {
                 + "id="
                 + id
                 + ", next="
-                + (n == null ? "null" : (n == State.CLOSED ? "closed" : ((Segment) n).id))
+                + (n == null ? "null" : (n == CLOSED ? "closed" : n.id))
                 + ", prev="
                 + (p == null ? "null" : p.id)
                 + ", pointers="
