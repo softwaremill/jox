@@ -87,6 +87,26 @@ Formatting can be checked using `mvn spotless:check` and applied with `mvn spotl
 When using VS Code, format-on-save should be disabled (see the pom.xml).
 For IntelliJ, it might be necessary to install the spotless plugin to properly reformat the sources.
 
+## Channel concurrency tests using Fray
+
+Apart from unit & stress tests, which live in the `channels/src/test/java` directory, Jox includes additional
+concurrency tests using the [Fray](https://github.com/cmu-pasta/fray) library. The library runs a number of randomized,
+but deterministic tests using orchestrated code & JVM. That way, even though the tests are not exhaustive, so we are
+not able to prove that the code is 100% race & deadlock-free, we gain a new approach to verifying thread interleavings
+which would otherwise be hard to obtain.
+
+The concurrency tests are only run when the `integration-tests` profile is enabled. That is, when in the
+`channels-fray-tests` module:
+
+- `mvn test` - Tests are skipped
+- `mvn verify` - Tests are skipped
+- `mvn integration-test -Pintegration-tests` - Tests run during the integration-test phase
+- `mvn verify -Pintegration-tests` - Tests run during the integration-test phase
+
+The test runs can be parametrized using the `CHANNEL_SIZE` and `JOX_SEGMENT_SIZE` environment variables. By default,
+these have the values 16 and 32. Note that the segment size affects not only the tests, but all channels, so be careful
+to change it only for scoped test runs.
+
 ## Copyright
 
 Copyright (C) 2023-2025 SoftwareMill [https://softwaremill.com](https://softwaremill.com).

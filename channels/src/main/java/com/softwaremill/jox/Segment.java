@@ -4,9 +4,21 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 
 final class Segment {
-    static final int SEGMENT_SIZE = 32; // 2^5
-    private static final int PROCESSED_SHIFT =
-            6; // to store values between 0 and 32 (inclusive) we need 6 bits
+    static final int SEGMENT_SIZE; // by default 32 = 2^5
+
+    static {
+        String channelSizeEnv = System.getenv("JOX_SEGMENT_SIZE");
+        SEGMENT_SIZE = channelSizeEnv != null ? Integer.parseInt(channelSizeEnv) : 32;
+        if (SEGMENT_SIZE < 0 || SEGMENT_SIZE > 32) {
+            throw new IllegalArgumentException("Segment size must be between 1 and 32");
+        }
+        if (SEGMENT_SIZE != 32) {
+            System.out.println("Using SEGMENT_SIZE: " + SEGMENT_SIZE);
+        }
+    }
+
+    // to store values between 0 and 32 (inclusive) we need 6 bits
+    private static final int PROCESSED_SHIFT = 6;
     private static final int POINTERS_SHIFT = 12;
     static final Segment NULL_SEGMENT = new Segment(-1, null, 0, false);
 
