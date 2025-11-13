@@ -25,7 +25,7 @@ public abstract class SelectClause<T> {
     abstract T transformedRawValue(Object rawValue);
 }
 
-class DefaultClause<T> extends SelectClause<T> {
+final class DefaultClause<T> extends SelectClause<T> {
     private final Supplier<T> callback;
 
     public DefaultClause(Supplier<T> callback) {
@@ -39,19 +39,15 @@ class DefaultClause<T> extends SelectClause<T> {
 
     @Override
     Object register(SelectInstance select) {
-        return DefaultClauseMarker.DEFAULT;
+        /*
+         * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of {@code null}, to
+         * indicate that the default clause has been selected during registration.
+         */
+        return this;
     }
 
     @Override
     T transformedRawValue(Object rawValue) {
         return callback.get();
     }
-}
-
-/**
- * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of {@code null}, to
- * indicate that the default clause has been selected during registration.
- */
-enum DefaultClauseMarker {
-    DEFAULT
 }
