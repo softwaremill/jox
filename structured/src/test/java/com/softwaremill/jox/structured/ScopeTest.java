@@ -1,13 +1,13 @@
 package com.softwaremill.jox.structured;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 public class ScopeTest {
 
@@ -37,15 +37,27 @@ public class ScopeTest {
         results.forEach(r -> assertEquals(peek, r));
     }
 
+    /** @see com.softwaremill.jox.structured.CancellableForkUsingResult#cancel */
     @Test
-    void testCancel () throws InterruptedException, ExecutionException {
+    void testForkCancelBehavior() throws InterruptedException, ExecutionException {
         var run = new AtomicBoolean(false);
-        var fork = (CancellableForkUsingResult<Integer>) new Scope().forkCancellable(()->{
-            run.set(true);
-            return 42;
-        });
+        var fork =
+                (CancellableForkUsingResult<Integer>)
+                        new Scope()
+                                .forkCancellable(
+                                        () -> {
+                                            run.set(true);
+                                            return 42;
+                                        });
         ExecutionException ee = assertThrows(ExecutionException.class, fork::cancel);
         assertInstanceOf(InterruptedException.class, ee.getCause());
         assertFalse(run.get());
+
+
+        ee = assertThrows(ExecutionException.class, fork::join);
+        assertInstanceOf(InterruptedException.class, ee.getCause());
+
+        ee = assertThrows(ExecutionException.class, fork::cancel);
+        assertInstanceOf(InterruptedException.class, ee.getCause());
     }
 }

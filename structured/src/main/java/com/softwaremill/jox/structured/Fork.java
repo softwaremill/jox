@@ -19,9 +19,14 @@ public interface Fork<T> {
 }
 
 class ForkUsingResult<T> extends CompletableFuture<T> implements Fork<T> {
-    /// throws InterruptedException, ExecutionException
-    /// @see CompletableFuture#get()
-    /// @see CompletableFuture#join()
+    /***
+     In runtime throws InterruptedException, ExecutionException
+     One parent: {@link CompletableFuture#join()} doesn't throw any checked exception ⇒
+     we can't add them.
+     But the caller's code sees {@link Fork#join()}, which throws checked exceptions, so
+     everything looks fine!
+     @see CompletableFuture#get()
+     */
     @Override
     public T join() {
         try {

@@ -1,12 +1,12 @@
 package com.softwaremill.jox.structured;
 
+import static com.softwaremill.jox.structured.Scopes.supervised;
+
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
-
-import static com.softwaremill.jox.structured.Scopes.supervised;
 
 public final class Race {
     /**
@@ -66,9 +66,10 @@ public final class Race {
                                     () -> {
                                         try {
                                             T r = f.call();
-                                            branchResults.add(r == null
-                                                    ? MagicConstants.NULL_WRAPPER_IN_RACE
-                                                    : r);
+                                            branchResults.add(
+                                                    r == null
+                                                            ? MagicConstants.NULL_WRAPPER_IN_RACE
+                                                            : r);
                                         } catch (Exception e) {
                                             branchResults.add(new ExceptionWrapperInRace(e));
                                         }
@@ -146,8 +147,10 @@ public final class Race {
     private record ExceptionWrapperInRace(Exception e) {}
 
     private record ExceptionWrapperInRaceResult(Exception e) {}
-}
-enum MagicConstants {
-    NULL_WRAPPER_IN_RACE,
-    TIMEOUT
+
+    /** Indicates that item is null or timeout is elapsed */
+    private enum MagicConstants {
+        NULL_WRAPPER_IN_RACE,
+        TIMEOUT
+    }
 }

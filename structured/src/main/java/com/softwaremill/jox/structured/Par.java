@@ -25,6 +25,14 @@ public class Par {
                 });
     }
 
+    /**
+     * 🔞 To use less memory (1 ArrayList vs 2), we use the same ArrayList for {@link Fork} and
+     * <code>result</code>.
+     * Generics are actually <code>Object</code> in runtime!
+     *
+     * <p>I.e: {@code collect} "consumes" forks and it shouldn't be used afterwards. It's not an
+     * everyday pattern
+     */
     @SuppressWarnings("unchecked")
     private static <T> List<T> collect(ArrayList<Object> forksAndResults)
             throws InterruptedException, ExecutionException {

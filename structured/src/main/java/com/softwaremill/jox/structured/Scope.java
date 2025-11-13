@@ -206,12 +206,16 @@ public final class Scope {
         var result = new CancellableForkUsingResult<T>();
         supervisor
                 .getCommands()
-                .send((RunFork<T>)() -> {
-                        new Scope().run(nestedScope ->
-                                forkCancellableNestedScope(
-                                        nestedScope, result, f));
-                        return null;
-                    });
+                .send(
+                        (RunFork<T>)
+                                () -> {
+                                    new Scope()
+                                            .run(
+                                                    nestedScope ->
+                                                            forkCancellableNestedScope(
+                                                                    nestedScope, result, f));
+                                    return null;
+                                });
         return result;
     }
 

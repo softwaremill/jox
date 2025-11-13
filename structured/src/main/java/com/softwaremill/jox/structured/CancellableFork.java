@@ -21,20 +21,17 @@ public interface CancellableFork<T> extends Fork<T> {
 }
 
 final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
-    /// interrupt signal
+    /** interrupt signal */
     final Semaphore done = new Semaphore(0);
-    /// Manual AtomicBoolean: 0 = initially false, 1 = true
-    private volatile byte started;
-    private static final byte TRUE = 1;
-
-    // VarHandle for atomic operations on the 'started' field
+    private volatile boolean started;
+    /** VarHandle for atomic operations on the 'started' field */
     private static final VarHandle STARTED;
     static {
         try {
             MethodHandles.Lookup l = // MethodHandles.lookup()
                     MethodHandles.privateLookupIn(
                             CancellableForkUsingResult.class, MethodHandles.lookup());
-            STARTED = l.findVarHandle(CancellableForkUsingResult.class, "started", byte.class);
+            STARTED = l.findVarHandle(CancellableForkUsingResult.class, "started", boolean.class);
         } catch (ReflectiveOperationException e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -57,6 +54,6 @@ final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements 
     }
 
     boolean checkNotStartedThenStart() {
-        return (byte) STARTED.getAndSet(this, TRUE) == 0;
+        return (Boolean) STARTED.getAndSet(this, true) == false;
     }
 }
