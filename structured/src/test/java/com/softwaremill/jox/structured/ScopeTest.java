@@ -37,7 +37,9 @@ public class ScopeTest {
         results.forEach(r -> assertEquals(peek, r));
     }
 
-    /** @see com.softwaremill.jox.structured.CancellableForkUsingResult#cancel */
+    /**
+     * @see com.softwaremill.jox.structured.CancellableForkUsingResult#cancel
+     */
     @Test
     void testForkCancelBehavior() throws InterruptedException, ExecutionException {
         var run = new AtomicBoolean(false);
@@ -52,7 +54,6 @@ public class ScopeTest {
         ExecutionException ee = assertThrows(ExecutionException.class, fork::cancel);
         assertInstanceOf(InterruptedException.class, ee.getCause());
         assertFalse(run.get());
-
 
         ee = assertThrows(ExecutionException.class, fork::join);
         assertInstanceOf(InterruptedException.class, ee.getCause());

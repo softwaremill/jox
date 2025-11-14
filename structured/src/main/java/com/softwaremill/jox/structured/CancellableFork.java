@@ -23,9 +23,12 @@ public interface CancellableFork<T> extends Fork<T> {
 final class CancellableForkUsingResult<T> extends ForkUsingResult<T> implements CancellableFork<T> {
     /** interrupt signal */
     final Semaphore done = new Semaphore(0);
+
     private volatile boolean started;
+
     /** VarHandle for atomic operations on the 'started' field */
     private static final VarHandle STARTED;
+
     static {
         try {
             MethodHandles.Lookup l = // MethodHandles.lookup()
