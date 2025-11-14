@@ -8,7 +8,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeoutException;
 
-public class Race {
+public final class Race {
     /**
      * The result of computation {@code f}, if it took less than {@code millis} ms, and a {@link
      * TimeoutException} otherwise.
@@ -22,10 +22,10 @@ public class Race {
                         f::call,
                         () -> {
                             Thread.sleep(millis);
-                            return new Timeout();
+                            return MagicConstants.TIMEOUT;
                         });
 
-        if (result instanceof Timeout) {
+        if (result == MagicConstants.TIMEOUT) {
             throw new TimeoutException("Computation didn't finish within " + millis + "ms");
         } else {
             //noinspection unchecked
@@ -65,12 +65,11 @@ public class Race {
                             scope.forkUnsupervised(
                                     () -> {
                                         try {
-                                            var r = f.call();
-                                            if (r == null) {
-                                                branchResults.add(new NullWrapperInRace());
-                                            } else {
-                                                branchResults.add(r);
-                                            }
+                                            T r = f.call();
+                                            branchResults.add(
+                                                    r == null
+                                                            ? MagicConstants.NULL_WRAPPER_IN_RACE
+                                                            : r);
                                         } catch (Exception e) {
                                             branchResults.add(new ExceptionWrapperInRace(e));
                                         }
@@ -78,18 +77,17 @@ public class Race {
                                     });
                         }
 
-                        var left = fs.size();
-                        while (left > 0) {
+                        int left = fs.size();
+                        while (left-- > 0) {
                             var first = branchResults.take();
                             if (first instanceof ExceptionWrapperInRace(Exception e)) {
                                 exceptions.add(e);
-                            } else if (first instanceof NullWrapperInRace) {
+                            } else if (first == MagicConstants.NULL_WRAPPER_IN_RACE) {
                                 return null;
                             } else {
                                 //noinspection unchecked
                                 return (T) first;
                             }
-                            left -= 1;
                         }
 
                         // if we get here, there must be an exception
@@ -146,11 +144,13 @@ public class Race {
         }
     }
 
-    private record NullWrapperInRace() {}
-
     private record ExceptionWrapperInRace(Exception e) {}
 
     private record ExceptionWrapperInRaceResult(Exception e) {}
 
-    private record Timeout() {}
+    /** Indicates that item is null or timeout is elapsed */
+    private enum MagicConstants {
+        NULL_WRAPPER_IN_RACE,
+        TIMEOUT
+    }
 }

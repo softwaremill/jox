@@ -5,6 +5,7 @@ import static com.softwaremill.jox.structured.Scopes.supervised;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 
 public class Par {
@@ -16,16 +17,30 @@ public class Par {
     public static <T> List<T> par(List<Callable<T>> fs) throws InterruptedException {
         return supervised(
                 scope -> {
-                    var forks = new ArrayList<Fork<T>>();
+                    var forks = new ArrayList<>(fs.size());
                     for (Callable<T> f : fs) {
                         forks.add(scope.fork(f));
                     }
-                    var results = new ArrayList<T>();
-                    for (Fork<T> fork : forks) {
-                        results.add(fork.join());
-                    }
-                    return results;
+                    return collect(forks);
                 });
+    }
+
+    /**
+     * 🔞 To use less memory (1 ArrayList vs 2), we use the same ArrayList for {@link Fork} and
+     * <code>result</code>.
+     * Generics are actually <code>Object</code> in runtime!
+     *
+     * <p>I.e: {@code collect} "consumes" forks and it shouldn't be used afterwards. It's not an
+     * everyday pattern
+     */
+    @SuppressWarnings("unchecked")
+    private static <T> List<T> collect(ArrayList<Object> forksAndResults)
+            throws InterruptedException, ExecutionException {
+        for (int i = 0, len = forksAndResults.size(); i < len; i++) {
+            var fork = (Fork<T>) forksAndResults.get(i);
+            forksAndResults.set(i, fork.join());
+        }
+        return (List<T>) forksAndResults;
     }
 
     /**
@@ -39,13 +54,13 @@ public class Par {
         return supervised(
                 scope -> {
                     var s = new Semaphore(parallelism);
-                    var forks = new ArrayList<Fork<T>>();
+                    var forks = new ArrayList<>(fs.size());
                     for (Callable<T> f : fs) {
                         forks.add(
                                 scope.fork(
                                         () -> {
                                             s.acquire();
-                                            var r = f.call();
+                                            T r = f.call();
                                             // no try-finally as there's no
                                             // point in releasing in case of an
                                             // exception, as any newly started
@@ -54,11 +69,7 @@ public class Par {
                                             return r;
                                         }));
                     }
-                    var results = new ArrayList<T>();
-                    for (Fork<T> fork : forks) {
-                        results.add(fork.join());
-                    }
-                    return results;
+                    return collect(forks);
                 });
     }
 }

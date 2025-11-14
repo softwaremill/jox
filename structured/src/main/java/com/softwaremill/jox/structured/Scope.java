@@ -15,7 +15,7 @@ import com.softwaremill.jox.ChannelError;
  * computations in a concurrency scope. Such forks can be created using {@link Scope#fork}, {@link
  * Scope#forkUser}, {@link Scope#forkCancellable} or {@link Scope#forkUnsupervised}.
  */
-public class Scope {
+public final class Scope {
     private final StructuredTaskScope<Object, Void> rawScope;
     private final Supervisor supervisor;
     private final AtomicBoolean scopeDone;
@@ -40,7 +40,7 @@ public class Scope {
 
                     while (true) {
                         switch (supervisor.getCommands().receiveOrClosed()) {
-                            case RunFork<?> r -> rawScope.fork(r.f());
+                            case RunFork<?> r -> rawScope.fork(r);
                             case ChannelDone _ -> {
                                 // if no exceptions, the main f-fork must be done by now
                                 try {
@@ -95,11 +95,11 @@ public class Scope {
      * enclosing scope to end (cancelling all other running forks).
      */
     public <T> Fork<T> fork(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -116,8 +116,8 @@ public class Scope {
                                         }
                                     }
                                     return null;
-                                }));
-        return new ForkUsingResult<>(result);
+                                });
+        return result;
     }
 
     /**
@@ -132,12 +132,12 @@ public class Scope {
      * (cancelling all other running forks).
      */
     public <T> Fork<T> forkUser(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor.forkUserStarts();
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -148,8 +148,8 @@ public class Scope {
                                         }
                                     }
                                     return null;
-                                }));
-        return new ForkUsingResult<>(result);
+                                });
+        return result;
     }
 
     /**
@@ -165,11 +165,11 @@ public class Scope {
      * <p>For alternate behaviors, see {@link #fork}, {@link #forkUser}, {@link #forkCancellable}.
      */
     public <T> Fork<T> forkUnsupervised(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
+        var result = new ForkUsingResult<T>();
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     try {
                                         result.complete(f.call());
@@ -177,8 +177,8 @@ public class Scope {
                                         result.completeExceptionally(e);
                                     }
                                     return null;
-                                }));
-        return new ForkUsingResult<>(result);
+                                });
+        return result;
     }
 
     /**
@@ -201,59 +201,48 @@ public class Scope {
      * virtual threads are started.
      */
     public <T> CancellableFork<T> forkCancellable(Callable<T> f) throws InterruptedException {
-        var result = new CompletableFuture<T>();
         // forks can be never run, if they are cancelled immediately - we need to detect this, not
         // to await on result.get()
-        var started = new AtomicBoolean(false);
-        // interrupt signal
-        var done = new Semaphore(0);
+        var result = new CancellableForkUsingResult<T>();
         supervisor
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     new Scope()
                                             .run(
                                                     nestedScope ->
                                                             forkCancellableNestedScope(
-                                                                    nestedScope,
-                                                                    started,
-                                                                    done,
-                                                                    result,
-                                                                    f));
+                                                                    nestedScope, result, f));
                                     return null;
-                                }));
-        return new CancellableForkUsingResult<>(result, done, started);
+                                });
+        return result;
     }
 
     private static <T> Void forkCancellableNestedScope(
-            Scope nestedScope,
-            AtomicBoolean started,
-            Semaphore done,
-            CompletableFuture<T> result,
-            Callable<T> f)
+            Scope nestedScope, CancellableForkUsingResult<T> result, Callable<T> f)
             throws InterruptedException {
         nestedScope
                 .getSupervisor()
                 .getCommands()
                 .send(
-                        new RunFork<T>(
+                        (RunFork<T>)
                                 () -> {
                                     // "else" means that the fork is already cancelled, so doing
                                     // nothing in that case
-                                    if (!started.getAndSet(true)) {
+                                    if (result.checkNotStartedThenStart()) {
                                         try {
                                             result.complete(f.call());
-                                        } catch (Exception e) {
+                                        } catch (Throwable e) {
                                             result.completeExceptionally(e);
                                         }
                                     }
 
                                     // the nested scope can now finish
-                                    done.release();
+                                    result.done.release();
                                     return null;
-                                }));
-        done.acquire();
+                                });
+        result.done.acquire();
         return null;
     }
 
@@ -308,6 +297,7 @@ public class Scope {
     }
 }
 
+@FunctionalInterface
 interface ExternalScheduler {
     void run(ThrowingConsumer<Scope> r) throws Exception;
 }

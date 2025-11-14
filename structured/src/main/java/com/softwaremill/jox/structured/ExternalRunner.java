@@ -9,12 +9,14 @@ public record ExternalRunner(ActorRef<ExternalScheduler> scheduler) {
      * Typically, it should start a background fork.
      */
     public void runAsync(ThrowingConsumer<Scope> f) {
-        SneakyThrows.sneakyThrows(
-                () ->
-                        scheduler.ask(
-                                s -> {
-                                    s.run(f);
-                                    return null;
-                                }));
+        try {
+            scheduler.ask(
+                    s -> {
+                        s.run(f);
+                        return null;
+                    });
+        } catch (Exception e) {
+            SneakyThrows.sneakyThrow(e);
+        }
     }
 }

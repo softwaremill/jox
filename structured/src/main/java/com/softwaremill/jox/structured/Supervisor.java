@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.softwaremill.jox.Channel;
 
-class Supervisor {
+final class Supervisor {
     private final AtomicInteger runningUserForks = new AtomicInteger(0);
     // used a single-complete cell to record the first exception (or success)
     private final CompletableFuture<Object> result = new CompletableFuture<>();
@@ -49,6 +49,6 @@ class Supervisor {
     }
 }
 
-sealed interface SupervisorCommand permits RunFork {}
+interface SupervisorCommand {}
 
-record RunFork<T>(Callable<T> f) implements SupervisorCommand {}
+interface RunFork<T> extends SupervisorCommand, Callable<T> {}

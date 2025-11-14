@@ -1,6 +1,6 @@
 package com.softwaremill.jox.structured;
 
-public class Scopes {
+public final class Scopes {
     /**
      * Starts a new concurrency scope, which allows starting forks in the given code block {@code
      * f}. Forks can be started using {@link Scope#fork}, {@link Scope#forkUser}, {@link

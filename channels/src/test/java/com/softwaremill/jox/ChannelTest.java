@@ -2,12 +2,14 @@ package com.softwaremill.jox;
 
 import static com.softwaremill.jox.TestUtil.forkVoid;
 import static com.softwaremill.jox.TestUtil.scoped;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
+import org.junit.jupiter.api.Test;
 
 /** Channel tests which are run for various capacities. */
 public class ChannelTest {
@@ -72,5 +74,11 @@ public class ChannelTest {
                     // then
                     assertEquals(1000, s.size());
                 });
+    }
+
+    @Test
+    void testNullItem() throws InterruptedException {
+        Channel<Object> ch = Channel.newBufferedChannel(4);
+        assertThrows(NullPointerException.class, () -> ch.send(null));
     }
 }
