@@ -141,8 +141,8 @@ public class SelectSendTest {
                                             scope,
                                             () -> {
                                                 for (int i = 0;
-                                                     i < channelsCount * msgsCount;
-                                                     i++) {
+                                                        i < channelsCount * msgsCount;
+                                                        i++) {
                                                     var r =
                                                             select(
                                                                     channels.stream()
