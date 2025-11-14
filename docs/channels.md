@@ -17,14 +17,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>channels</artifactId>
-    <version>1.0.1</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:channels:1.0.1'
+implementation 'com.softwaremill.jox:channels:1.1.0'
 ```
 
 ## Buffered channel
@@ -262,7 +262,7 @@ the specified duration. It's guaranteed that this additional thread will be clea
 The project includes benchmarks implemented using JMH - both for the `Channel`, as well as for some built-in Java
 synchronisation primitives (queues), as well as the Kotlin channel implementation.
 
-The test results for version 0.5.0, run on an M1 Max MacBook Pro, with Java 21.0.1, are as follows:
+The test results for version 0.5.0, run on an M1 Max MacBook Pro, with Java 21.1.0, are as follows:
 
 ```
 Benchmark                                                       (capacity)  (chainLength)  (parallelism)  Mode  Cnt     Score     Error  Units
