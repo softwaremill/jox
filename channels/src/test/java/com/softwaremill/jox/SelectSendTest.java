@@ -1,7 +1,6 @@
 package com.softwaremill.jox;
 
-import static com.softwaremill.jox.Select.select;
-import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.Select.*;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -142,8 +141,8 @@ public class SelectSendTest {
                                             scope,
                                             () -> {
                                                 for (int i = 0;
-                                                        i < channelsCount * msgsCount;
-                                                        i++) {
+                                                     i < channelsCount * msgsCount;
+                                                     i++) {
                                                     var r =
                                                             select(
                                                                     channels.stream()
@@ -229,5 +228,24 @@ public class SelectSendTest {
         assertEquals("v2", r2);
         assertEquals("v3", r3);
         assertEquals("v4", r4);
+    }
+
+    @Test
+    public void testTrySendWithDefault() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        ch1.send("v1"); // the channel is now full
+
+        // when
+        var sent = select(ch1.sendClause("v2", () -> "sent"), defaultClause("not sent"));
+
+        // then
+        assertEquals("not sent", sent);
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        var sent2 = select(ch1.sendClause("v2", () -> "sent"), defaultClause("not sent"));
+        assertEquals("sent", sent2);
+        assertEquals("v2", ch1.receive());
     }
 }
