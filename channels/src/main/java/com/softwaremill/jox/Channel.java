@@ -97,6 +97,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     private final int capacity;
     final boolean isRendezvous;
 
+    // usages are inlined to avoid storing an additional field:
     // final boolean isUnlimited = capacity < 0; !isUnlimited = capacity >= 0
 
     // mutable state
@@ -198,7 +199,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
         var currentSegment = bufferEndSegment;
         // the number of segments where all cells are processed, or some are processed (last segment
-        // of the buffer) = Math.ceil((double) capacity / Segment.SEGMENT_SIZE)
+        // of the buffer) = Math.ceil((double) capacity / Segment.SEGMENT_SIZE) (optimized for
+        // efficiency)
         int segmentsToProcess =
                 capacity <= 0
                         ? 0
@@ -617,8 +619,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return ReceiveResult.FAILED;
                     }
                     case CellState.RESUMING ->
-                        // expandBuffer() is resuming the sender -> repeat
-                        Thread.onSpinWait();
+                            // expandBuffer() is resuming the sender -> repeat
+                            Thread.onSpinWait();
                     case CellState.CLOSED -> {
                         return ReceiveResult.CLOSED;
                     }
@@ -759,7 +761,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return ExpandBufferResult.DONE;
                     }
                     case CellState.RESUMING ->
-                        Thread.onSpinWait(); // receive() is resuming the sender -> repeat
+                            Thread.onSpinWait(); // receive() is resuming the sender -> repeat
                     case CellState.CLOSED -> {
                         return ExpandBufferResult.CLOSED;
                     }
@@ -931,7 +933,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return;
                     }
                     case CellState.RESUMING ->
-                        Thread.onSpinWait();// receive() or expandBuffer() are resuming the cell - wait
+                            Thread.onSpinWait(); // receive() or expandBuffer() are resuming the
+                    // cell - wait
                     default ->
                             throw new IllegalStateException(
                                     "Unexpected state: " + state + " in channel: " + this);
@@ -1035,8 +1038,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return false;
                     }
                     case CellState.RESUMING ->
-                        // receive() or expandBuffer() is resuming the sender -> repeat
-                        Thread.onSpinWait();
+                            // receive() or expandBuffer() is resuming the sender -> repeat
+                            Thread.onSpinWait();
                     case CellState.CLOSED -> {
                         return false;
                     }

@@ -159,7 +159,7 @@ public class StressTest {
                                         numberOfThreads
                                                 + capacity
                                                 + Math.ceil(
-                                                (double) capacity / Segment.SEGMENT_SIZE)
+                                                        (double) capacity / Segment.SEGMENT_SIZE)
                                                 + (capacity > 0 ? 1 : 0)
                                                 + 1;
                                 assertTrue(
