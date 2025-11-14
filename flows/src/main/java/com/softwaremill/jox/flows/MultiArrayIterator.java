@@ -12,11 +12,9 @@ class MultiArrayIterator implements Iterator<Byte> {
     private final List<byte[]> arrays;
     private int currentArrayIndex = 0;
     private int currentPosition = 0;
-    private final int totalLength;
 
     public MultiArrayIterator(List<byte[]> arrays) {
         this.arrays = arrays;
-        this.totalLength = arrays.stream().mapToInt(arr -> arr.length).sum();
     }
 
     @Override
@@ -61,11 +59,6 @@ class MultiArrayIterator implements Iterator<Byte> {
             }
         }
         return remaining;
-    }
-
-    /** Returns the total length of all arrays combined. */
-    public int totalLength() {
-        return totalLength;
     }
 
     /** Creates an empty MultiArrayIterator. */

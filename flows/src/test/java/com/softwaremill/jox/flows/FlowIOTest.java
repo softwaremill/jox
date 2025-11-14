@@ -8,8 +8,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -395,8 +395,8 @@ public class FlowIOTest {
         Path path = folder.resolve("not-existing-file.txt");
         var source = Flows.fromByteArrays(new byte[0]);
 
-        // when & then
-        assertThrows(NoSuchFileException.class, () -> source.runToFile(path));
+        // when & then: Linux NoSuchFileException, windows: more generic FileSystemException
+        assertThrows(FileSystemException.class, () -> source.runToFile(path));
     }
 
     @Test
