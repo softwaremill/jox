@@ -29,8 +29,8 @@ public abstract class SelectClause<T> {
 
 abstract class DefaultClause<T> extends SelectClause<T> {
     /**
-     * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of {@code null}, to
-     * indicate that the default clause has been selected during registration.
+     * Used as a result of {@link DefaultClause#register(SelectInstance)}, instead of {@code null},
+     * to indicate that the default clause has been selected during registration.
      */
     @Override
     Object register(SelectInstance select) {
@@ -41,7 +41,7 @@ abstract class DefaultClause<T> extends SelectClause<T> {
 final class DefaultClauseValue<T> extends DefaultClause<T> {
     private final T value;
 
-    public DefaultClauseValue (T value) {
+    public DefaultClauseValue(T value) {
         this.value = value;
     }
 

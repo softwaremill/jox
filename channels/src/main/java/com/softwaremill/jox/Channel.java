@@ -254,17 +254,20 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     /**
-     Kotlin provides https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.channels/-send-channel/try-send.html and tryReceive() returning ChannelResult
-
-     Project Reactor has tryEmitNext() for similar NIO integration
+     * Kotlin provides
+     * https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.channels/-send-channel/try-send.html
+     * and tryReceive() returning ChannelResult
+     *
+     * <p>Project Reactor has tryEmitNext() for similar NIO integration
      */
     public boolean trySend(T value) throws InterruptedException {
         var sent = select(sendClause(value), DEFAULT_NOT_SENT_CLAUSE);
         return sent != DEFAULT_NOT_SENT_VALUE;
     }
-    private static final Object DEFAULT_NOT_SENT_VALUE = new Object();
-    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE = new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
 
+    private static final Object DEFAULT_NOT_SENT_VALUE = new Object();
+    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
+            new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
 
     @Override
     public Object sendOrClosed(T value) throws InterruptedException {

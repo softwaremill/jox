@@ -286,8 +286,8 @@ public class Select {
     public static <T> SelectClause<T> defaultClauseNull() {
         return (SelectClause<T>) DEFAULT_NULL;
     }
-    static final DefaultClause<Void> DEFAULT_NULL = new DefaultClauseValue<Void>(null);
 
+    private static final DefaultClause<Void> DEFAULT_NULL = new DefaultClauseValue<Void>(null);
 
     public static <T> SelectClause<T> defaultClause(Supplier<T> callback) {
         return new DefaultClauseCallback<>(callback);

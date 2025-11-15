@@ -1,7 +1,5 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
 import static com.softwaremill.jox.Select.*;
 import static com.softwaremill.jox.TestUtil.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -11,6 +9,8 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+
+import org.junit.jupiter.api.Test;
 
 public class SelectSendTest {
     @Test
@@ -243,7 +243,7 @@ public class SelectSendTest {
         assertEquals("not sent", sent);
 
         // when
-        sent = select(ch1.sendClause("v2", () -> "sent"), defaultClause(()->"not sent"));
+        sent = select(ch1.sendClause("v2", () -> "sent"), defaultClause(() -> "not sent"));
 
         // then
         assertEquals("not sent", sent);

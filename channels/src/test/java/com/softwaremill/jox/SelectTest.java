@@ -1,11 +1,11 @@
 package com.softwaremill.jox;
 
-import org.junit.jupiter.api.Test;
-
 import static com.softwaremill.jox.Select.defaultClause;
 import static com.softwaremill.jox.Select.defaultClauseNull;
 import static com.softwaremill.jox.Select.select;
 import static org.junit.jupiter.api.Assertions.*;
+
+import org.junit.jupiter.api.Test;
 
 public class SelectTest {
     @Test
@@ -28,7 +28,8 @@ public class SelectTest {
         Channel<String> ch2 = Channel.newBufferedChannel(1);
 
         // when
-        String received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(()->"x"));
+        String received =
+                select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(() -> "x"));
 
         // then
         assertEquals("x", received);
