@@ -1,16 +1,16 @@
 package com.softwaremill.jox;
 
+import org.junit.jupiter.api.Test;
+
 import static com.softwaremill.jox.Select.*;
 import static com.softwaremill.jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
-
-import org.junit.jupiter.api.Test;
 
 public class SelectSendTest {
     @Test
@@ -241,11 +241,53 @@ public class SelectSendTest {
 
         // then
         assertEquals("not sent", sent);
+
+        // when
+        sent = select(ch1.sendClause("v2", () -> "sent"), defaultClause(()->"not sent"));
+
+        // then
+        assertEquals("not sent", sent);
+
         assertEquals("v1", ch1.receive());
 
         // when - now there's space in the channel
         var sent2 = select(ch1.sendClause("v2", () -> "sent"), defaultClause("not sent"));
         assertEquals("sent", sent2);
+        assertEquals("v2", ch1.receive());
+    }
+
+    @Test
+    public void testTrySendWithDefaultNull() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        ch1.send("v1"); // the channel is now full
+
+        // when
+        var sent = select(ch1.sendClause("v2", () -> "sent"), defaultClauseNull());
+
+        // then
+        assertNull(sent);
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        var sent2 = select(ch1.sendClause("v2", () -> "sent"), defaultClauseNull());
+        assertEquals("sent", sent2);
+        assertEquals("v2", ch1.receive());
+    }
+
+    @Test
+    public void testTrySend() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1")); // the channel is now full
+
+        // when
+        assertFalse(ch1.trySend("v2"));
+
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        assertTrue(ch1.trySend("v2"));
         assertEquals("v2", ch1.receive());
     }
 }
