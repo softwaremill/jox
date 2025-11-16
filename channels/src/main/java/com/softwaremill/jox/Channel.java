@@ -266,8 +266,23 @@ public final class Channel<T> implements Source<T>, Sink<T> {
     }
 
     private static final Object DEFAULT_NOT_SENT_VALUE = new Object();
-    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
-            new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
+    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE = new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
+
+    @SafeVarargs
+    public static <T> boolean trySend(T value, Channel<T>... toOneOfChannels) throws InterruptedException {
+        if (toOneOfChannels == null || toOneOfChannels.length == 0)
+            return false;
+
+        var selectCauses = new SelectClause[toOneOfChannels.length + 1];
+        for (int i = 0; i < toOneOfChannels.length; i++){
+            selectCauses[i] = toOneOfChannels[i].sendClause(value);
+        }
+        selectCauses[toOneOfChannels.length] = DEFAULT_NOT_SENT_CLAUSE;
+
+        var sent = select(selectCauses);
+        return sent != DEFAULT_NOT_SENT_VALUE;
+    }
+
 
     @Override
     public Object sendOrClosed(T value) throws InterruptedException {

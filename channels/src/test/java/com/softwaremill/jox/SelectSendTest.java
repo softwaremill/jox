@@ -290,4 +290,29 @@ public class SelectSendTest {
         assertTrue(ch1.trySend("v2"));
         assertEquals("v2", ch1.receive());
     }
+
+    @Test
+    public void testTrySend2() throws InterruptedException {
+        assertFalse(Channel.trySend("v2", null));
+
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1a")); // the channel is now full
+        assertTrue(ch2.trySend("v1b")); // the channel is now full
+
+        // when
+        assertFalse(ch1.trySend("v2"));
+        assertFalse(ch2.trySend("v2"));
+        assertFalse(Channel.trySend("v2", ch1, ch2));
+
+        assertEquals("v1a", ch1.receive());
+        assertEquals("v1b", ch2.receive());
+
+        // when - now there's space in the channel
+        assertTrue(Channel.trySend("v2a", ch1, ch2));
+        assertTrue(Channel.trySend("v2b", ch1, ch2));
+        assertEquals("v2a", ch1.receive());
+        assertEquals("v2b", ch2.receive());
+    }
 }
