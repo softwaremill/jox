@@ -17,20 +17,20 @@ public class Select {
 
     First, the select starts in the `REGISTERING` state. For each clause, we call its `register` method, which in turn
     reserves a send/receive cell in the channel, and stores a `StoredSelect` instance there. This instance, apart from
-    the `SelectInstance`, also holds the segment & index of the cell, so that we can clean up later, when another
+    the `SelectInstance`, also holds the segment & index of the cell so that we can clean up later, when another
     clause is selected.
 
     During registration, if another thread tries to select a clause concurrently, it's prevented from doing so;
-    instead, we collect the clauses for which this happened in a list, and re-register them. Such a thread treats
+    instead, we collect the clauses for which this happened in a list and re-register them. Such a thread treats
     such invocations as if the cell was interrupted, and retries with a new cell. Later, we clean up the stored
     selects, which are re-registered, so that there are no memory leaks.
 
-    Regardless of the outcome, clean up is always called at some point for each `StoredSelect`, apart from the one
-    corresponding to the selected clause. The cleanup sets the cell's state to an interrupted sender or receiver, and
+    Regardless of the outcome, cleanup is always called at some point for each `StoredSelect`, apart from the one
+    corresponding to the selected clause. The cleanup sets the cell's state to an interrupted sender or receiver and
     updates the segment's counter appropriately.
 
     It's possible that a clause is completed immediately during registration. If that's the case, we overwrite the
-    state (including a potentially concurrently set closed state), and cease further registrations.
+    state (including a potentially concurrently set closed state) and cease further registrations.
 
     Any of the states set during registration are acted upon in `checkStateAndWait`. The method properly cleans up in
     case a clause was selected, or a channel becomes closed. If it sees a `REGISTERING` state, the state is changed
@@ -38,7 +38,7 @@ public class Select {
 
     On the other hand, other threads which encounter a `StoredSelect` instance in a channel's cell, call the
     `SelectInstance`'s methods: either `trySelect` or `channelClosed`. These change the state appropriately, optionally
-    waking up the suspended thread to let it know, that it should inspect the state again. If the state change is
+    waking up the suspended thread to let it know that it should inspect the state again. If the state change is
     successful, the cell's state is updated. Otherwise, it's the responsibility of the cleanup procedure to update it.
     */
 
@@ -51,7 +51,7 @@ public class Select {
      * <p>If no clauses are given, throws {@link ChannelDoneException}.
      *
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return The value returned by the selected clause.
      * @throws ChannelClosedException When any of the channels is closed (done or in error).
      */
@@ -76,9 +76,9 @@ public class Select {
      * <p>If no clauses are given, returns {@link ChannelDone}.
      *
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return Either the value returned by the selected clause, or {@link ChannelClosed}, when any
-     *     of the channels is closed (done or in error).
+     * of the channels is closed (done or in error).
      */
     @SafeVarargs
     public static <U> Object selectOrClosed(SelectClause<? extends U>... clauses)
@@ -122,9 +122,9 @@ public class Select {
      *
      * @param timeout The maximum time to wait for a clause to be selected.
      * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     *                {@code null} and can't contain {@code null} values.
      * @return The value returned by the selected clause.
-     * @throws TimeoutException When the timeout elapses before any clause can be selected.
+     * @throws TimeoutException     When the timeout elapses before any clause can be selected.
      * @throws InterruptedException When the current thread is interrupted.
      */
     @SafeVarargs
@@ -154,12 +154,12 @@ public class Select {
      *
      * <p>If the timeout elapses before any clause can be completed, returns the timeout value.
      *
-     * @param timeout The maximum time to wait for a clause to be selected.
+     * @param timeout      The maximum time to wait for a clause to be selected.
      * @param timeoutValue The value to return if the timeout elapses.
-     * @param clauses The clauses, from which one will be selected. Array must not be empty or
-     *     {@code null} and can't contain {@code null} values.
+     * @param clauses      The clauses, from which one will be selected. Array must not be empty or
+     *                     {@code null} and can't contain {@code null} values.
      * @return Either the value returned by the selected clause, the timeout value when timeout
-     *     occurs, or {@link ChannelClosed} when any of the channels is closed (done or in error).
+     * occurs, or {@link ChannelClosed} when any of the channels is closed (done or in error).
      * @throws InterruptedException When the current thread is interrupted.
      */
     @SafeVarargs
@@ -344,7 +344,7 @@ final class SelectInstance {
      * registered.
      *
      * @return {@code true}, if the registration was successful, and the clause has been stored.
-     *     {@code false}, if the channel is closed, or the clause has been immediately selected.
+     * {@code false}, if the channel is closed, or the clause has been immediately selected.
      */
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     <U> boolean register(SelectClause<U> clause) {
@@ -378,10 +378,10 @@ final class SelectInstance {
 
     /**
      * @param allRendezvous If channels for all clauses are rendezvous channels. In such a case,
-     *     busy-looping is initially used, instead of blocking.
+     *                      busy-looping is initially used, instead of blocking.
      * @return Either the value returned by the selected clause (which can include {@link
-     *     RestartSelectMarker#RESTART}), or {@link ChannelClosed}, when any of the channels is
-     *     closed.
+     * RestartSelectMarker#RESTART}), or {@link ChannelClosed}, when any of the channels is
+     * closed.
      */
     Object checkStateAndWait(boolean allRendezvous) throws InterruptedException {
         while (true) {
@@ -487,8 +487,8 @@ final class SelectInstance {
 
     /**
      * @return {@code true} if the given clause was successfully selected, {@code false} otherwise
-     *     (a channel is closed, another clause is selected, registration is in progress, select is
-     *     interrupted).
+     * (a channel is closed, another clause is selected, registration is in progress, select is
+     * interrupted).
      */
     boolean trySelect(StoredSelectClause storedSelectClause) {
         while (true) {
@@ -539,8 +539,8 @@ final class SelectInstance {
 
     /**
      * @return {@code true} when the given {@code channelClosed} has been set as the new state of
-     *     the select. {@code false}, if another clause has already been selected, or if the channel
-     *     is already closed.
+     * the select. {@code false}, if another clause has already been selected, or if the channel
+     * is already closed.
      */
     boolean channelClosed(ChannelClosed channelClosed) {
         while (true) {
