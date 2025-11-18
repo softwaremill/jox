@@ -1,7 +1,5 @@
 package com.softwaremill.jox;
 
-import static com.softwaremill.jox.Select.select;
-
 import java.util.function.Supplier;
 
 /**
@@ -33,8 +31,14 @@ public interface Sink<T> extends CloseableChannel {
      * @return {@code true} if the value was sent, {@code false} otherwise.
      * @throws ChannelClosedException When the channel is closed.
      */
-    default boolean trySend(T value) throws InterruptedException {
-        var sent = select(sendClause(value), Channel.DEFAULT_NOT_SENT_CLAUSE);
+    default boolean trySend(T value) {
+        Object sent;
+        try {
+            sent = Select.select(sendClause(value), Channel.DEFAULT_NOT_SENT_CLAUSE);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(
+                    "Interrupted during trySend, which should not be possible", e);
+        }
         return sent != Channel.DEFAULT_NOT_SENT_VALUE;
     }
 
@@ -47,7 +51,7 @@ public interface Sink<T> extends CloseableChannel {
      * @throws ChannelClosedException When the channel is closed.
      */
     @SafeVarargs
-    static <T> boolean trySend(T value, Sink<T>... toOneOfChannels) throws InterruptedException {
+    static <T> boolean trySend(T value, Sink<T>... toOneOfChannels) {
         if (toOneOfChannels == null || toOneOfChannels.length == 0) return false;
 
         var selectCauses = new SelectClause[toOneOfChannels.length + 1];
@@ -56,7 +60,13 @@ public interface Sink<T> extends CloseableChannel {
         }
         selectCauses[toOneOfChannels.length] = Channel.DEFAULT_NOT_SENT_CLAUSE;
 
-        var sent = select(selectCauses);
+        Object sent;
+        try {
+            sent = Select.select(selectCauses);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(
+                    "Interrupted during trySend, which should not be possible", e);
+        }
         return sent != Channel.DEFAULT_NOT_SENT_VALUE;
     }
 
