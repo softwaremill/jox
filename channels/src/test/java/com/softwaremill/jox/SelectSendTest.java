@@ -293,7 +293,7 @@ public class SelectSendTest {
 
     @Test
     public void testTrySend2() throws InterruptedException {
-        assertFalse(Channel.trySend("v2", null));
+        assertFalse(Sink.trySend("v2", null));
 
         // given
         Channel<String> ch1 = Channel.newBufferedChannel(1);
@@ -304,14 +304,14 @@ public class SelectSendTest {
         // when
         assertFalse(ch1.trySend("v2"));
         assertFalse(ch2.trySend("v2"));
-        assertFalse(Channel.trySend("v2", ch1, ch2));
+        assertFalse(Sink.trySend("v2", ch1, ch2));
 
         assertEquals("v1a", ch1.receive());
         assertEquals("v1b", ch2.receive());
 
         // when - now there's space in the channel
-        assertTrue(Channel.trySend("v2a", ch1, ch2));
-        assertTrue(Channel.trySend("v2b", ch1, ch2));
+        assertTrue(Sink.trySend("v2a", ch1, ch2));
+        assertTrue(Sink.trySend("v2b", ch1, ch2));
         assertEquals("v2a", ch1.receive());
         assertEquals("v2b", ch2.receive());
     }

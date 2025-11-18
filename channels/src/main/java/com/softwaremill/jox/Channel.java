@@ -13,27 +13,32 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
- * Channel is a thread-safe data structure which exposes three basic operations:
+ * Channel is a thread-safe data structure that exposes three basic operations:
  *
- * <p>- {@link Channel#send(Object)}-ing a value to the channel. Values can't be {@code null}. -
- * {@link Channel#receive()}-ing a value from the channel - closing the channel using {@link
- * Channel#done()} or {@link Channel#error(Throwable)}
+ * <ul>
+ *   <li>{@link Channel#send(Object)}-ing a value to the channel. Values can't be {@code null}.
+ *   <li>{@link Channel#receive()}-ing a value from the channel
+ *   <li>closing the channel using {@link Channel#done()} or {@link Channel#error(Throwable)}
+ * </ul>
  *
  * <p>There are three channel flavors:
  *
- * <p>- rendezvous channels, where senders and receivers must meet to exchange values - buffered
- * channels, where a given number of sent values might be buffered, before subsequent `send`s block
- * - unlimited channels, where an unlimited number of values might be buffered, hence `send` never
- * blocks
+ * <ul>
+ *   <li>rendezvous channels, where senders and receivers must meet to exchange values
+ *   <li>buffered channels, where a given number of sent values might be buffered, before subsequent
+ *       `send`s block
+ *   <li>unlimited channels, where an unlimited number of values might be buffered, hence `send`
+ *       never blocks
+ * </ul>
  *
  * <p>To create a channel, use {@link Channel#newRendezvousChannel()}, {@link
  * Channel#newBufferedChannel(int)} and {@link Channel#newUnlimitedChannel()} methods. Additionally,
  * {@link Channel#newBufferedDefaultChannel()} creates a buffered channel with a "default" capacity
  * of 16, which should be a good starting point for most use-cases.
  *
- * <p>In a rendezvous channel, senders and receivers block, until a matching party arrives (unless
- * one is already waiting). Similarly, buffered channels block if the buffer is full (in case of
- * senders), or in case of receivers, if the buffer is empty and there are no waiting senders.
+ * <p>In a rendezvous channel, senders and receivers block until a matching party arrives (unless
+ * one is already waiting). Similarly, buffered channels block if the buffer is full (in the case of
+ * senders), or in the case of receivers, if the buffer is empty and there are no waiting senders.
  *
  * <p>All blocking operations behave properly upon interruption.
  *
@@ -42,7 +47,7 @@ import java.util.stream.Stream;
  * values (using {@link Channel#error(Throwable)}).
  *
  * <p>After closing, no more values can be sent to the channel. If the channel is "done", any
- * pending sends will be completed normally. If the channel is in an "error" state, pending sends
+ * pending `send`s will be completed normally. If the channel is in an "error" state, pending sends
  * will be interrupted and will return with the reason for the closure.
  *
  * <p>In case the channel is closed, one of the {@link ChannelClosedException}s is thrown.
@@ -253,41 +258,15 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         }
     }
 
-    /**
-     * Kotlin provides
-     * https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.channels/-send-channel/try-send.html
-     * and tryReceive() returning ChannelResult
-     *
-     * <p>Project Reactor has tryEmitNext() for similar NIO integration
-     */
-    public boolean trySend(T value) throws InterruptedException {
-        var sent = select(sendClause(value), DEFAULT_NOT_SENT_CLAUSE);
-        return sent != DEFAULT_NOT_SENT_VALUE;
-    }
-
-    private static final Object DEFAULT_NOT_SENT_VALUE = new Object();
-    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE = new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
-
-    @SafeVarargs
-    public static <T> boolean trySend(T value, Channel<T>... toOneOfChannels) throws InterruptedException {
-        if (toOneOfChannels == null || toOneOfChannels.length == 0)
-            return false;
-
-        var selectCauses = new SelectClause[toOneOfChannels.length + 1];
-        for (int i = 0; i < toOneOfChannels.length; i++){
-            selectCauses[i] = toOneOfChannels[i].sendClause(value);
-        }
-        selectCauses[toOneOfChannels.length] = DEFAULT_NOT_SENT_CLAUSE;
-
-        var sent = select(selectCauses);
-        return sent != DEFAULT_NOT_SENT_VALUE;
-    }
-
-
     @Override
     public Object sendOrClosed(T value) throws InterruptedException {
         return doSend(value, null, null);
     }
+
+    // used by Sink.trySend
+    static final Object DEFAULT_NOT_SENT_VALUE = new Object();
+    static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
+            new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
 
     /**
      * @return If {@code select} & {@code selectClause} is {@code null}: {@code null} when the value
