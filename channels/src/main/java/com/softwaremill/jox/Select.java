@@ -279,15 +279,22 @@ public class Select {
     }
 
     public static <T> SelectClause<T> defaultClause(T value) {
-        return defaultClause(() -> value);
+        return new DefaultClauseValue<>(value);
     }
 
+    @SuppressWarnings("unchecked")
+    public static <T> SelectClause<T> defaultClauseNull() {
+        return (SelectClause<T>) DEFAULT_NULL;
+    }
+
+    private static final DefaultClause<Void> DEFAULT_NULL = new DefaultClauseValue<Void>(null);
+
     public static <T> SelectClause<T> defaultClause(Supplier<T> callback) {
-        return new DefaultClause<>(callback);
+        return new DefaultClauseCallback<>(callback);
     }
 }
 
-class SelectInstance {
+final class SelectInstance {
     /**
      * Possible states:
      *
@@ -587,7 +594,7 @@ enum SelectState {
  * Used to keep information about a select instance that is stored in a channel, awaiting
  * completion.
  */
-class StoredSelectClause {
+final class StoredSelectClause {
     private final SelectInstance select;
     private final Segment segment;
     private final int i;

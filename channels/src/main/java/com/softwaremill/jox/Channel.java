@@ -2,6 +2,7 @@ package com.softwaremill.jox;
 
 import static com.softwaremill.jox.CellState.*;
 import static com.softwaremill.jox.Segment.findAndMoveForward;
+import static com.softwaremill.jox.Select.select;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -251,6 +252,37 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             throw c.toException();
         }
     }
+
+    /**
+     * Kotlin provides
+     * https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines.channels/-send-channel/try-send.html
+     * and tryReceive() returning ChannelResult
+     *
+     * <p>Project Reactor has tryEmitNext() for similar NIO integration
+     */
+    public boolean trySend(T value) throws InterruptedException {
+        var sent = select(sendClause(value), DEFAULT_NOT_SENT_CLAUSE);
+        return sent != DEFAULT_NOT_SENT_VALUE;
+    }
+
+    private static final Object DEFAULT_NOT_SENT_VALUE = new Object();
+    private static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE = new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
+
+    @SafeVarargs
+    public static <T> boolean trySend(T value, Channel<T>... toOneOfChannels) throws InterruptedException {
+        if (toOneOfChannels == null || toOneOfChannels.length == 0)
+            return false;
+
+        var selectCauses = new SelectClause[toOneOfChannels.length + 1];
+        for (int i = 0; i < toOneOfChannels.length; i++){
+            selectCauses[i] = toOneOfChannels[i].sendClause(value);
+        }
+        selectCauses[toOneOfChannels.length] = DEFAULT_NOT_SENT_CLAUSE;
+
+        var sent = select(selectCauses);
+        return sent != DEFAULT_NOT_SENT_VALUE;
+    }
+
 
     @Override
     public Object sendOrClosed(T value) throws InterruptedException {

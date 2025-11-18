@@ -1,15 +1,15 @@
 package com.softwaremill.jox;
 
 import static com.softwaremill.jox.Select.defaultClause;
+import static com.softwaremill.jox.Select.defaultClauseNull;
 import static com.softwaremill.jox.Select.select;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
 public class SelectTest {
     @Test
-    public void testSelectDefault() throws InterruptedException {
+    public void testSelectDefaultValue() throws InterruptedException {
         // given
         Channel<String> ch1 = Channel.newBufferedChannel(1);
         Channel<String> ch2 = Channel.newBufferedChannel(1);
@@ -19,6 +19,33 @@ public class SelectTest {
 
         // then
         assertEquals("x", received);
+    }
+
+    @Test
+    public void testSelectDefaultCallback() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
+
+        // when
+        String received =
+                select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(() -> "x"));
+
+        // then
+        assertEquals("x", received);
+    }
+
+    @Test
+    public void testSelectDefaultNull() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
+
+        // when
+        String received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClauseNull());
+
+        // then
+        assertNull(received);
     }
 
     @Test

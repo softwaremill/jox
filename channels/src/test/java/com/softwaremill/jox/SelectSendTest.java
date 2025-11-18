@@ -2,7 +2,7 @@ package com.softwaremill.jox;
 
 import static com.softwaremill.jox.Select.*;
 import static com.softwaremill.jox.TestUtil.*;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -241,11 +241,78 @@ public class SelectSendTest {
 
         // then
         assertEquals("not sent", sent);
+
+        // when
+        sent = select(ch1.sendClause("v2", () -> "sent"), defaultClause(() -> "not sent"));
+
+        // then
+        assertEquals("not sent", sent);
+
         assertEquals("v1", ch1.receive());
 
         // when - now there's space in the channel
         var sent2 = select(ch1.sendClause("v2", () -> "sent"), defaultClause("not sent"));
         assertEquals("sent", sent2);
         assertEquals("v2", ch1.receive());
+    }
+
+    @Test
+    public void testTrySendWithDefaultNull() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        ch1.send("v1"); // the channel is now full
+
+        // when
+        var sent = select(ch1.sendClause("v2", () -> "sent"), defaultClauseNull());
+
+        // then
+        assertNull(sent);
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        var sent2 = select(ch1.sendClause("v2", () -> "sent"), defaultClauseNull());
+        assertEquals("sent", sent2);
+        assertEquals("v2", ch1.receive());
+    }
+
+    @Test
+    public void testTrySend() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1")); // the channel is now full
+
+        // when
+        assertFalse(ch1.trySend("v2"));
+
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        assertTrue(ch1.trySend("v2"));
+        assertEquals("v2", ch1.receive());
+    }
+
+    @Test
+    public void testTrySend2() throws InterruptedException {
+        assertFalse(Channel.trySend("v2", null));
+
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1a")); // the channel is now full
+        assertTrue(ch2.trySend("v1b")); // the channel is now full
+
+        // when
+        assertFalse(ch1.trySend("v2"));
+        assertFalse(ch2.trySend("v2"));
+        assertFalse(Channel.trySend("v2", ch1, ch2));
+
+        assertEquals("v1a", ch1.receive());
+        assertEquals("v1b", ch2.receive());
+
+        // when - now there's space in the channel
+        assertTrue(Channel.trySend("v2a", ch1, ch2));
+        assertTrue(Channel.trySend("v2b", ch1, ch2));
+        assertEquals("v2a", ch1.receive());
+        assertEquals("v2b", ch2.receive());
     }
 }
