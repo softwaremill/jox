@@ -6,11 +6,11 @@
   <parent>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>parent</artifactId>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
   </parent>
 
   <artifactId>channels-fray-tests</artifactId>
-  <version>1.1.0</version>
+  <version>1.1.1</version>
   <packaging>jar</packaging>
   <name>${project.groupId}:${project.artifactId}</name>
 
@@ -18,7 +18,7 @@
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>channels</artifactId>
-      <version>1.1.0</version>
+      <version>1.1.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
