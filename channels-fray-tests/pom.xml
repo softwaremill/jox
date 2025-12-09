@@ -51,7 +51,7 @@
       <plugin>
         <groupId>org.pastalab.fray.maven</groupId>
         <artifactId>fray-plugins-maven</artifactId>
-        <version>0.6.9</version>
+        <version>0.6.10</version>
         <executions>
           <execution>
             <id>prepare-fray</id>
