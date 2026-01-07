@@ -6,5 +6,11 @@
   "automerge": true,
   "labels": [
     "dependency"
+  ],
+  "packageRules": [
+    {
+      "matchPackageNames": ["sphinx"],
+      "enabled": false
+    }
   ]
 }
