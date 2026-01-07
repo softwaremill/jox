@@ -21,6 +21,7 @@
     <module>bench</module>
     <module>flows</module>
     <module>channels-fray-tests</module>
+    <module>kafka</module>
   </modules>
 
   <!-- Deployment metadata -->
