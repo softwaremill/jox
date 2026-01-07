@@ -2,6 +2,7 @@ package com.softwaremill.jox.kafka;
 
 import java.util.List;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 
 /**
@@ -12,15 +13,15 @@ import org.apache.kafka.clients.producer.ProducerRecord;
  * @param <K> The type of the key.
  * @param <V> The type of the value.
  */
-public record SendPacket<K, V>(List<ProducerRecord<K, V>> send, List<ReceivedMessage<?, ?>> commit)
+public record SendPacket<K, V>(List<ProducerRecord<K, V>> send, List<ConsumerRecord<?, ?>> commit)
         implements HasCommit {
     public static <K, V> SendPacket<K, V> of(
-            ProducerRecord<K, V> send, ReceivedMessage<?, ?> commit) {
+            ProducerRecord<K, V> send, ConsumerRecord<?, ?> commit) {
         return new SendPacket<>(List.of(send), List.of(commit));
     }
 
     public static <K, V> SendPacket<K, V> of(
-            List<ProducerRecord<K, V>> send, ReceivedMessage<?, ?> commit) {
+            List<ProducerRecord<K, V>> send, ConsumerRecord<?, ?> commit) {
         return new SendPacket<>(send, List.of(commit));
     }
 }

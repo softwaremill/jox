@@ -5,6 +5,7 @@ import static com.softwaremill.jox.structured.Scopes.supervised;
 import java.util.ArrayList;
 import java.util.Collections;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,12 +21,12 @@ public final class KafkaFlow {
 
     private KafkaFlow() {}
 
-    public static <K, V> Flow<ReceivedMessage<K, V>> subscribe(
+    public static <K, V> Flow<ConsumerRecord<K, V>> subscribe(
             ConsumerSettings<K, V> settings, String topic, String... otherTopics) {
         return subscribe(settings.toConsumer(), true, topic, otherTopics);
     }
 
-    public static <K, V> Flow<ReceivedMessage<K, V>> subscribe(
+    public static <K, V> Flow<ConsumerRecord<K, V>> subscribe(
             KafkaConsumer<K, V> kafkaConsumer,
             boolean closeWhenComplete,
             String topic,
@@ -43,7 +44,7 @@ public final class KafkaFlow {
                 });
     }
 
-    public static <K, V> Flow<ReceivedMessage<K, V>> subscribe(
+    public static <K, V> Flow<ConsumerRecord<K, V>> subscribe(
             ActorRef<KafkaConsumerWrapper<K, V>> kafkaConsumerActor,
             String topic,
             String... otherTopics) {
@@ -54,7 +55,7 @@ public final class KafkaFlow {
             ActorRef<KafkaConsumerWrapper<K, V>> kafkaConsumerActor,
             String topic,
             String[] otherTopics,
-            FlowEmit<ReceivedMessage<K, V>> emit)
+            FlowEmit<ConsumerRecord<K, V>> emit)
             throws Exception {
         final var topics = new ArrayList<String>();
         topics.add(topic);
@@ -66,7 +67,7 @@ public final class KafkaFlow {
             while (true) {
                 var records = kafkaConsumerActor.ask(KafkaConsumerWrapper::poll);
                 for (var r : records) {
-                    emit.apply(new ReceivedMessage<>(r));
+                    emit.apply(r);
                 }
             }
         } catch (Exception e) {

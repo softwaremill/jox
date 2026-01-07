@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import com.softwaremill.jox.Source;
@@ -57,12 +58,9 @@ public final class OffsetCommit {
                             if (obj == tick) {
                                 commitAll.run();
                             } else if (obj instanceof HasCommit packet) {
-                                for (ReceivedMessage<?, ?> receivedMessage : packet.commit()) {
-                                    var tp =
-                                            new TopicPartition(
-                                                    receivedMessage.topic(),
-                                                    receivedMessage.partition());
-                                    toCommit.merge(tp, receivedMessage.offset(), Math::max);
+                                for (ConsumerRecord<?, ?> consumerRecord : packet.commit()) {
+                                    final var tp = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+                                    toCommit.merge(tp, consumerRecord.offset(), Math::max);
                                 }
                             }
                         });
