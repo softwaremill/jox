@@ -9,6 +9,7 @@ Jox contains three main modules:
 * Programmer-friendly [structured concurrency](structured.md) (Java 25 only)
 * Finite & infinite streaming using [flows](flows.md), with reactive streams compatibility, (blocking) I/O integration
   and a high-level, "functional" API (Java 25 only)
+* [Kafka](kafka.md) integration for reading from and writing to Kafka topics using flows (Java 25 only)
 
 Source code is [available on GitHub](https://github.com/softwaremill/jox).
 
@@ -106,4 +107,5 @@ For a Scala version, see the [Ox project](https://github.com/softwaremill/ox).
    channels
    flows
    structured
+   kafka
    contributing
