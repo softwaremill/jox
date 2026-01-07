@@ -16,14 +16,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>structured</artifactId>
-    <version>0.5.0</version>
+    <version>0.5.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:structured:0.5.0'
+implementation 'com.softwaremill.jox:structured:0.5.1'
 ```
 
 ## Creating scopes and forking computations
