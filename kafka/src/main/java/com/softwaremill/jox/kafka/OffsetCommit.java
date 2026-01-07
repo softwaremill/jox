@@ -59,7 +59,10 @@ public final class OffsetCommit {
                                 commitAll.run();
                             } else if (obj instanceof HasCommit packet) {
                                 for (ConsumerRecord<?, ?> consumerRecord : packet.commit()) {
-                                    final var tp = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+                                    final var tp =
+                                            new TopicPartition(
+                                                    consumerRecord.topic(),
+                                                    consumerRecord.partition());
                                     toCommit.merge(tp, consumerRecord.offset(), Math::max);
                                 }
                             }

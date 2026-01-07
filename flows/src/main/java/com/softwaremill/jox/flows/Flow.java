@@ -1,7 +1,10 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.*;
-import com.softwaremill.jox.structured.*;
+import static com.softwaremill.jox.Select.defaultClause;
+import static com.softwaremill.jox.Select.selectOrClosed;
+import static com.softwaremill.jox.flows.Flows.usingEmit;
+import static com.softwaremill.jox.structured.Scopes.supervised;
+import static java.lang.Thread.sleep;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,11 +28,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 
-import static com.softwaremill.jox.Select.defaultClause;
-import static com.softwaremill.jox.Select.selectOrClosed;
-import static com.softwaremill.jox.flows.Flows.usingEmit;
-import static com.softwaremill.jox.structured.Scopes.supervised;
-import static java.lang.Thread.sleep;
+import com.softwaremill.jox.*;
+import com.softwaremill.jox.structured.*;
 
 /**
  * Describes an asynchronous transformation pipeline. When run, emits elements of type `T`.
@@ -834,24 +834,27 @@ public class Flow<T> {
      * emitting `n` elements, the returned flow completes as well.
      */
     public Flow<T> take(int n) {
-        return usingEmit(emit -> {
-            AtomicInteger taken = new AtomicInteger(0);
-            try {
-                last.run(t -> {
-                    final var next = taken.incrementAndGet();
+        return usingEmit(
+                emit -> {
+                    AtomicInteger taken = new AtomicInteger(0);
+                    try {
+                        last.run(
+                                t -> {
+                                    final var next = taken.incrementAndGet();
 
-                    emit.apply(t);
+                                    emit.apply(t);
 
-                    if (next >= n) {
-                        throw new BreakException();
+                                    if (next >= n) {
+                                        throw new BreakException();
+                                    }
+                                });
+                    } catch (JoxScopeExecutionException e) {
+                        if (!(e.getCause() instanceof BreakException)) {
+                            throw e;
+                        }
+                    } catch (BreakException _) {
                     }
                 });
-            } catch (JoxScopeExecutionException e) {
-                if (!(e.getCause() instanceof BreakException)) {
-                    throw e;
-                }
-            } catch (BreakException _) {}
-        });
     }
 
     /**

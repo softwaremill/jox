@@ -1,10 +1,9 @@
 package com.softwaremill.jox.flows;
 
-import com.softwaremill.jox.Channel;
-import com.softwaremill.jox.ChannelError;
-import com.softwaremill.jox.Source;
-import com.softwaremill.jox.structured.JoxScopeExecutionException;
-import org.junit.jupiter.api.Test;
+import static com.softwaremill.jox.structured.Scopes.supervised;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Duration;
 import java.util.*;
@@ -12,10 +11,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
-import static com.softwaremill.jox.structured.Scopes.supervised;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.Test;
+
+import com.softwaremill.jox.Channel;
+import com.softwaremill.jox.ChannelError;
+import com.softwaremill.jox.Source;
+import com.softwaremill.jox.structured.JoxScopeExecutionException;
 
 class FlowTest {
 
@@ -46,10 +47,12 @@ class FlowTest {
 
     @Test
     void shouldThrowExceptionForFailedFlow() {
-        assertThrows(IllegalStateException.class, () -> {
-            Flows.failed(new IllegalStateException())
-                .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
-        });
+        assertThrows(
+                IllegalStateException.class,
+                () -> {
+                    Flows.failed(new IllegalStateException())
+                            .runFold(0, (acc, n) -> Integer.valueOf(acc.toString() + n));
+                });
     }
 
     @Test
@@ -102,48 +105,53 @@ class FlowTest {
 
     @Test
     void shouldTakeExactlyAllElementsFromFlowWithoutWaitingForMore() throws Exception {
-        supervised(scope -> {
-            var ch = Channel.<Integer>newUnlimitedChannel();
+        supervised(
+                scope -> {
+                    var ch = Channel.<Integer>newUnlimitedChannel();
 
-            scope.fork(() -> {
-                ch.send(1);
-                ch.send(2);
-                ch.send(3);
-                return null;
-            });
+                    scope.fork(
+                            () -> {
+                                ch.send(1);
+                                ch.send(2);
+                                ch.send(3);
+                                return null;
+                            });
 
-            var result = Flows.fromSource(ch).take(3).runToList();
-            assertEquals(List.of(1, 2, 3), result);
-            return null;
-        });
+                    var result = Flows.fromSource(ch).take(3).runToList();
+                    assertEquals(List.of(1, 2, 3), result);
+                    return null;
+                });
     }
 
     @Test
     void shouldBreakImmediatelyAfterTakingNElements() throws Exception {
-        supervised(scope -> {
-            var ch = Channel.<Integer>newUnlimitedChannel();
-            var processedCount = new AtomicInteger(0);
+        supervised(
+                scope -> {
+                    var ch = Channel.<Integer>newUnlimitedChannel();
+                    var processedCount = new AtomicInteger(0);
 
-            scope.fork(() -> {
-                for (int i = 1; i <= 10; i++) {
-                    ch.send(i);
-                }
-                return null;
-            });
+                    scope.fork(
+                            () -> {
+                                for (int i = 1; i <= 10; i++) {
+                                    ch.send(i);
+                                }
+                                return null;
+                            });
 
-            var result = Flows.fromSource(ch)
-                .map(
-                    x -> {
-                        processedCount.incrementAndGet();
-                        return x;
-                    })
-                .take(3)
-                .runToList();
+                    var result =
+                            Flows.fromSource(ch)
+                                    .map(
+                                            x -> {
+                                                processedCount.incrementAndGet();
+                                                return x;
+                                            })
+                                    .take(3)
+                                    .runToList();
 
-            assertEquals(List.of(1, 2, 3), result);
-            assertEquals(3, processedCount.get());
-            return null;
-        });
+                    assertEquals(List.of(1, 2, 3), result);
+                    assertEquals(3, processedCount.get());
+                    return null;
+                });
     }
 
     @Test
