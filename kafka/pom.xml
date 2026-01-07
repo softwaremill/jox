@@ -16,7 +16,7 @@
 
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
-    <kafka.version>3.9.0</kafka.version>
+    <kafka.version>3.9.1</kafka.version>
   </properties>
 
   <dependencies>
