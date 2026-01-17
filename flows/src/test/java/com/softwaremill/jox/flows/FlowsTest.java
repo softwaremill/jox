@@ -54,6 +54,151 @@ class FlowsTest {
     }
 
     @Test
+    void shouldCreateSimpleChannelFlow() throws Exception {
+        // given
+        var flow =
+                Flows.<Integer>usingChannel(
+                        sink -> {
+                            supervised(
+                                    scope -> {
+                                        scope.forkUser(
+                                                () -> {
+                                                    sink.send(1);
+                                                    return null;
+                                                });
+
+                                        scope.forkUser(
+                                                () -> {
+                                                    sink.send(2);
+                                                    return null;
+                                                });
+
+                                        return null;
+                                    });
+
+                            sink.send(3);
+                        });
+
+        // when
+        var result = flow.runToList();
+
+        // then
+        assertEquals(3, result.size());
+        assertTrue(result.containsAll(List.of(1, 2, 3)));
+    }
+
+    @Test
+    @Timeout(value = 5, unit = TimeUnit.SECONDS)
+    void shouldCreateChannelFlow() throws Exception {
+        // given
+        var flow =
+                Flows.<Integer>usingChannel(
+                        sink -> {
+                            supervised(
+                                    scope -> {
+                                        for (var i = 0; i <= 1000; i++) {
+                                            final var value = i;
+
+                                            scope.forkUser(
+                                                    () -> {
+                                                        Thread.sleep(1000);
+                                                        sink.send(value);
+                                                        return null;
+                                                    });
+                                        }
+
+                                        return null;
+                                    });
+                        });
+
+        // when
+        var sum = flow.runFold(0, Integer::sum);
+
+        // then
+        assertEquals(500500, sum);
+    }
+
+    @Test
+    void shouldCreateChannelFlowAndCancelIt() throws Exception {
+        var flow =
+                Flows.<Integer>usingChannel(
+                        sink ->
+                                supervised(
+                                        scope -> {
+                                            for (var i = 0; i <= 10; i++) {
+                                                final var value = i;
+
+                                                scope.forkUser(
+                                                        () -> {
+                                                            Thread.sleep(10000);
+                                                            sink.send(value);
+                                                            return null;
+                                                        });
+                                            }
+
+                                            return null;
+                                        }));
+
+        supervised(
+                scope -> {
+                    var cancellable =
+                            scope.forkCancellable(
+                                    () -> {
+                                        try {
+                                            return flow.runFold(0, Integer::sum);
+                                        } catch (InterruptedException e) {
+                                            return -1;
+                                        }
+                                    });
+
+                    Thread.sleep(1000);
+                    var res = cancellable.cancel();
+                    assertEquals(-1, res);
+                    return null;
+                });
+    }
+
+    @Test
+    void shouldPropagateErrorFromUsingChannel() {
+        // given
+        var flow =
+                Flows.<Integer>usingChannel(
+                        _ -> {
+                            throw new RuntimeException("boom");
+                        });
+
+        // when & then
+        var exception = assertThrows(Exception.class, flow::runToList);
+        assertTrue(exception.getMessage().contains("boom"));
+    }
+
+    @Test
+    void shouldPropagateErrorFromForkInUsingChannel() {
+        // given
+        var flow =
+                Flows.<Integer>usingChannel(
+                        sink -> {
+                            supervised(
+                                    scope -> {
+                                        scope.forkUser(
+                                                () -> {
+                                                    Thread.sleep(50);
+                                                    throw new RuntimeException("fork boom");
+                                                });
+
+                                        sink.send(1);
+                                        sink.send(2);
+
+                                        return null;
+                                    });
+                        });
+
+        // when & then
+        var exception = assertThrows(Exception.class, flow::runToList);
+        assertTrue(exception.getMessage().contains("fork boom"));
+    }
+
+    @Test
     void shouldProduceRange() throws Exception {
         assertEquals(List.of(1, 2, 3, 4, 5), Flows.range(1, 5, 1).runToList());
         assertEquals(List.of(1, 3, 5), Flows.range(1, 5, 2).runToList());

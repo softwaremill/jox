@@ -102,8 +102,30 @@ However, take care **not** to share the `FlowEmit` instance across threads. That
 thread-unsafe and should only be used on the calling thread. The lifetime of `FlowEmit` should not extend over the
 duration of the invocation of `usingEmit`.
 
-Any asynchronous communication should be best done with `Channel`s. You can then manually forward any elements received
-from a channel to `emit`, or use e.g. `FlowEmit.channelToEmit`.
+For **concurrent emissions** from multiple threads, use `usingChannel` instead:
+
+```java
+import com.softwaremill.jox.flows.Flows;
+import static com.softwaremill.jox.structured.Scopes.supervised;
+
+void main() throws Exception {
+    Flows.usingChannel(sink -> {
+        sink.send(1);
+
+        supervised(scope -> {
+            scope.forkUser(() -> {
+                sink.send(2);
+                return null;
+            });
+            scope.forkUser(() -> {
+                sink.send(3);
+                return null;
+            });
+            return null;
+        });
+    }).runToList(); // Returns [1, 2, 3] in non-deterministic order
+}
+```
 
 ## Transforming flows: basics
 

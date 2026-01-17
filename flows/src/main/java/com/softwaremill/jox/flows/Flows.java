@@ -45,6 +45,75 @@ public final class Flows {
     }
 
     /**
+     * Creates a flow that supports concurrent, thread-safe emissions.
+     *
+     * <p>Unlike {@link #usingEmit(ThrowingConsumer)} which provides a thread-unsafe {@link
+     * FlowEmit}, this method provides a thread-safe {@link Sink} that can be safely used from
+     * multiple threads concurrently. This makes it suitable for scenarios requiring concurrent
+     * emission, such as bridging external event sources, parallel processing, or aggregating
+     * results from multiple background tasks.
+     *
+     * <p><b>When to use:</b>
+     *
+     * <ul>
+     *   <li>Use {@link #usingEmit} for simple, sequential emission from a single thread
+     *   <li>Use {@code usingChannel} when you need concurrent emission from multiple threads
+     * </ul>
+     *
+     * <p><b>Example usage:</b>
+     *
+     * <pre>{@code
+     * var flow = Flows.usingChannel(sink -> {
+     *     // Emit from the main thread
+     *     sink.send(1);
+     *
+     *     // Fork background tasks that emit concurrently
+     *     supervised(scope -> {
+     *         scope.forkUser(() -> { sink.send(2); return null; });
+     *         scope.forkUser(() -> { sink.send(3); return null; });
+     *         return null;
+     *     });
+     * });
+     *
+     * var result = flow.runToList(); // Result contains [1, 2, 3] in non-deterministic order
+     * }</pre>
+     *
+     * <p><b>Buffer configuration:</b> The internal channel buffer size is determined by the {@link
+     * Flow#CHANNEL_BUFFER_SIZE} scoped value, or {@link Channel#DEFAULT_BUFFER_SIZE} if not
+     * specified.
+     *
+     * @param withSink callback that receives a thread-safe {@link Sink} for emitting elements
+     * @param <T> the type of elements emitted by the flow
+     * @return a flow that emits elements sent to the sink
+     * @see #usingEmit(ThrowingConsumer)
+     */
+    public static <T> Flow<T> usingChannel(ThrowingConsumer<Sink<T>> withSink) {
+        return usingEmit(
+                emit ->
+                        supervised(
+                                scope -> {
+                                    var channel = Flow.<T>newChannelWithBufferSizeFromScope();
+
+                                    scope.fork(
+                                            () -> {
+                                                try {
+                                                    withSink.accept(channel);
+                                                    channel.doneOrClosed();
+                                                } catch (Throwable t) {
+                                                    channel.errorOrClosed(t);
+                                                    throw t;
+                                                }
+
+                                                return null;
+                                            });
+
+                                    FlowEmit.channelToEmit(channel, emit);
+
+                                    return null;
+                                }));
+    }
+
+    /**
      * Creates a flow using the given {@param source}. An element is emitted for each value received
      * from the source. If the source is completed with an error, is it propagated by throwing.
      */
