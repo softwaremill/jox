@@ -127,6 +127,9 @@ void main() throws Exception {
 }
 ```
 
+If you have a `Channel` instance, you can also forward the channel to an emit using `Flow.usingEmti` and 
+`FlowEmit.channelToEmit`. 
+
 ## Transforming flows: basics
 
 Multiple transformation stages can be added to a flow, each time returning a new `Flow` instance, describing the
