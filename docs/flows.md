@@ -16,14 +16,14 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>flows</artifactId>
-    <version>0.5.1</version>
+    <version>0.5.2</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:flows:0.5.1'
+implementation 'com.softwaremill.jox:flows:0.5.2'
 ```
 
 ## Usage
