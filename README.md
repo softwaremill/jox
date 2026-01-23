@@ -2,7 +2,7 @@
 
 [![Ideas, suggestions, problems, questions](https://img.shields.io/badge/Discourse-ask%20question-blue)](https://softwaremill.community/c/open-source/11)
 [![CI](https://github.com/softwaremill/jox/workflows/CI/badge.svg)](https://github.com/softwaremill/jox/actions?query=workflow%3A%22CI%22)
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels/badge.svg)](https://maven-badges.herokuapp.com/maven-central/com.softwaremill.jox/channels)
+[![Maven Central](https://https://maven-badges.sml.io/maven-central/com.softwaremill.jox/channels/badge.svg)](https://maven-badges.sml.io/maven-central/com.softwaremill.jox/channels)
 [![javadoc](https://javadoc.io/badge2/com.softwaremill.jox/channels/javadoc.svg)](https://javadoc.io/doc/com.softwaremill.jox/channels)
 
 [Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
