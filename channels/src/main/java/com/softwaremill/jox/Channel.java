@@ -1069,6 +1069,78 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         }
     }
 
+    // *****************
+    // Channel state API
+    // *****************
+
+    /**
+     * Returns a best-effort estimate of the number of elements in the channel.
+     *
+     * <p>This is a non-blocking O(1) operation that computes the difference between the number of
+     * send and receive operations initiated on this channel. This approximates the number of
+     * buffered values, but may also include in-flight or waiting operations (e.g., senders blocked
+     * because the channel is at capacity).
+     *
+     * <p><b>Important caveats:</b>
+     *
+     * <ul>
+     *   <li>The returned value is immediately outdated due to concurrent operations
+     *   <li>For buffered channels at capacity, this includes waiting senders beyond the buffer
+     *   <li>For rendezvous channels, this typically returns 0
+     *   <li>Should NOT be used for synchronization or control flow logic
+     *   <li>Best suited for monitoring, metrics, and debugging
+     * </ul>
+     *
+     * <p><b>Use cases:</b>
+     *
+     * <ul>
+     *   <li>Monitoring unlimited channels for unbounded growth
+     *   <li>Exporting metrics to monitoring systems (Prometheus, Micrometer, etc.)
+     *   <li>Dashboard visualization of channel state
+     *   <li>Alert thresholds (e.g., "channel buffered &gt;5000 items")
+     *   <li>Capacity planning and performance analysis
+     * </ul>
+     *
+     * <p><b>Anti-patterns (do NOT do this):</b>
+     *
+     * <ul>
+     *   <li>{@code if (ch.estimateSize() > 0) ch.receive()} - race condition
+     *   <li>{@code while (ch.estimateSize() < capacity) ch.send(x)} - unreliable
+     * </ul>
+     *
+     * <p><b>Recommended patterns:</b>
+     *
+     * <ul>
+     *   <li>Log estimate periodically for trending analysis
+     *   <li>Export to metrics system for alerting on thresholds
+     *   <li>Use in tests to verify approximate behavior
+     * </ul>
+     *
+     * <p><b>Example - Monitoring:</b>
+     *
+     * <pre>{@code
+     * var ch = Channel.<Work>newUnlimitedChannel();
+     *
+     * // Background thread for metrics
+     * Thread.startVirtualThread(() -> {
+     *     while (!ch.closedForSend()) {
+     *         long estimate = ch.estimateSize();
+     *         metricsRegistry.gauge("channel.size", estimate);
+     *         Thread.sleep(Duration.ofSeconds(10));
+     *     }
+     * });
+     * }</pre>
+     *
+     * @return A best-effort estimate of elements in the channel, based on the send/receive
+     *     operation differential. Always &gt;= 0. The value is immediately stale and should only be
+     *     used for observability purposes.
+     */
+    public long estimateSize() {
+        long s = getSendersCounter(sendersAndClosedFlag);
+        long r = receivers;
+        return Math.max(0, s - r);
+    }
+
     // **************
     // Select clauses
     // **************
