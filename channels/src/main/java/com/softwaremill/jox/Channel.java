@@ -1091,45 +1091,12 @@ public final class Channel<T> implements Source<T>, Sink<T> {
      *   <li>Best suited for monitoring, metrics, and debugging
      * </ul>
      *
-     * <p><b>Use cases:</b>
-     *
-     * <ul>
-     *   <li>Monitoring unlimited channels for unbounded growth
-     *   <li>Exporting metrics to monitoring systems (Prometheus, Micrometer, etc.)
-     *   <li>Dashboard visualization of channel state
-     *   <li>Alert thresholds (e.g., "channel buffered &gt;5000 items")
-     *   <li>Capacity planning and performance analysis
-     * </ul>
-     *
      * <p><b>Anti-patterns (do NOT do this):</b>
      *
      * <ul>
      *   <li>{@code if (ch.estimateSize() > 0) ch.receive()} - race condition
      *   <li>{@code while (ch.estimateSize() < capacity) ch.send(x)} - unreliable
      * </ul>
-     *
-     * <p><b>Recommended patterns:</b>
-     *
-     * <ul>
-     *   <li>Log estimate periodically for trending analysis
-     *   <li>Export to metrics system for alerting on thresholds
-     *   <li>Use in tests to verify approximate behavior
-     * </ul>
-     *
-     * <p><b>Example - Monitoring:</b>
-     *
-     * <pre>{@code
-     * var ch = Channel.<Work>newUnlimitedChannel();
-     *
-     * // Background thread for metrics
-     * Thread.startVirtualThread(() -> {
-     *     while (!ch.closedForSend()) {
-     *         long estimate = ch.estimateSize();
-     *         metricsRegistry.gauge("channel.size", estimate);
-     *         Thread.sleep(Duration.ofSeconds(10));
-     *     }
-     * });
-     * }</pre>
      *
      * @return A best-effort estimate of elements in the channel, based on the send/receive
      *     operation differential. Always &gt;= 0. The value is immediately stale and should only be

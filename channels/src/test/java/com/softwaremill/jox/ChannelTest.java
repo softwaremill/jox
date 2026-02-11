@@ -96,12 +96,10 @@ public class ChannelTest {
         ch.send(1);
         ch.send(2);
         ch.send(3);
-        assertTrue(ch.estimateSize() >= 3, "Expected at least 3 items, got " + ch.estimateSize());
+        assertEquals(3, ch.estimateSize());
 
         ch.receive();
-        assertTrue(
-                ch.estimateSize() >= 2,
-                "Expected at least 2 items after receive, got " + ch.estimateSize());
+        assertEquals(2, ch.estimateSize());
 
         ch.receive();
         ch.receive();
@@ -116,14 +114,10 @@ public class ChannelTest {
         ch.send(3);
 
         ch.done();
-        assertTrue(
-                ch.estimateSize() >= 3,
-                "Estimate should still work after close, got " + ch.estimateSize());
+        assertEquals(3, ch.estimateSize());
 
         ch.receive();
-        assertTrue(
-                ch.estimateSize() >= 2,
-                "Estimate should reflect remaining buffered values, got " + ch.estimateSize());
+        assertEquals(2, ch.estimateSize());
     }
 
     @Test
@@ -134,22 +128,14 @@ public class ChannelTest {
             ch.send(i);
         }
 
-        long estimate = ch.estimateSize();
-        assertTrue(
-                estimate >= 900,
-                "Expected at least 900 items in unlimited channel, got " + estimate);
-        assertTrue(estimate <= 1000, "Expected at most 1000 items, got " + estimate);
+        assertEquals(1000, ch.estimateSize());
 
         // Receive some and check size decreases
         for (int i = 0; i < 500; i++) {
             ch.receive();
         }
 
-        estimate = ch.estimateSize();
-        assertTrue(
-                estimate >= 400,
-                "Expected at least 400 items after receiving 500, got " + estimate);
-        assertTrue(estimate <= 500, "Expected at most 500 items, got " + estimate);
+        assertEquals(500, ch.estimateSize());
     }
 
     @Test
@@ -163,12 +149,8 @@ public class ChannelTest {
                     forkVoid(
                             scope,
                             () -> {
-                                try {
-                                    Thread.sleep(10);
-                                    ch.send(1);
-                                } catch (InterruptedException e) {
-                                    throw new RuntimeException(e);
-                                }
+                                Thread.sleep(10);
+                                ch.send(1);
                             });
 
                     // Rendezvous should have 0 or very small estimate
@@ -181,6 +163,32 @@ public class ChannelTest {
                     // Receive the value
                     ch.receive();
                     assertEquals(0, ch.estimateSize());
+                });
+
+        // Receivers waiting before senders — estimate should never be negative
+        Channel<Integer> ch2 = Channel.newRendezvousChannel();
+        scoped(
+                scope -> {
+                    // Start receivers before senders
+                    for (int i = 0; i < 5; i++) {
+                        forkVoid(
+                                scope,
+                                () -> {
+                                    Thread.sleep(10);
+                                    ch2.receive();
+                                });
+                    }
+
+                    // Even with waiting receivers, estimate should be >= 0
+                    Thread.sleep(20);
+                    assertEquals(0, ch2.estimateSize());
+
+                    // Send values to waiting receivers
+                    for (int i = 0; i < 5; i++) {
+                        ch2.send(i);
+                    }
+
+                    assertEquals(0, ch2.estimateSize());
                 });
     }
 
@@ -232,36 +240,6 @@ public class ChannelTest {
     }
 
     @Test
-    void testEstimateSize_neverNegative() throws InterruptedException, ExecutionException {
-        Channel<Integer> ch = Channel.newRendezvousChannel();
-
-        scoped(
-                scope -> {
-                    // Start receivers before senders
-                    for (int i = 0; i < 5; i++) {
-                        forkVoid(
-                                scope,
-                                () -> {
-                                    Thread.sleep(10);
-                                    ch.receive();
-                                });
-                    }
-
-                    // Even with waiting receivers, estimate should be >= 0
-                    Thread.sleep(20);
-                    long estimate = ch.estimateSize();
-                    assertTrue(estimate >= 0, "Estimate should never be negative, got " + estimate);
-
-                    // Send values to waiting receivers
-                    for (int i = 0; i < 5; i++) {
-                        ch.send(i);
-                    }
-
-                    assertEquals(0, ch.estimateSize());
-                });
-    }
-
-    @Test
     void testEstimateSize_afterError() throws InterruptedException {
         Channel<Integer> ch = Channel.newBufferedChannel(10);
         ch.send(1);
@@ -269,9 +247,8 @@ public class ChannelTest {
 
         ch.error(new RuntimeException("test error"));
 
-        // Estimate should still work after error
-        long estimate = ch.estimateSize();
-        assertTrue(estimate >= 0, "Estimate should work after error, got " + estimate);
+        // Estimate should still work after error — 2 sends, 0 receives
+        assertEquals(2, ch.estimateSize());
     }
 
     @Test
