@@ -95,17 +95,23 @@ the sink processes the received values.
 use the `sendOrClosed()` and `receiveOrClosed()` methods, which return either a `ChannelClosed` value (reason of
 closure), or `null` / the received value.
 
+Channels can also be inspected whether they are closed, using the `isClosedForReceive()` and `isClosedForSend()`.
+
 ```java
 import com.softwaremill.jox.Channel;
 
 class Demo3 {
     public static void main(String[] args) throws InterruptedException {
         var ch = Channel.<Integer>newBufferedChannel(3);
+
+        // send()-s won't block
         ch.send(1);
         ch.done();
 
-        System.out.println("Received: " + ch.receiveOrClosed()); // 1
-        System.out.println("Received: " + ch.receiveOrClosed()); // ChannelDone[]
+        // prints: Received: 1
+        System.out.println("Received: " + ch.receiveOrClosed());
+        // prints: Received: ChannelDone[]
+        System.out.println("Received: " + ch.receiveOrClosed());
     }
 }
 ```
@@ -118,15 +124,15 @@ For integration with non-blocking frameworks (e.g. Netty, Vert.x), `trySend` and
 var ch = Channel.<Integer>newBufferedChannel(1);
 
 // returns true if sent, false if the buffer is full or no receiver is waiting
-boolean s1 = ch.trySend(1); 
+boolean s1 = ch.trySend(1);
 
 // returns the value, or null if none is immediately available
-Integer r1 = ch.tryReceive(); 
+Integer r1 = ch.tryReceive();
 ```
 
 Both have `OrClosed` variants which return a `ChannelClosed` value instead of throwing an exception if the channel is closed.
 
-Channels can also be inspected using `isClosedForReceive()` and `isClosedForSend()`.
+Note: under contention, `trySend`/`tryReceive` may return `false`/`null` even when space or values are available. If you need guaranteed delivery, use `send()`/`receive()` instead.
 
 ## Selecting from multiple channels
 
@@ -135,27 +141,41 @@ channel:
 
 ```java
 import com.softwaremill.jox.Channel;
+
 import static com.softwaremill.jox.Select.select;
 
 class Demo4 {
     public static void main(String[] args) throws InterruptedException {
+        // creates a buffered channel (buffer of size 3)
         var ch1 = Channel.<Integer>newBufferedChannel(3);
         var ch2 = Channel.<Integer>newBufferedChannel(3);
+        var ch3 = Channel.<Integer>newBufferedChannel(3);
 
+        // send a value to two channels
         ch2.send(29);
+        ch3.send(32);
 
-        var received = select(ch1.receiveClause(), ch2.receiveClause());
-        System.out.println("Received: " + received); // 29
+        var received =
+                select(ch1.receiveClause(), ch2.receiveClause(), ch3.receiveClause());
+
+        // prints: Received: 29
+        System.out.println("Received: " + received);
+        // ch3 still holds a value that can be received
     }
 }
 ```
 
-The received value can be optionally transformed by a provided function. `select` is biased: if multiple clauses can be completed immediately, the one that appears first is selected.
+The received value can be optionally transformed by a provided function.
 
-Similarly, you can select from a send clause. Apart from `sendClause(value)`, there's also a variant which runs a callback once selected:
+`select` is biased: if a couple of the clauses can be completed immediately, the one that appears first will be
+selected.
+
+Similarly, you can select from a send clause to complete. Apart from the `Channel.sendClause()` method, there's also a
+variant which runs a callback, once the clause is selected:
 
 ```java
 import com.softwaremill.jox.Channel;
+
 import static com.softwaremill.jox.Select.select;
 
 class Demo5 {
@@ -163,64 +183,91 @@ class Demo5 {
         var ch1 = Channel.<Integer>newBufferedChannel(1);
         var ch2 = Channel.<Integer>newBufferedChannel(1);
 
-        ch1.send(12); // full
+        ch1.send(12); // buffer is now full
 
         var sent = select(ch1.sendClause(13, () -> "1st"), ch2.sendClause(25, () -> "2nd"));
-        System.out.println("Sent: " + sent); // 2nd
+
+        // prints: Sent: second
+        System.out.println("Sent: " + sent);
     }
 }
 ```
 
-Optionally, a `defaultClause` can be provided, which is selected if no other clause is available immediately:
+Optionally, you can also provide a default clause, which will be selected if none of the other clauses can be completed
+immediately:
 
 ```java
 import com.softwaremill.jox.Channel;
+
 import static com.softwaremill.jox.Select.defaultClause;
 import static com.softwaremill.jox.Select.select;
 
 class Demo6 {
     public static void main(String[] args) throws InterruptedException {
         var ch1 = Channel.<Integer>newBufferedChannel(3);
-        var received = select(ch1.receiveClause(), defaultClause(52));
-        System.out.println("Received: " + received); // 52
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
+
+        var received = select(ch1.receiveClause(), ch2.receiveClause(), defaultClause(52));
+
+        // prints: Received: 52
+        System.out.println("Received: " + received);
     }
 }
 ```
 
 ### Select with timeout
 
-`selectWithin` throws `TimeoutException` if no clause completes within the given duration:
+You can also select from multiple channels with a timeout using `selectWithin`. If none of the clauses can be completed
+within the specified timeout, a `TimeoutException` is thrown:
 
 ```java
 import com.softwaremill.jox.Channel;
+
 import java.time.Duration;
 import java.util.concurrent.TimeoutException;
+
 import static com.softwaremill.jox.Select.selectWithin;
 
 class Demo7 {
     public static void main(String[] args) throws InterruptedException {
         var ch1 = Channel.<Integer>newBufferedChannel(3);
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
+
         try {
-            selectWithin(Duration.ofMillis(500), ch1.receiveClause());
+            // Wait up to 500 milliseconds for a value to be available
+            var received = selectWithin(Duration.ofMillis(500), ch1.receiveClause(), ch2.receiveClause());
+            System.out.println("Received: " + received);
         } catch (TimeoutException e) {
-            System.out.println("Select timed out");
+            // prints: Select timed out after 500 ms
+            System.out.println("Select timed out after 500 ms");
         }
     }
 }
 ```
 
-Alternatively, `selectOrClosedWithin` returns a timeout value:
+Alternatively, you can use `selectOrClosedWithin` which returns a timeout value instead of throwing an exception:
 
 ```java
 import com.softwaremill.jox.Channel;
+
 import java.time.Duration;
+
 import static com.softwaremill.jox.Select.selectOrClosedWithin;
 
 class Demo8 {
     public static void main(String[] args) throws InterruptedException {
         var ch1 = Channel.<Integer>newBufferedChannel(3);
-        var result = selectOrClosedWithin(Duration.ofMillis(500), "TIMEOUT", ch1.receiveClause());
-        System.out.println("Result: " + result); // TIMEOUT
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
+
+        var result = selectOrClosedWithin(Duration.ofMillis(500), "TIMEOUT",
+                                          ch1.receiveClause(), ch2.receiveClause());
+
+        if (result.equals("TIMEOUT")) {
+            // prints: Select timed out
+            System.out.println("Select timed out");
+        } else {
+            System.out.println("Received: " + result);
+        }
     }
 }
 ```

@@ -574,6 +574,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         expandBuffer();
                         return c.getPayload();
                     } else {
+                        // the state will be set to INTERRUPTED_SEND by the continuation, meanwhile
+                        // everybody else will observe RESUMING
                         return ReceiveResult.FAILED;
                     }
                 }
@@ -585,6 +587,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         expandBuffer();
                         return ss.getPayload();
                     } else {
+                        // the state will be set to INTERRUPTED_SEND by the cleanup, meanwhile
+                        // everybody else will observe RESUMING
                         return ReceiveResult.FAILED;
                     }
                 }
