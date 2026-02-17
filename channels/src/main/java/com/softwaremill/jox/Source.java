@@ -32,8 +32,8 @@ public interface Source<T> extends CloseableChannel {
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
      * Safe to call from platform threads, including NIO event loop threads.
      *
-     * <p>May spuriously return {@code null} under contention. Should not be used as a substitute
-     * for {@link #receive()} in a spin loop.
+     * <p>May return {@code null} even when a value is available, due to contention with concurrent
+     * operations. Should not be used as a substitute for {@link #receive()} in a spin loop.
      *
      * @return The received value, or {@code null} if no value is immediately available.
      * @throws ChannelClosedException When the channel is closed.
@@ -52,8 +52,8 @@ public interface Source<T> extends CloseableChannel {
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
      * Safe to call from platform threads, including NIO event loop threads.
      *
-     * <p>May spuriously return {@code null} under contention. Should not be used as a substitute
-     * for {@link #receiveOrClosed()} in a spin loop.
+     * <p>May return {@code null} even when a value is available, due to contention with concurrent
+     * operations. Should not be used as a substitute for {@link #receiveOrClosed()} in a spin loop.
      *
      * @return The received value of type {@code T}, {@link ChannelClosed} when the channel is
      *     closed, or {@code null} if no value is immediately available.

@@ -214,6 +214,18 @@ public class ChannelTrySendReceiveTest {
         assertInstanceOf(ChannelDone.class, ch.tryReceiveOrClosed());
     }
 
+    @Test
+    void tryReceiveOrClosed_closedError_withBufferedValues_shouldReturnError()
+            throws InterruptedException {
+        Channel<String> ch = Channel.newBufferedChannel(3);
+        ch.send("a");
+        ch.send("b");
+        ch.error(new RuntimeException("boom"));
+
+        // error() discards buffered values — should return ChannelError immediately
+        assertInstanceOf(ChannelError.class, ch.tryReceiveOrClosed());
+    }
+
     // *************************
     // Mixed send/receive tests
     // *************************

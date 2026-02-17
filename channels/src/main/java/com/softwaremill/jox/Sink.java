@@ -30,8 +30,8 @@ public interface Sink<T> extends CloseableChannel {
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
      * Safe to call from platform threads, including NIO event loop threads.
      *
-     * <p>May spuriously return {@code false} under contention. Should not be used as a substitute
-     * for {@link #send(Object)} in a spin loop.
+     * <p>May return {@code false} even when space is available, due to contention with concurrent
+     * operations. Should not be used as a substitute for {@link #send(Object)} in a spin loop.
      *
      * @param value The value to send. Not {@code null}.
      * @return {@code true} if the value was sent, {@code false} otherwise.
@@ -50,8 +50,8 @@ public interface Sink<T> extends CloseableChannel {
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
      * Safe to call from platform threads, including NIO event loop threads.
      *
-     * <p>May spuriously fail under contention. Should not be used as a substitute for {@link
-     * #sendOrClosed(Object)} in a spin loop.
+     * <p>May fail even when space is available, due to contention with concurrent operations.
+     * Should not be used as a substitute for {@link #sendOrClosed(Object)} in a spin loop.
      *
      * @param value The value to send. Not {@code null}.
      * @return Either {@code null} when the value was sent successfully, {@link ChannelClosed} when
