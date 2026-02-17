@@ -366,7 +366,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             throw new NullPointerException();
         }
         while (true) {
-            // reading the segment before the counter increment
             var segment = sendSegment;
             var scf = sendersAndClosedFlag;
             var s = getSendersCounter(scf);
@@ -375,7 +374,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 return closedReason;
             }
 
-            // pre-check if immediate completion is possible
             if (capacity >= 0) {
                 var bufEnd = bufferEnd;
                 var r = receivers;
@@ -386,7 +384,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 }
             }
 
-            // reserving cell s
             if (!SENDERS_AND_CLOSE_FLAG.compareAndSet(this, scf, scf + 1)) {
                 continue;
             }
@@ -407,7 +404,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 }
             }
 
-            // process cell (never suspends)
             var sendResult = tryUpdateCellSend(segment, i, s, value);
             if (sendResult == SendResult.BUFFERED) {
                 return null;
@@ -439,25 +435,21 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
             if (state == null) {
                 if (capacity >= 0 && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
-                    // cell is empty, no receiver, not in buffer -> would suspend
-                    // roll back: mark as interrupted send
+                    // cell is empty, and no receiver, not in buffer -> interrupt
                     if (segment.casCell(i, null, INTERRUPTED_SEND)) {
                         segment.cellInterruptedSender();
                         return TRY_SEND_NOT_SENT;
                     }
-                    // CAS unsuccessful, repeat
                 } else {
                     // cell is empty, but a receiver is in progress, or in buffer -> elimination
                     if (segment.casCell(i, null, value)) {
                         return SendResult.BUFFERED;
                     }
-                    // CAS unsuccessful, repeat
                 }
             } else if (state == IN_BUFFER) {
                 if (segment.casCell(i, IN_BUFFER, value)) {
                     return SendResult.BUFFERED;
                 }
-                // CAS unsuccessful, repeat
             } else if (state instanceof Continuation c) {
                 // a receiver is waiting -> trying to resume
                 if (c.tryResume(value)) {
@@ -468,6 +460,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 }
             } else if (state instanceof StoredSelectClause ss) {
                 ss.setPayload(value);
+                // a select clause is waiting -> trying to resume
                 if (ss.getSelect().trySelect(ss)) {
                     segment.setCell(i, DONE);
                     return SendResult.RESUMED;
@@ -475,6 +468,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                     return SendResult.FAILED;
                 }
             } else if (state == INTERRUPTED_RECEIVE || state == BROKEN) {
+                // cell interrupted or poisoned -> trying with a new one
                 return SendResult.FAILED;
             } else if (state == CLOSED) {
                 return SendResult.CLOSED;
@@ -501,10 +495,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 return null;
             }
 
-            // reading the segment before the counter increment
             var segment = receiveSegment;
 
-            // reserving cell r
             if (!RECEIVERS.compareAndSet(this, r, r + 1)) {
                 continue;
             }
@@ -524,7 +516,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 }
             }
 
-            // process cell (never suspends)
             var result = tryUpdateCellReceive(segment, i, r);
             if (result == ReceiveResult.CLOSED) {
                 return closedReason;
@@ -550,25 +541,22 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
             if (state == null || state == IN_BUFFER) {
                 if (r >= getSendersCounter(sendersAndClosedFlag)) {
-                    // cell is empty, no sender -> would suspend
-                    // roll back: mark as interrupted receive
+                    // cell is empty, no sender -> interrupt
                     if (segment.casCell(i, state, INTERRUPTED_RECEIVE)) {
                         segment.cellInterruptedReceiver();
                         expandBuffer();
-                        return null; // nothing available
+                        return null;
                     }
-                    // CAS unsuccessful, repeat
                 } else {
                     // sender in progress -> mark as broken
                     if (segment.casCell(i, state, BROKEN)) {
                         expandBuffer();
-                        return ReceiveResult.FAILED; // retry
+                        return ReceiveResult.FAILED;
                     }
-                    // CAS unsuccessful, repeat
                 }
             } else if (state instanceof Continuation c) {
-                // resolving a potential race with expandBuffer
                 if (segment.casCell(i, state, RESUMING)) {
+                    // a sender is waiting -> trying to resume
                     if (c.tryResume(0)) {
                         segment.setCell(i, DONE);
                         expandBuffer();
@@ -579,9 +567,9 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return ReceiveResult.FAILED;
                     }
                 }
-                // CAS unsuccessful, repeat
             } else if (state instanceof StoredSelectClause ss) {
                 if (segment.casCell(i, state, RESUMING)) {
+                    // a send clause is waiting -> trying to resume
                     if (ss.getSelect().trySelect(ss)) {
                         segment.setCell(i, DONE);
                         expandBuffer();
@@ -592,7 +580,6 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                         return ReceiveResult.FAILED;
                     }
                 }
-                // CAS unsuccessful, repeat
             } else if (state instanceof CellState) {
                 switch (state) {
                     case CellState.INTERRUPTED_SEND -> {
