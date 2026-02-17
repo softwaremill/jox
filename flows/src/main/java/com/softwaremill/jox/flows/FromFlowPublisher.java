@@ -206,11 +206,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
         // 3.15: the signals channel is never closed
         @Override
         public void request(long n) {
-            try {
-                signals.send(new Request(n));
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            signals.trySend(new Request(n));
         }
 
         // 3.5: as above for 3.2
@@ -218,11 +214,7 @@ class FromFlowPublisher<T> implements Flow.Publisher<T> {
         // 3.16: as above for 3.15
         @Override
         public void cancel() {
-            try {
-                signals.send(new Cancel());
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
+            signals.trySend(new Cancel());
         }
 
         // 3.10, 3.11: no synchronous calls in this implementation

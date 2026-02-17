@@ -263,10 +263,18 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         return doSend(value, null, null);
     }
 
-    // used by Sink.trySend
+    // used by Sink.trySend (Select-based fallback)
     static final Object DEFAULT_NOT_SENT_VALUE = new Object();
     static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
             new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
+
+    // used by Source.tryReceive (Select-based fallback)
+    static final Object DEFAULT_NOT_RECEIVED_VALUE = new Object();
+    static final DefaultClause<?> DEFAULT_NOT_RECEIVED_CLAUSE =
+            new DefaultClauseValue<>(DEFAULT_NOT_RECEIVED_VALUE);
+
+    // sentinel value returned by trySendOrClosed() to indicate "not sent"
+    static final Object TRY_SEND_NOT_SENT = new Object();
 
     /**
      * @return If {@code select} & {@code selectClause} is {@code null}: {@code null} when the value
@@ -344,6 +352,261 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else {
                 throw new IllegalStateException(
                         "Unexpected result: " + sendResult + " in channel: " + this);
+            }
+        }
+    }
+
+    // *************
+    // Non-blocking send
+    // *************
+
+    @Override
+    public Object trySendOrClosed(T value) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        while (true) {
+            // reading the segment before the counter increment
+            var segment = sendSegment;
+            var scf = sendersAndClosedFlag;
+            var s = getSendersCounter(scf);
+
+            if (isClosed(scf)) {
+                return closedReason;
+            }
+
+            // pre-check if immediate completion is possible
+            if (capacity >= 0) {
+                var bufEnd = bufferEnd;
+                var r = receivers;
+                if (capacity == 0) {
+                    if (s >= r) return TRY_SEND_NOT_SENT;
+                } else {
+                    if (s >= bufEnd && s >= r) return TRY_SEND_NOT_SENT;
+                }
+            }
+
+            // reserving cell s
+            if (!SENDERS_AND_CLOSE_FLAG.compareAndSet(this, scf, scf + 1)) {
+                continue;
+            }
+
+            var id = s / Segment.SEGMENT_SIZE;
+            var i = (int) (s % Segment.SEGMENT_SIZE);
+
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(SEND_SEGMENT, this, segment, id);
+                if (segment == null) {
+                    return closedReason;
+                }
+
+                if (segment.getId() != id) {
+                    SENDERS_AND_CLOSE_FLAG.compareAndSet(
+                            this, s + 1, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            // process cell (never suspends)
+            var sendResult = tryUpdateCellSend(segment, i, s, value);
+            if (sendResult == SendResult.BUFFERED) {
+                return null;
+            } else if (sendResult == SendResult.RESUMED) {
+                segment.cleanPrev();
+                return null;
+            } else if (sendResult == SendResult.FAILED) {
+                segment.cleanPrev();
+                continue;
+            } else if (sendResult == SendResult.CLOSED) {
+                return closedReason;
+            } else if (sendResult == TRY_SEND_NOT_SENT) {
+                return TRY_SEND_NOT_SENT;
+            } else {
+                throw new IllegalStateException(
+                        "Unexpected result: " + sendResult + " in channel: " + this);
+            }
+        }
+    }
+
+    /**
+     * Non-suspending variant of {@code updateCellSend}. Where the normal send would suspend (no
+     * receiver, not in buffer), this marks the cell as INTERRUPTED_SEND and returns the
+     * TRY_SEND_NOT_SENT sentinel.
+     */
+    private Object tryUpdateCellSend(Segment segment, int i, long s, T value) {
+        while (true) {
+            var state = segment.getCell(i);
+
+            if (state == null) {
+                if (capacity >= 0 && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
+                    // cell is empty, no receiver, not in buffer -> would suspend
+                    // roll back: mark as interrupted send
+                    if (segment.casCell(i, null, INTERRUPTED_SEND)) {
+                        segment.cellInterruptedSender();
+                        return TRY_SEND_NOT_SENT;
+                    }
+                    // CAS unsuccessful, repeat
+                } else {
+                    // cell is empty, but a receiver is in progress, or in buffer -> elimination
+                    if (segment.casCell(i, null, value)) {
+                        return SendResult.BUFFERED;
+                    }
+                    // CAS unsuccessful, repeat
+                }
+            } else if (state == IN_BUFFER) {
+                if (segment.casCell(i, IN_BUFFER, value)) {
+                    return SendResult.BUFFERED;
+                }
+                // CAS unsuccessful, repeat
+            } else if (state instanceof Continuation c) {
+                // a receiver is waiting -> trying to resume
+                if (c.tryResume(value)) {
+                    segment.setCell(i, DONE);
+                    return SendResult.RESUMED;
+                } else {
+                    return SendResult.FAILED;
+                }
+            } else if (state instanceof StoredSelectClause ss) {
+                ss.setPayload(value);
+                if (ss.getSelect().trySelect(ss)) {
+                    segment.setCell(i, DONE);
+                    return SendResult.RESUMED;
+                } else {
+                    return SendResult.FAILED;
+                }
+            } else if (state == INTERRUPTED_RECEIVE || state == BROKEN) {
+                return SendResult.FAILED;
+            } else if (state == CLOSED) {
+                return SendResult.CLOSED;
+            } else {
+                throw new IllegalStateException(
+                        "Unexpected state: " + state + " in channel: " + this);
+            }
+        }
+    }
+
+    // *************
+    // Non-blocking receive
+    // *************
+
+    @Override
+    public Object tryReceiveOrClosed() {
+        while (true) {
+            var scf = sendersAndClosedFlag;
+            var s = getSendersCounter(scf);
+            var r = receivers;
+
+            if (s <= r) {
+                if (isClosed(scf)) return closedForReceive();
+                return null;
+            }
+
+            // reading the segment before the counter increment
+            var segment = receiveSegment;
+
+            // reserving cell r
+            if (!RECEIVERS.compareAndSet(this, r, r + 1)) {
+                continue;
+            }
+
+            var id = r / Segment.SEGMENT_SIZE;
+            var i = (int) (r % Segment.SEGMENT_SIZE);
+
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(RECEIVE_SEGMENT, this, segment, id);
+                if (segment == null) {
+                    return closedReason;
+                }
+
+                if (segment.getId() != id) {
+                    RECEIVERS.compareAndSet(this, r + 1, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            // process cell (never suspends)
+            var result = tryUpdateCellReceive(segment, i, r);
+            if (result == ReceiveResult.CLOSED) {
+                return closedReason;
+            } else if (result == ReceiveResult.FAILED) {
+                segment.cleanPrev();
+                continue;
+            } else if (result == null) {
+                return null;
+            } else {
+                segment.cleanPrev();
+                return result;
+            }
+        }
+    }
+
+    /**
+     * Non-suspending variant of {@code updateCellReceive}. Where the normal receive would suspend
+     * (no sender available), this marks the cell as INTERRUPTED_RECEIVE and returns null.
+     */
+    private Object tryUpdateCellReceive(Segment segment, int i, long r) {
+        while (true) {
+            var state = segment.getCell(i);
+
+            if (state == null || state == IN_BUFFER) {
+                if (r >= getSendersCounter(sendersAndClosedFlag)) {
+                    // cell is empty, no sender -> would suspend
+                    // roll back: mark as interrupted receive
+                    if (segment.casCell(i, state, INTERRUPTED_RECEIVE)) {
+                        segment.cellInterruptedReceiver();
+                        expandBuffer();
+                        return null; // nothing available
+                    }
+                    // CAS unsuccessful, repeat
+                } else {
+                    // sender in progress -> mark as broken
+                    if (segment.casCell(i, state, BROKEN)) {
+                        expandBuffer();
+                        return ReceiveResult.FAILED; // retry
+                    }
+                    // CAS unsuccessful, repeat
+                }
+            } else if (state instanceof Continuation c) {
+                // resolving a potential race with expandBuffer
+                if (segment.casCell(i, state, RESUMING)) {
+                    if (c.tryResume(0)) {
+                        segment.setCell(i, DONE);
+                        expandBuffer();
+                        return c.getPayload();
+                    } else {
+                        return ReceiveResult.FAILED;
+                    }
+                }
+                // CAS unsuccessful, repeat
+            } else if (state instanceof StoredSelectClause ss) {
+                if (segment.casCell(i, state, RESUMING)) {
+                    if (ss.getSelect().trySelect(ss)) {
+                        segment.setCell(i, DONE);
+                        expandBuffer();
+                        return ss.getPayload();
+                    } else {
+                        return ReceiveResult.FAILED;
+                    }
+                }
+                // CAS unsuccessful, repeat
+            } else if (state instanceof CellState) {
+                switch (state) {
+                    case CellState.INTERRUPTED_SEND -> {
+                        return ReceiveResult.FAILED;
+                    }
+                    case CellState.RESUMING -> Thread.onSpinWait();
+                    case CellState.CLOSED -> {
+                        return ReceiveResult.CLOSED;
+                    }
+                    default ->
+                            throw new IllegalStateException(
+                                    "Unexpected state: " + state + " in channel: " + this);
+                }
+            } else {
+                // buffered value
+                segment.setCell(i, DONE);
+                expandBuffer();
+                return state;
             }
         }
     }

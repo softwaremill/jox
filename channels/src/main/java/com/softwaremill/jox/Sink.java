@@ -27,19 +27,50 @@ public interface Sink<T> extends CloseableChannel {
     /**
      * Attempt to send a value to the channel if there's a waiting receiver, or space in the buffer.
      *
+     * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
+     * Safe to call from platform threads, including NIO event loop threads.
+     *
+     * <p>May spuriously return {@code false} under contention. Should not be used as a substitute
+     * for {@link #send(Object)} in a spin loop.
+     *
      * @param value The value to send. Not {@code null}.
      * @return {@code true} if the value was sent, {@code false} otherwise.
      * @throws ChannelClosedException When the channel is closed.
      */
     default boolean trySend(T value) {
+        Object r = trySendOrClosed(value);
+        if (r instanceof ChannelClosed c) throw c.toException();
+        return r == null; // null = sent, sentinel = not sent
+    }
+
+    /**
+     * Attempt to send a value to the channel if there's a waiting receiver, or space in the buffer.
+     * Doesn't throw exceptions when the channel is closed but returns a value.
+     *
+     * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
+     * Safe to call from platform threads, including NIO event loop threads.
+     *
+     * <p>May spuriously fail under contention. Should not be used as a substitute for {@link
+     * #sendOrClosed(Object)} in a spin loop.
+     *
+     * @param value The value to send. Not {@code null}.
+     * @return Either {@code null} when the value was sent successfully, {@link ChannelClosed} when
+     *     the channel is closed, or a sentinel value indicating the value was not sent (check using
+     *     {@code result == null} for success, {@code result instanceof ChannelClosed} for closed).
+     */
+    default Object trySendOrClosed(T value) {
+        // Select-based fallback for binary compatibility
         Object sent;
         try {
             sent = Select.select(sendClause(value), Channel.DEFAULT_NOT_SENT_CLAUSE);
         } catch (InterruptedException e) {
             throw new IllegalStateException(
-                    "Interrupted during trySend, which should not be possible", e);
+                    "Interrupted during trySendOrClosed, which should not be possible", e);
         }
-        return sent != Channel.DEFAULT_NOT_SENT_VALUE;
+        if (sent == Channel.DEFAULT_NOT_SENT_VALUE) {
+            return Channel.TRY_SEND_NOT_SENT;
+        }
+        return null; // sent successfully
     }
 
     /**
