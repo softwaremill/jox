@@ -22,6 +22,7 @@ jobs:
       - name: Test
         run: mvn --batch-mode --update-snapshots verify
       - name: Prepare release notes
+        if: github.event_name == 'push'
         uses: release-drafter/release-drafter@6db134d15f3909ccc9eefd369f02bd1e9cffdf97 # v6, specifically v6.1.0
         with:
           config-name: release-drafter.yml
