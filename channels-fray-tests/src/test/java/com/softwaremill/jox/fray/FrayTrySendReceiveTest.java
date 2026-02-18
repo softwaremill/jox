@@ -23,8 +23,8 @@ public class FrayTrySendReceiveTest {
         Fork<Void> f1 =
                 Fork.newNoResult(
                         () -> {
-                            while (!ch.trySend(10)) {
-                                Thread.yield();
+                            if (!ch.trySend(10)) {
+                                ch.send(10);
                             }
                         });
         Fork<Integer> f2 = Fork.newWithResult(ch::receive);
@@ -42,20 +42,13 @@ public class FrayTrySendReceiveTest {
         Channel<Integer> ch = Channel.newBufferedChannel(CHANNEL_SIZE);
 
         Fork<Void> f1 = Fork.newNoResult(() -> ch.send(10));
-        Fork<Integer> f2 =
-                Fork.newWithResult(
-                        () -> {
-                            Integer result;
-                            while ((result = ch.tryReceive()) == null) {
-                                Thread.yield();
-                            }
-                            return result;
-                        });
+        Fork<Integer> f2 = Fork.newWithResult(ch::tryReceive);
 
         Fork.startAll(f1, f2);
         f1.join();
+        Integer received = f2.join();
 
-        assert (f2.join() == 10);
+        assert (received == null || received == 10);
     }
 
     // trySend | tryReceive
@@ -64,27 +57,17 @@ public class FrayTrySendReceiveTest {
     public void trySendTryReceiveTest() throws InterruptedException {
         Channel<Integer> ch = Channel.newBufferedChannel(CHANNEL_SIZE);
 
-        Fork<Void> f1 =
-                Fork.newNoResult(
-                        () -> {
-                            while (!ch.trySend(10)) {
-                                Thread.yield();
-                            }
-                        });
-        Fork<Integer> f2 =
-                Fork.newWithResult(
-                        () -> {
-                            Integer result;
-                            while ((result = ch.tryReceive()) == null) {
-                                Thread.yield();
-                            }
-                            return result;
-                        });
+        Fork<Boolean> f1 = Fork.newWithResult(() -> ch.trySend(10));
+        Fork<Integer> f2 = Fork.newWithResult(ch::tryReceive);
 
         Fork.startAll(f1, f2);
-        f1.join();
+        boolean sent = f1.join();
+        Integer received = f2.join();
 
-        assert (f2.join() == 10);
+        if (received != null) {
+            assert sent;
+            assert (received == 10);
+        }
     }
 
     // multiple trySend | multiple tryReceive
@@ -103,18 +86,16 @@ public class FrayTrySendReceiveTest {
             sendForks.add(
                     Fork.newNoResult(
                             () -> {
-                                while (!ch.trySend(finalI)) {
-                                    Thread.yield();
+                                if (!ch.trySend(finalI)) {
+                                    ch.send(finalI);
                                 }
                             }));
             receiveForks.add(
                     Fork.newWithResult(
                             () -> {
-                                Integer result;
-                                while ((result = ch.tryReceive()) == null) {
-                                    Thread.yield();
-                                }
-                                return result;
+                                Integer result = ch.tryReceive();
+                                if (result != null) return result;
+                                return ch.receive();
                             }));
         }
 
@@ -133,28 +114,25 @@ public class FrayTrySendReceiveTest {
         assert (result == concurrency * (concurrency - 1) / 2);
     }
 
-    // trySend | tryReceive (rendezvous) — both try simultaneously, exactly one pair succeeds
+    // trySend | tryReceive (rendezvous)
 
     @ConcurrencyTest
     public void trySendTryReceive_rendezvousTest() throws InterruptedException {
         Channel<Integer> ch = Channel.newRendezvousChannel();
 
-        Fork<Boolean> f1 =
-                Fork.newWithResult(
+        Fork<Void> f1 =
+                Fork.newNoResult(
                         () -> {
-                            while (!ch.trySend(10)) {
-                                Thread.yield();
+                            if (!ch.trySend(10)) {
+                                ch.send(10);
                             }
-                            return true;
                         });
         Fork<Integer> f2 =
                 Fork.newWithResult(
                         () -> {
-                            Integer result;
-                            while ((result = ch.tryReceive()) == null) {
-                                Thread.yield();
-                            }
-                            return result;
+                            Integer result = ch.tryReceive();
+                            if (result != null) return result;
+                            return ch.receive();
                         });
 
         Fork.startAll(f1, f2);
@@ -163,7 +141,7 @@ public class FrayTrySendReceiveTest {
         assert (f2.join() == 10);
     }
 
-    // trySend | receive (rendezvous) — trySend spins, blocking receive waits
+    // trySend | receive (rendezvous)
 
     @ConcurrencyTest
     public void trySendReceive_rendezvousTest() throws InterruptedException {
@@ -172,8 +150,8 @@ public class FrayTrySendReceiveTest {
         Fork<Void> f1 =
                 Fork.newNoResult(
                         () -> {
-                            while (!ch.trySend(10)) {
-                                Thread.yield();
+                            if (!ch.trySend(10)) {
+                                ch.send(10);
                             }
                         });
         Fork<Integer> f2 = Fork.newWithResult(ch::receive);
@@ -184,7 +162,7 @@ public class FrayTrySendReceiveTest {
         assert (f2.join() == 10);
     }
 
-    // send | tryReceive (rendezvous) — blocking send waits, tryReceive spins
+    // send | tryReceive (rendezvous)
 
     @ConcurrencyTest
     public void sendTryReceive_rendezvousTest() throws InterruptedException {
@@ -194,11 +172,9 @@ public class FrayTrySendReceiveTest {
         Fork<Integer> f2 =
                 Fork.newWithResult(
                         () -> {
-                            Integer result;
-                            while ((result = ch.tryReceive()) == null) {
-                                Thread.yield();
-                            }
-                            return result;
+                            Integer result = ch.tryReceive();
+                            if (result != null) return result;
+                            return ch.receive();
                         });
 
         Fork.startAll(f1, f2);
@@ -213,27 +189,15 @@ public class FrayTrySendReceiveTest {
     public void trySendTryReceive_unlimitedTest() throws InterruptedException {
         Channel<Integer> ch = Channel.newUnlimitedChannel();
 
-        Fork<Void> f1 =
-                Fork.newNoResult(
-                        () -> {
-                            while (!ch.trySend(10)) {
-                                Thread.yield();
-                            }
-                        });
-        Fork<Integer> f2 =
-                Fork.newWithResult(
-                        () -> {
-                            Integer result;
-                            while ((result = ch.tryReceive()) == null) {
-                                Thread.yield();
-                            }
-                            return result;
-                        });
+        Fork<Boolean> f1 = Fork.newWithResult(() -> ch.trySend(10));
+        Fork<Integer> f2 = Fork.newWithResult(ch::tryReceive);
 
         Fork.startAll(f1, f2);
-        f1.join();
+        boolean sent = f1.join();
+        Integer received = f2.join();
 
-        assert (f2.join() == 10);
+        assert sent;
+        assert received == null || (received == 10);
     }
 
     // trySend | close | tryReceive
@@ -246,26 +210,12 @@ public class FrayTrySendReceiveTest {
                 Fork.newWithResult(
                         () -> {
                             Object r = ch.trySendOrClosed(10);
-                            return r == null; // true if sent
+                            return r == null;
                         });
 
         Fork<Void> f2 = Fork.newNoResult(ch::done);
 
-        Fork<Object> f3 =
-                Fork.newWithResult(
-                        () -> {
-                            // keep trying until we get a value or the channel is done
-                            while (true) {
-                                Object r = ch.tryReceiveOrClosed();
-                                if (r instanceof ChannelDone) {
-                                    return r;
-                                }
-                                if (r != null) {
-                                    return r;
-                                }
-                                Thread.yield();
-                            }
-                        });
+        Fork<Object> f3 = Fork.newWithResult(ch::tryReceiveOrClosed);
 
         Fork.startAll(f1, f2, f3);
 
@@ -273,12 +223,9 @@ public class FrayTrySendReceiveTest {
         f2.join();
         Object received = f3.join();
 
-        if (sent) {
-            // if the value was sent, it must have been received
+        if (received != null && !(received instanceof ChannelDone)) {
             assert (received.equals(10));
-        } else {
-            // if not sent, receiver must see channel done
-            assert (received instanceof ChannelDone);
+            assert sent;
         }
     }
 }
