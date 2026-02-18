@@ -42,13 +42,18 @@ public class FrayTrySendReceiveTest {
         Channel<Integer> ch = Channel.newBufferedChannel(CHANNEL_SIZE);
 
         Fork<Void> f1 = Fork.newNoResult(() -> ch.send(10));
-        Fork<Integer> f2 = Fork.newWithResult(ch::tryReceive);
+        Fork<Integer> f2 =
+                Fork.newWithResult(
+                        () -> {
+                            Integer result = ch.tryReceive();
+                            if (result != null) return result;
+                            return ch.receive();
+                        });
 
         Fork.startAll(f1, f2);
         f1.join();
-        Integer received = f2.join();
 
-        assert (received == null || received == 10);
+        assert (f2.join() == 10);
     }
 
     // trySend | tryReceive
