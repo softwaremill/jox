@@ -118,7 +118,7 @@ class Demo3 {
 
 ## Non-blocking operations
 
-For integration with non-blocking frameworks (e.g. Netty, Vert.x), `trySend` and `tryReceive` methods are provided. They never block or suspend and are safe to call from platform threads.
+Non-blocking `trySend` and `tryReceive` methods are provided. They never block or suspend.
 
 ```java
 var ch = Channel.<Integer>newBufferedChannel(1);

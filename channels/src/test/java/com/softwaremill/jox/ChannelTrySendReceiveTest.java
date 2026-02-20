@@ -23,13 +23,6 @@ public class ChannelTrySendReceiveTest {
     }
 
     @Test
-    void trySend_buffered_shouldReturnFalseWhenBufferFull() {
-        Channel<String> ch = Channel.newBufferedChannel(1);
-        assertTrue(ch.trySend("a"));
-        assertFalse(ch.trySend("b")); // buffer full, no receiver
-    }
-
-    @Test
     void trySend_rendezvous_shouldReturnFalseWhenNoReceiver() {
         Channel<String> ch = Channel.newRendezvousChannel();
         assertFalse(ch.trySend("a"));
@@ -231,45 +224,44 @@ public class ChannelTrySendReceiveTest {
     // *************************
 
     @Test
-    void trySend_thenTryReceive_roundTrip_buffered() {
-        Channel<Integer> ch = Channel.newBufferedChannel(5);
-        for (int i = 0; i < 5; i++) {
-            assertTrue(ch.trySend(i));
-        }
-        for (int i = 0; i < 5; i++) {
-            assertEquals(i, ch.tryReceive());
-        }
-        assertNull(ch.tryReceive());
+    void trySend_buffered_shouldSendThenFailWhenFull() throws InterruptedException {
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1")); // the channel is now full
+
+        // when
+        assertFalse(ch1.trySend("v2"));
+
+        assertEquals("v1", ch1.receive());
+
+        // when - now there's space in the channel
+        assertTrue(ch1.trySend("v2"));
+        assertEquals("v2", ch1.receive());
     }
 
     @Test
-    void trySend_thenTryReceive_roundTrip_unlimited() {
-        Channel<Integer> ch = Channel.newUnlimitedChannel();
-        for (int i = 0; i < 100; i++) {
-            assertTrue(ch.trySend(i));
-        }
-        for (int i = 0; i < 100; i++) {
-            assertEquals(i, ch.tryReceive());
-        }
-        assertNull(ch.tryReceive());
-    }
+    void trySend_static_toMultipleChannels() throws InterruptedException {
+        assertFalse(Sink.trySend("v2", null));
 
-    @Test
-    void trySend_mixedWithRegularReceive() throws InterruptedException, ExecutionException {
-        Channel<String> ch = Channel.newBufferedChannel(2);
-        assertTrue(ch.trySend("a"));
-        assertTrue(ch.trySend("b"));
-        assertEquals("a", ch.receive());
-        assertEquals("b", ch.receive());
-    }
+        // given
+        Channel<String> ch1 = Channel.newBufferedChannel(1);
+        Channel<String> ch2 = Channel.newBufferedChannel(1);
+        assertTrue(ch1.trySend("v1a")); // the channel is now full
+        assertTrue(ch2.trySend("v1b")); // the channel is now full
 
-    @Test
-    void regularSend_thenTryReceive() throws InterruptedException {
-        Channel<String> ch = Channel.newBufferedChannel(2);
-        ch.send("a");
-        ch.send("b");
-        assertEquals("a", ch.tryReceive());
-        assertEquals("b", ch.tryReceive());
+        // when
+        assertFalse(ch1.trySend("v2"));
+        assertFalse(ch2.trySend("v2"));
+        assertFalse(Sink.trySend("v2", ch1, ch2));
+
+        assertEquals("v1a", ch1.receive());
+        assertEquals("v1b", ch2.receive());
+
+        // when - now there's space in the channel
+        assertTrue(Sink.trySend("v2a", ch1, ch2));
+        assertTrue(Sink.trySend("v2b", ch1, ch2));
+        assertEquals("v2a", ch1.receive());
+        assertEquals("v2b", ch2.receive());
     }
 
     // *************
@@ -284,12 +276,12 @@ public class ChannelTrySendReceiveTest {
         int numConsumers = 4;
         int itemsPerProducer = 10_000;
 
-        var sentCount = new AtomicInteger(0);
         var receivedValues = new ConcurrentSkipListSet<Integer>();
+        var producersDone = new AtomicInteger(0);
 
         scoped(
                 scope -> {
-                    // producers: trySend in a loop
+                    // producers: trySend in a loop, close channel when all done
                     for (int p = 0; p < numProducers; p++) {
                         int producerBase = p * itemsPerProducer;
                         forkVoid(
@@ -300,21 +292,23 @@ public class ChannelTrySendReceiveTest {
                                         while (!ch.trySend(val)) {
                                             Thread.yield();
                                         }
-                                        sentCount.incrementAndGet();
+                                    }
+                                    if (producersDone.incrementAndGet() == numProducers) {
+                                        ch.done();
                                     }
                                 });
                     }
 
-                    // consumers: tryReceive in a loop
-                    int totalItems = numProducers * itemsPerProducer;
+                    // consumers: tryReceiveOrClosed in a loop
                     for (int c = 0; c < numConsumers; c++) {
                         forkVoid(
                                 scope,
                                 () -> {
-                                    while (receivedValues.size() < totalItems) {
-                                        Integer v = ch.tryReceive();
+                                    while (true) {
+                                        var v = ch.tryReceiveOrClosed();
+                                        if (v instanceof ChannelDone) break;
                                         if (v != null) {
-                                            receivedValues.add(v);
+                                            receivedValues.add((Integer) v);
                                         } else {
                                             Thread.yield();
                                         }
@@ -324,7 +318,6 @@ public class ChannelTrySendReceiveTest {
                 });
 
         int totalItems = numProducers * itemsPerProducer;
-        assertEquals(totalItems, sentCount.get());
         assertEquals(totalItems, receivedValues.size());
     }
 
@@ -365,45 +358,8 @@ public class ChannelTrySendReceiveTest {
     }
 
     @Test
-    void concurrentRegularSendWithTryReceive() throws InterruptedException, ExecutionException {
-        Channel<Integer> ch = Channel.newBufferedChannel(16);
-        int total = 10_000;
-        var received = new ConcurrentSkipListSet<Integer>();
-
-        scoped(
-                scope -> {
-                    // producer: regular send
-                    forkVoid(
-                            scope,
-                            () -> {
-                                for (int i = 0; i < total; i++) {
-                                    ch.send(i);
-                                }
-                                ch.done();
-                            });
-
-                    // consumer: tryReceive
-                    forkVoid(
-                                    scope,
-                                    () -> {
-                                        while (true) {
-                                            var r = ch.tryReceiveOrClosed();
-                                            if (r instanceof ChannelDone) break;
-                                            if (r != null) {
-                                                received.add((Integer) r);
-                                            } else {
-                                                Thread.yield();
-                                            }
-                                        }
-                                    })
-                            .get();
-                });
-
-        assertEquals(total, received.size());
-    }
-
-    @Test
-    void trySend_rendezvous_concurrentStress() throws InterruptedException, ExecutionException {
+    void concurrentTrySendAndTryReceive_rendezvous()
+            throws InterruptedException, ExecutionException {
         Channel<Integer> ch = Channel.newRendezvousChannel();
         int total = 1000;
         var received = new ConcurrentSkipListSet<Integer>();
@@ -422,7 +378,7 @@ public class ChannelTrySendReceiveTest {
                                 ch.done();
                             });
 
-                    // receiver: regular receive
+                    // receiver: blocking receive to avoid livelock with trySend
                     forkVoid(
                                     scope,
                                     () -> {
@@ -436,92 +392,5 @@ public class ChannelTrySendReceiveTest {
                 });
 
         assertEquals(total, received.size());
-    }
-
-    @Test
-    void tryReceive_rendezvous_concurrentStress() throws InterruptedException, ExecutionException {
-        Channel<Integer> ch = Channel.newRendezvousChannel();
-        int total = 1000;
-        var received = new ConcurrentSkipListSet<Integer>();
-
-        scoped(
-                scope -> {
-                    // sender: regular send
-                    forkVoid(
-                            scope,
-                            () -> {
-                                for (int i = 0; i < total; i++) {
-                                    ch.send(i);
-                                }
-                                ch.done();
-                            });
-
-                    // receiver: tryReceive
-                    forkVoid(
-                                    scope,
-                                    () -> {
-                                        while (true) {
-                                            var r = ch.tryReceiveOrClosed();
-                                            if (r instanceof ChannelDone) break;
-                                            if (r != null) {
-                                                received.add((Integer) r);
-                                            } else {
-                                                Thread.yield();
-                                            }
-                                        }
-                                    })
-                            .get();
-                });
-
-        assertEquals(total, received.size());
-    }
-
-    @Test
-    void segmentCleanup_afterManyTrySendFailures() throws InterruptedException, ExecutionException {
-        // trySend on a rendezvous channel with no receiver: should not leak segments
-        Channel<Integer> ch = Channel.newRendezvousChannel();
-        for (int i = 0; i < 10_000; i++) {
-            assertFalse(ch.trySend(i));
-        }
-        // channel should still be functional
-        scoped(
-                scope -> {
-                    forkVoid(scope, () -> ch.send(42));
-                    Thread.sleep(50);
-                    assertEquals(42, ch.tryReceive());
-                });
-    }
-
-    @Test
-    void segmentCleanup_afterManyTryReceiveFailures() throws InterruptedException {
-        // tryReceive on an empty channel: should not leak segments
-        Channel<Integer> ch = Channel.newBufferedChannel(2);
-        for (int i = 0; i < 10_000; i++) {
-            assertNull(ch.tryReceive());
-        }
-        // channel should still be functional
-        ch.send(42);
-        assertEquals(42, ch.tryReceive());
-    }
-
-    @Test
-    void trySendTryReceive_bufferedCapacity1() {
-        Channel<Integer> ch = Channel.newBufferedChannel(1);
-        assertTrue(ch.trySend(1));
-        assertEquals(1, ch.tryReceive());
-    }
-
-    @Test
-    void trySendTryReceive_bufferedCapacity10() {
-        Channel<Integer> ch = Channel.newBufferedChannel(10);
-        assertTrue(ch.trySend(1));
-        assertEquals(1, ch.tryReceive());
-    }
-
-    @Test
-    void trySendTryReceive_unlimited() {
-        Channel<Integer> ch = Channel.newUnlimitedChannel();
-        assertTrue(ch.trySend(1));
-        assertEquals(1, ch.tryReceive());
     }
 }

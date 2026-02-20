@@ -28,7 +28,6 @@ public interface Sink<T> extends CloseableChannel {
      * Attempt to send a value to the channel if there's a waiting receiver, or space in the buffer.
      *
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
-     * Safe to call from platform threads, including NIO event loop threads.
      *
      * <p>May return {@code false} even when space is available, due to contention with concurrent
      * operations. Should not be used as a substitute for {@link #send(Object)} in a spin loop.
@@ -48,7 +47,6 @@ public interface Sink<T> extends CloseableChannel {
      * Doesn't throw exceptions when the channel is closed but returns a value.
      *
      * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
-     * Safe to call from platform threads, including NIO event loop threads.
      *
      * <p>May fail even when space is available, due to contention with concurrent operations.
      * Should not be used as a substitute for {@link #sendOrClosed(Object)} in a spin loop.
@@ -58,20 +56,7 @@ public interface Sink<T> extends CloseableChannel {
      *     the channel is closed, or a sentinel value indicating the value was not sent (check using
      *     {@code result == null} for success, {@code result instanceof ChannelClosed} for closed).
      */
-    default Object trySendOrClosed(T value) {
-        // Select-based fallback for binary compatibility
-        Object sent;
-        try {
-            sent = Select.select(sendClause(value), Channel.DEFAULT_NOT_SENT_CLAUSE);
-        } catch (InterruptedException e) {
-            throw new IllegalStateException(
-                    "Interrupted during trySendOrClosed, which should not be possible", e);
-        }
-        if (sent == Channel.DEFAULT_NOT_SENT_VALUE) {
-            return Channel.TRY_SEND_NOT_SENT;
-        }
-        return null; // sent successfully
-    }
+    Object trySendOrClosed(T value);
 
     /**
      * Attempt to send a value to one of the given channels if in any of them there's a waiting
