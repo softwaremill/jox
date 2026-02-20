@@ -202,24 +202,12 @@ public final class KafkaStage {
                     toSend,
                     (m, e) -> {
                         if (e != null) {
-                            try {
-                                exceptions.sendOrClosed(e);
-                            } catch (InterruptedException ex) {
-                                // ignore
-                            }
+                            exceptions.trySendOrClosed(e);
                         } else {
                             if (commitOffsets && leftToSend.decrementAndGet() == 0) {
-                                try {
-                                    toCommit.send(packet);
-                                } catch (InterruptedException ex) {
-                                    // ignore
-                                }
+                                toCommit.trySendOrClosed(packet);
                             }
-                            try {
-                                metadata.send(new Pair<>(sequenceNo, m));
-                            } catch (InterruptedException ex) {
-                                // ignore
-                            }
+                            metadata.trySendOrClosed(new Pair<>(sequenceNo, m));
                         }
                     });
         }

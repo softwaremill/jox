@@ -116,6 +116,24 @@ class Demo3 {
 }
 ```
 
+## Non-blocking operations
+
+Non-blocking `trySend` and `tryReceive` methods are provided. They never block or suspend.
+
+```java
+var ch = Channel.<Integer>newBufferedChannel(1);
+
+// returns true if sent, false if the buffer is full or no receiver is waiting
+boolean s1 = ch.trySend(1);
+
+// returns the value, or null if none is immediately available
+Integer r1 = ch.tryReceive();
+```
+
+Both have `OrClosed` variants which return a `ChannelClosed` value instead of throwing an exception if the channel is closed.
+
+Note: under contention, `trySend`/`tryReceive` may return `false`/`null` even when space or values are available. If you need guaranteed delivery, use `send()`/`receive()` instead.
+
 ## Selecting from multiple channels
 
 The `select` method selects exactly one clause to complete. For example, you can receive a value from exactly one
@@ -213,7 +231,7 @@ import static com.softwaremill.jox.Select.selectWithin;
 class Demo7 {
     public static void main(String[] args) throws InterruptedException {
         var ch1 = Channel.<Integer>newBufferedChannel(3);
-        var ch2 = Channel.<Integer>newBufferedChannel(3); 
+        var ch2 = Channel.<Integer>newBufferedChannel(3);
 
         try {
             // Wait up to 500 milliseconds for a value to be available
@@ -241,7 +259,7 @@ class Demo8 {
         var ch1 = Channel.<Integer>newBufferedChannel(3);
         var ch2 = Channel.<Integer>newBufferedChannel(3);
 
-        var result = selectOrClosedWithin(Duration.ofMillis(500), "TIMEOUT", 
+        var result = selectOrClosedWithin(Duration.ofMillis(500), "TIMEOUT",
                                           ch1.receiveClause(), ch2.receiveClause());
 
         if (result.equals("TIMEOUT")) {

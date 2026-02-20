@@ -27,6 +27,38 @@ public interface Source<T> extends CloseableChannel {
     Object receiveOrClosed() throws InterruptedException;
 
     /**
+     * Attempt to receive a value from the channel if one is immediately available.
+     *
+     * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
+     *
+     * <p>May return {@code null} even when a value is available, due to contention with concurrent
+     * operations. Should not be used as a substitute for {@link #receive()} in a spin loop.
+     *
+     * @return The received value, or {@code null} if no value is immediately available.
+     * @throws ChannelClosedException When the channel is closed.
+     */
+    default T tryReceive() {
+        Object r = tryReceiveOrClosed();
+        if (r instanceof ChannelClosed c) throw c.toException();
+        //noinspection unchecked
+        return (T) r; // null means nothing available
+    }
+
+    /**
+     * Attempt to receive a value from the channel if one is immediately available. Doesn't throw
+     * exceptions when the channel is closed, but returns a value.
+     *
+     * <p>This method never blocks or suspends the calling thread. It completes in bounded time.
+     *
+     * <p>May return {@code null} even when a value is available, due to contention with concurrent
+     * operations. Should not be used as a substitute for {@link #receiveOrClosed()} in a spin loop.
+     *
+     * @return The received value of type {@code T}, {@link ChannelClosed} when the channel is
+     *     closed, or {@code null} if no value is immediately available.
+     */
+    Object tryReceiveOrClosed();
+
+    /**
      * Create a clause which can be used in {@link Select#select(SelectClause[])}. The clause will
      * receive a value from the current channel.
      */
