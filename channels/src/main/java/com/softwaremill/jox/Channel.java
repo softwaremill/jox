@@ -445,6 +445,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             } else if (sendResult == SendResult.CLOSED) {
                 return closedReason;
             } else if (sendResult == TRY_SEND_NOT_SENT) {
+                // nothing to send to (R <= s), not clearing prev: earlier segments may still be
+                // needed by receivers
                 return TRY_SEND_NOT_SENT;
             } else {
                 throw new IllegalStateException(
@@ -525,6 +527,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 segment.cleanPrev();
                 continue;
             } else if (result == null) {
+                // nothing to receive (S <= r), not clearing prev: earlier segments may still be
+                // needed by senders
                 return null;
             } else {
                 segment.cleanPrev();
