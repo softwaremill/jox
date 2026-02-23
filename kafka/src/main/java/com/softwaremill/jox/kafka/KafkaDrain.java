@@ -63,7 +63,11 @@ public final class KafkaDrain {
                                             if (exception != null) {
                                                 logger.error(
                                                         "Exception when sending record", exception);
-                                                producerExceptions.trySendOrClosed(exception);
+                                                try {
+                                                    producerExceptions.sendOrClosed(exception);
+                                                } catch (InterruptedException e) {
+                                                    // ignore
+                                                }
                                             }
                                         });
                             }

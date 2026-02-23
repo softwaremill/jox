@@ -263,7 +263,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         return doSend(value, null, null);
     }
 
-    // used by Sink.trySend (Select-based fallback)
+    // used by the multi-channel Sink.trySend(value, channels...) select-based variant
     static final Object DEFAULT_NOT_SENT_VALUE = new Object();
     static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
             new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
