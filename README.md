@@ -109,4 +109,4 @@ to change it only for scoped test runs.
 
 ## Copyright
 
-Copyright (C) 2023-2025 SoftwareMill [https://softwaremill.com](https://softwaremill.com).
+Copyright (C) 2023-2026 SoftwareMill [https://softwaremill.com](https://softwaremill.com).

@@ -6,7 +6,7 @@
   <parent>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>parent</artifactId>
-    <version>1.1.1</version>
+    <version>1.1.2</version>
   </parent>
 
   <artifactId>structured</artifactId>
@@ -57,7 +57,7 @@
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>channels</artifactId>
-      <version>1.1.1</version>
+      <version>1.1.2</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
