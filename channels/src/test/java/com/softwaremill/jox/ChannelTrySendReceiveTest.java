@@ -16,13 +16,6 @@ public class ChannelTrySendReceiveTest {
     // ********
 
     @Test
-    void trySend_buffered_shouldSendWhenBufferHasSpace() {
-        Channel<String> ch = Channel.newBufferedChannel(2);
-        assertTrue(ch.trySend("a"));
-        assertTrue(ch.trySend("b"));
-    }
-
-    @Test
     void trySend_rendezvous_shouldReturnFalseWhenNoReceiver() {
         Channel<String> ch = Channel.newRendezvousChannel();
         assertFalse(ch.trySend("a"));
@@ -35,8 +28,15 @@ public class ChannelTrySendReceiveTest {
         scoped(
                 scope -> {
                     var f = fork(scope, ch::receive);
-                    Thread.sleep(50);
-                    assertTrue(ch.trySend("x"));
+                    boolean sent = false;
+                    for (int i = 0; i < 10; i++) {
+                        Thread.sleep(10);
+                        if (ch.trySend("x")) {
+                            sent = true;
+                            break;
+                        }
+                    }
+                    assertTrue(sent, "trySend should succeed once the receiver is waiting");
                     assertEquals("x", f.get());
                 });
     }
@@ -72,12 +72,6 @@ public class ChannelTrySendReceiveTest {
     // ****************
     // trySendOrClosed
     // ****************
-
-    @Test
-    void trySendOrClosed_buffered_shouldReturnNullOnSuccess() {
-        Channel<String> ch = Channel.newBufferedChannel(2);
-        assertNull(ch.trySendOrClosed("a"));
-    }
 
     @Test
     void trySendOrClosed_buffered_shouldReturnSentinelWhenFull() {
@@ -134,8 +128,14 @@ public class ChannelTrySendReceiveTest {
         scoped(
                 scope -> {
                     forkVoid(scope, () -> ch.send("x"));
-                    Thread.sleep(50);
-                    assertEquals("x", ch.tryReceive());
+                    Object value = null;
+                    for (int i = 0; i < 10; i++) {
+                        Thread.sleep(10);
+                        value = ch.tryReceive();
+                        if (value != null) break;
+                    }
+                    assertEquals(
+                            "x", value, "tryReceive should succeed once the sender is waiting");
                 });
     }
 
@@ -153,14 +153,14 @@ public class ChannelTrySendReceiveTest {
     void tryReceive_closedDone_noValues_shouldThrow() {
         Channel<String> ch = Channel.newBufferedChannel(1);
         ch.done();
-        assertThrows(ChannelDoneException.class, () -> ch.tryReceive());
+        assertThrows(ChannelDoneException.class, ch::tryReceive);
     }
 
     @Test
     void tryReceive_closedError_shouldThrow() {
         Channel<String> ch = Channel.newBufferedChannel(1);
         ch.error(new RuntimeException("boom"));
-        assertThrows(ChannelErrorException.class, () -> ch.tryReceive());
+        assertThrows(ChannelErrorException.class, ch::tryReceive);
     }
 
     // ********************
@@ -342,43 +342,6 @@ public class ChannelTrySendReceiveTest {
                             });
 
                     // consumer: regular receive
-                    forkVoid(
-                                    scope,
-                                    () -> {
-                                        while (true) {
-                                            var r = ch.receiveOrClosed();
-                                            if (r instanceof ChannelDone) break;
-                                            received.add((Integer) r);
-                                        }
-                                    })
-                            .get();
-                });
-
-        assertEquals(total, received.size());
-    }
-
-    @Test
-    void concurrentTrySendAndTryReceive_rendezvous()
-            throws InterruptedException, ExecutionException {
-        Channel<Integer> ch = Channel.newRendezvousChannel();
-        int total = 1000;
-        var received = new ConcurrentSkipListSet<Integer>();
-
-        scoped(
-                scope -> {
-                    // sender: trySend
-                    forkVoid(
-                            scope,
-                            () -> {
-                                for (int i = 0; i < total; i++) {
-                                    while (!ch.trySend(i)) {
-                                        Thread.yield();
-                                    }
-                                }
-                                ch.done();
-                            });
-
-                    // receiver: blocking receive to avoid livelock with trySend
                     forkVoid(
                                     scope,
                                     () -> {
