@@ -263,10 +263,13 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         return doSend(value, null, null);
     }
 
-    // used by Sink.trySend
+    // used by the multi-channel Sink.trySend(value, channels...) select-based variant
     static final Object DEFAULT_NOT_SENT_VALUE = new Object();
     static final DefaultClause<?> DEFAULT_NOT_SENT_CLAUSE =
             new DefaultClauseValue<>(DEFAULT_NOT_SENT_VALUE);
+
+    // sentinel value returned by trySendOrClosed() to indicate "not sent"
+    static final Object TRY_SEND_NOT_SENT = new Object();
 
     /**
      * @return If {@code select} & {@code selectClause} is {@code null}: {@code null} when the value
@@ -315,7 +318,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 return closedReason;
             }
 
-            var sendResult = updateCellSend(segment, i, s, value, select, selectClause);
+            var sendResult = updateCellSend(segment, i, s, value, select, selectClause, true);
             if (sendResult == SendResult.BUFFERED) {
                 // a receiver is coming, or we are in buffer
                 // similarly as above, not clearing the previous pointer
@@ -348,13 +351,203 @@ public final class Channel<T> implements Source<T>, Sink<T> {
         }
     }
 
+    // *************
+    // Non-blocking send
+    // *************
+
+    /*
+     * Differences from doSend:
+     * - Counter reservation uses snapshot + CAS (not getAndAdd), so we don't waste cell indices
+     *   when the channel is full or closed — failed CAS simply retries with a fresh snapshot.
+     * - Closed check happens before the CAS (vs after segment resolution in doSend), allowing
+     *   an early exit without reserving a cell.
+     * - Capacity pre-check heuristic: for buffered channels, `s >= bufEnd && s >= r` is checked
+     *   before the CAS to avoid reserving a cell when there's clearly no space or receiver.
+     *   For rendezvous, this simplifies to `s >= r`.
+     * - In the segment-skip CAS we use `s+1` (not `s`) because the cell at index `s` was already
+     *   reserved by our successful CAS.
+     * - The cell update uses updateCellSend with suspend=false: where the blocking path would
+     *   park the thread, the non-blocking path marks the cell as INTERRUPTED_SEND and returns.
+     */
+    @Override
+    public Object trySendOrClosed(T value) {
+        if (value == null) {
+            throw new NullPointerException();
+        }
+        while (true) {
+            // reading the segment before the counter CAS - needed to find the required segment
+            // later
+            var segment = sendSegment;
+            // snapshot of the counter (unlike doSend's getAndAdd, we don't reserve yet)
+            var scf = sendersAndClosedFlag;
+            var s = getSendersCounter(scf);
+
+            // early closed check — before reserving a cell (doSend checks after segment resolution)
+            if (isClosed(scf)) {
+                return closedReason;
+            }
+
+            // capacity pre-check: avoid reserving a cell when there's clearly no space or receiver
+            if (capacity >= 0) {
+                var bufEnd = bufferEnd;
+                var r = receivers;
+                if (capacity == 0) {
+                    // rendezvous: need a waiting receiver
+                    if (s >= r) return TRY_SEND_NOT_SENT;
+                } else {
+                    // buffered: need buffer space or a waiting receiver
+                    if (s >= bufEnd && s >= r) return TRY_SEND_NOT_SENT;
+                }
+            }
+            // unlimited channels (capacity < 0) skip this check — trySend always has space
+
+            // reserving the next cell via CAS (doSend uses getAndAdd, which always succeeds but
+            // wastes cell indices when the channel is full)
+            if (!SENDERS_AND_CLOSE_FLAG.compareAndSet(this, scf, scf + 1)) {
+                continue;
+            }
+
+            // calculating the segment id and the index within the segment
+            var id = s / Segment.SEGMENT_SIZE;
+            var i = (int) (s % Segment.SEGMENT_SIZE);
+
+            // check if `sendSegment` stores a previous segment, if so move the reference forward
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(SEND_SEGMENT, this, segment, id);
+                if (segment == null) {
+                    // the channel has been closed, `s` points to a segment which doesn't exist
+                    return closedReason;
+                }
+
+                if (segment.getId() != id) {
+                    // skipping all interrupted cells; using s+1 (not s as in doSend) because the
+                    // cell at index s was already reserved by our successful CAS above
+                    SENDERS_AND_CLOSE_FLAG.compareAndSet(
+                            this, s + 1, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            Object sendResult;
+            try {
+                sendResult = updateCellSend(segment, i, s, value, null, null, false);
+            } catch (InterruptedException e) {
+                throw new AssertionError("unreachable: non-blocking send cannot be interrupted", e);
+            }
+            if (sendResult == SendResult.BUFFERED) {
+                return null;
+            } else if (sendResult == SendResult.RESUMED) {
+                segment.cleanPrev();
+                return null;
+            } else if (sendResult == SendResult.FAILED) {
+                segment.cleanPrev();
+                continue;
+            } else if (sendResult == SendResult.CLOSED) {
+                return closedReason;
+            } else if (sendResult == TRY_SEND_NOT_SENT) {
+                // nothing to send to (R <= s), not clearing prev: earlier segments may still be
+                // needed by receivers
+                return TRY_SEND_NOT_SENT;
+            } else {
+                throw new IllegalStateException(
+                        "Unexpected result: " + sendResult + " in channel: " + this);
+            }
+        }
+    }
+
+    // *************
+    // Non-blocking receive
+    // *************
+
+    /*
+     * Differences from doReceive:
+     * - Counter reservation uses snapshot + CAS (not getAndAdd), so we don't waste cell indices
+     *   when nothing is available — failed CAS simply retries with a fresh snapshot.
+     * - Before attempting the CAS, we check `s <= r`: if no sender has reserved a cell beyond
+     *   the current receiver position, there's nothing to receive. In that branch we also check
+     *   for closed status, returning closedForReceive() if applicable.
+     * - The cell update uses updateCellReceive with suspend=false: where the blocking path would
+     *   park the thread, the non-blocking path marks the cell as INTERRUPTED_RECEIVE and returns.
+     */
+    @Override
+    public Object tryReceiveOrClosed() {
+        while (true) {
+            // snapshot of counters (unlike doReceive's getAndAdd, we don't reserve yet)
+            var scf = sendersAndClosedFlag;
+            var s = getSendersCounter(scf);
+            var r = receivers;
+
+            // pre-check: if no sender has reserved a cell beyond the current receiver position,
+            // there's nothing to receive
+            if (s <= r) {
+                if (isClosed(scf)) return closedForReceive();
+                return null;
+            }
+
+            // reading the segment before the counter CAS - needed to find the required segment
+            // later
+            var segment = receiveSegment;
+
+            // reserving the next cell via CAS (doReceive uses getAndAdd, which always succeeds but
+            // wastes cell indices when the channel is empty)
+            if (!RECEIVERS.compareAndSet(this, r, r + 1)) {
+                continue;
+            }
+
+            // calculating the segment id and the index within the segment
+            var id = r / Segment.SEGMENT_SIZE;
+            var i = (int) (r % Segment.SEGMENT_SIZE);
+
+            // check if `receiveSegment` stores a previous segment, if so move the reference forward
+            if (segment.getId() != id) {
+                segment = findAndMoveForward(RECEIVE_SEGMENT, this, segment, id);
+                if (segment == null) {
+                    // the channel has been closed, r points to a segment which doesn't exist
+                    return closedReason;
+                }
+
+                if (segment.getId() != id) {
+                    // skipping all interrupted cells; using r+1 (not r as in doReceive) because
+                    // the cell at index r was already reserved by our successful CAS above
+                    RECEIVERS.compareAndSet(this, r + 1, segment.getId() * Segment.SEGMENT_SIZE);
+                    continue;
+                }
+            }
+
+            Object result;
+            try {
+                result = updateCellReceive(segment, i, r, null, null, false);
+            } catch (InterruptedException e) {
+                throw new AssertionError(
+                        "unreachable: non-blocking receive cannot be interrupted", e);
+            }
+            if (result == ReceiveResult.CLOSED) {
+                return closedReason;
+            } else if (result == ReceiveResult.FAILED) {
+                segment.cleanPrev();
+                continue;
+            } else if (result == null) {
+                // nothing to receive (S <= r), not clearing prev: earlier segments may still be
+                // needed by senders
+                return null;
+            } else {
+                segment.cleanPrev();
+                return result;
+            }
+        }
+    }
+
     /**
      * @param segment The segment which stores the cell's state.
      * @param i The index within the {@code segment}.
      * @param s Global index of the reserved cell.
      * @param value The value to send.
-     * @return One of {@link SendResult}, or {@link StoredSelectClause} if {@code select} is not
-     *     {@code null}.
+     * @param suspend If {@code true}, the thread may be suspended (parked) when no receiver is
+     *     available and the cell is not in the buffer. If {@code false} (non-blocking path), the
+     *     cell is marked as INTERRUPTED_SEND and {@link Channel#TRY_SEND_NOT_SENT} is returned
+     *     instead.
+     * @return One of {@link SendResult}, {@link Channel#TRY_SEND_NOT_SENT} (when {@code
+     *     suspend=false}), or {@link StoredSelectClause} if {@code select} is not {@code null}.
      */
     private Object updateCellSend(
             Segment segment,
@@ -362,7 +555,8 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             long s,
             T value,
             SelectInstance select,
-            SelectClause<?> selectClause)
+            SelectClause<?> selectClause,
+            boolean suspend)
             throws InterruptedException {
         while (true) {
             // reading the current state of the cell; we'll try to update it atomically
@@ -371,8 +565,15 @@ public final class Channel<T> implements Source<T>, Sink<T> {
             if (state == null) {
                 // reading the buffer end & receiver's counter if needed: !isUnlimited
                 if (capacity >= 0 && s >= (isRendezvous ? 0 : bufferEnd) && s >= receivers) {
-                    // cell is empty, and no receiver, not in buffer -> suspend
-                    if (select != null) {
+                    // cell is empty, and no receiver, not in buffer
+                    if (!suspend) {
+                        // non-blocking path: mark the cell as interrupted and return
+                        if (segment.casCell(i, null, INTERRUPTED_SEND)) {
+                            segment.cellInterruptedSender();
+                            return TRY_SEND_NOT_SENT;
+                        }
+                        // else: CAS unsuccessful, repeat
+                    } else if (select != null) {
                         // cell is empty, no receiver, and we are in a select -> store the select
                         // instance and await externally; the value to send is stored in the
                         // selectClause
@@ -501,7 +702,7 @@ public final class Channel<T> implements Source<T>, Sink<T> {
                 }
             }
 
-            var result = updateCellReceive(segment, i, r, select, selectClause);
+            var result = updateCellReceive(segment, i, r, select, selectClause, true);
             if (result == ReceiveResult.CLOSED) {
                 // not cleaning the previous segments - the close procedure might still need it
                 return closedReason;
@@ -541,11 +742,20 @@ public final class Channel<T> implements Source<T>, Sink<T> {
      * @param r Index of the reserved cell.
      * @param select The select instance of which this receive is part of, or {@code null} (along
      *     with {@code selectClause}) if this is a direct receive call.
+     * @param suspend If {@code true}, the thread may be suspended (parked) when no sender is
+     *     available. If {@code false} (non-blocking path), the cell is marked as
+     *     INTERRUPTED_RECEIVE and {@code null} is returned instead.
      * @return Either a state-result ({@link ReceiveResult}), {@link StoredSelectClause} in case
-     *     {@code select} is not {@code null}, or the received value.
+     *     {@code select} is not {@code null}, {@code null} (when {@code suspend=false} and nothing
+     *     available), or the received value.
      */
     private Object updateCellReceive(
-            Segment segment, int i, long r, SelectInstance select, SelectClause<?> selectClause)
+            Segment segment,
+            int i,
+            long r,
+            SelectInstance select,
+            SelectClause<?> selectClause,
+            boolean suspend)
             throws InterruptedException {
         while (true) {
             // reading the current state of the cell; we'll try to update it atomically
@@ -553,7 +763,15 @@ public final class Channel<T> implements Source<T>, Sink<T> {
 
             if (state == null || state == IN_BUFFER) {
                 if (r >= getSendersCounter(sendersAndClosedFlag)) { // reading the sender's counter
-                    if (select != null) {
+                    if (!suspend) {
+                        // non-blocking path: mark the cell as interrupted and return
+                        if (segment.casCell(i, state, INTERRUPTED_RECEIVE)) {
+                            segment.cellInterruptedReceiver();
+                            expandBuffer();
+                            return null;
+                        }
+                        // else: CAS unsuccessful, repeat
+                    } else if (select != null) {
                         // cell is empty, no sender, and we are in a select -> store the select
                         // instance and await externally
                         var storedSelect =
