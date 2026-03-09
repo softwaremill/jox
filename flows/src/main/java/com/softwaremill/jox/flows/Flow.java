@@ -1294,6 +1294,51 @@ public class Flow<T> {
     }
 
     /**
+     * Recovers from upstream errors by switching to an alternative flow produced by the provided
+     * function. Elements already emitted before the error are preserved. If the function returns
+     * {@link Optional#empty()}, the original error is propagated.
+     *
+     * <p>Creates an asynchronous boundary (see {@link #buffer}) to isolate failures when running
+     * the upstream flow.
+     *
+     * @param pf A function that handles specific exceptions and returns an alternative flow to
+     *     switch to, or empty if the exception is not handled.
+     * @return A flow that emits elements from the upstream flow, and switches to the recovery flow
+     *     if the upstream fails with a handled exception.
+     */
+    public <U extends T> Flow<U> recoverWith(ThrowingFunction<Throwable, Optional<Flow<U>>> pf) {
+        return usingEmit(
+                emit ->
+                        supervised(
+                                scope -> {
+                                    Channel<U> channel = newChannelWithBufferSizeFromScope();
+                                    forkPropagate(
+                                            scope,
+                                            channel,
+                                            () -> {
+                                                try {
+                                                    //noinspection unchecked
+                                                    last.run(t -> channel.send((U) t));
+                                                } catch (Throwable e) {
+                                                    Optional<Flow<U>> recovery = pf.apply(e);
+                                                    if (recovery.isPresent()) {
+                                                        recovery.get()
+                                                                .runToEmit(t -> channel.send(t));
+                                                    } else {
+                                                        channel.error(e);
+                                                        return null;
+                                                    }
+                                                }
+                                                channel.done();
+                                                return null;
+                                            });
+
+                                    FlowEmit.channelToEmit(channel, emit);
+                                    return null;
+                                }));
+    }
+
+    /**
      * Completes the flow when any {@link Exception} is thrown by the upstream, discarding the
      * exception. Downstream failures are not caught.
      */
