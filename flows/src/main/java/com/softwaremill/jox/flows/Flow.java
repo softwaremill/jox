@@ -1217,7 +1217,6 @@ public class Flow<T> {
      * @param seed A function creating the initial aggregate from the first element.
      * @param aggregate A function combining the current aggregate with a new element.
      */
-    @SuppressWarnings("unchecked")
     public <S> Flow<S> batchWeighted(
             long maxWeight,
             ThrowingFunction<T, Long> costFn,
@@ -1229,109 +1228,103 @@ public class Flow<T> {
         return usingEmit(
                 emit ->
                         supervised(
-                                scope -> {
-                                    Channel<S> output = Channel.newRendezvousChannel();
-                                    Source<T> c = runToChannel(scope);
-                                    forkPropagate(
-                                            scope,
-                                            output,
-                                            () -> {
-                                                S agg = null;
-                                                long remainingWeight = maxWeight;
-                                                T pending = null;
-                                                boolean upstreamDone = false;
-                                                boolean hasPending = false;
+                                scope ->
+                                        batchWeightedImpl(
+                                                scope, maxWeight, costFn, seed, aggregate, emit)));
+    }
 
-                                                boolean shouldRun = true;
-                                                while (shouldRun) {
-                                                    if (agg == null && !upstreamDone) {
-                                                        // no aggregate yet: just receive
-                                                        switch (c.receiveOrClosed()) {
-                                                            case ChannelDone _ -> {
-                                                                output.done();
-                                                                shouldRun = false;
-                                                            }
-                                                            case ChannelError(
-                                                                            Throwable cause,
-                                                                            Channel<?> _) -> {
-                                                                output.error(cause);
-                                                                shouldRun = false;
-                                                            }
-                                                            case Object t -> {
-                                                                agg = seed.apply((T) t);
-                                                                remainingWeight =
-                                                                        maxWeight
-                                                                                - costFn.apply(
-                                                                                        (T) t);
-                                                            }
-                                                        }
-                                                    } else if (agg != null
-                                                            && !hasPending
-                                                            && !upstreamDone) {
-                                                        // have aggregate, no pending: select
-                                                        // between send and receive; send first so
-                                                        // that when downstream is ready, we emit
-                                                        // immediately rather than eagerly
-                                                        // aggregating more
-                                                        switch (selectOrClosed(
-                                                                output.sendClause(
-                                                                        agg, () -> SENT_MARKER),
-                                                                c.receiveClause())) {
-                                                            // upstream done; still have agg to send
-                                                            case ChannelDone _ ->
-                                                                    upstreamDone = true;
-                                                            case ChannelError(
-                                                                            Throwable cause,
-                                                                            Channel<?> _) -> {
-                                                                output.error(cause);
-                                                                shouldRun = false;
-                                                            }
-                                                            case Object r -> {
-                                                                if (r == SENT_MARKER) {
-                                                                    agg = null;
-                                                                    remainingWeight = maxWeight;
-                                                                } else {
-                                                                    T t = (T) r;
-                                                                    long cost = costFn.apply(t);
-                                                                    if (cost <= remainingWeight) {
-                                                                        agg =
-                                                                                aggregate.apply(
-                                                                                        agg, t);
-                                                                        remainingWeight -= cost;
-                                                                    } else {
-                                                                        pending = t;
-                                                                        hasPending = true;
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    } else if (agg != null && hasPending) {
-                                                        // have aggregate and pending (budget
-                                                        // exceeded): must send aggregate
-                                                        output.send(agg);
-                                                        agg = seed.apply(pending);
-                                                        remainingWeight =
-                                                                maxWeight - costFn.apply(pending);
-                                                        pending = null;
-                                                        hasPending = false;
-                                                    } else if (agg != null) {
-                                                        // upstream done, have aggregate: send it
-                                                        output.send(agg);
-                                                        agg = null;
-                                                        remainingWeight = maxWeight;
-                                                        output.done();
-                                                        shouldRun = false;
-                                                    } else {
-                                                        // upstream done, no aggregate: done
-                                                        output.done();
-                                                        shouldRun = false;
-                                                    }
-                                                }
-                                                return null;
-                                            });
-                                    FlowEmit.channelToEmit(output, emit);
-                                    return null;
-                                }));
+    @SuppressWarnings("unchecked")
+    private <S> Void batchWeightedImpl(
+            Scope scope,
+            long maxWeight,
+            ThrowingFunction<T, Long> costFn,
+            ThrowingFunction<T, S> seed,
+            ThrowingBiFunction<S, T, S> aggregate,
+            FlowEmit<S> emit)
+            throws Exception {
+        Channel<S> output = Channel.newRendezvousChannel();
+        Source<T> c = runToChannel(scope);
+        forkPropagate(
+                scope,
+                output,
+                () -> {
+                    S agg = null;
+                    long remainingWeight = maxWeight;
+                    T pending = null;
+                    boolean upstreamDone = false;
+                    boolean hasPending = false;
+
+                    boolean shouldRun = true;
+                    while (shouldRun) {
+                        if (agg == null && !upstreamDone) {
+                            // no aggregate yet: just receive
+                            switch (c.receiveOrClosed()) {
+                                case ChannelDone _ -> {
+                                    output.done();
+                                    shouldRun = false;
+                                }
+                                case ChannelError(Throwable cause, Channel<?> _) -> {
+                                    output.error(cause);
+                                    shouldRun = false;
+                                }
+                                case Object t -> {
+                                    agg = seed.apply((T) t);
+                                    remainingWeight = maxWeight - costFn.apply((T) t);
+                                }
+                            }
+                        } else if (agg != null && !hasPending && !upstreamDone) {
+                            // have aggregate, no pending: select between send and receive;
+                            // send first so that when downstream is ready, we emit
+                            // immediately rather than eagerly aggregating more
+                            switch (selectOrClosed(
+                                    output.sendClause(agg, () -> SENT_MARKER), c.receiveClause())) {
+                                // upstream done; still have agg to send
+                                case ChannelDone _ -> upstreamDone = true;
+                                case ChannelError(Throwable cause, Channel<?> _) -> {
+                                    output.error(cause);
+                                    shouldRun = false;
+                                }
+                                case Object r -> {
+                                    if (r == SENT_MARKER) {
+                                        agg = null;
+                                        remainingWeight = maxWeight;
+                                    } else {
+                                        T t = (T) r;
+                                        long cost = costFn.apply(t);
+                                        if (cost <= remainingWeight) {
+                                            agg = aggregate.apply(agg, t);
+                                            remainingWeight -= cost;
+                                        } else {
+                                            pending = t;
+                                            hasPending = true;
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (agg != null && hasPending) {
+                            // have aggregate and pending (budget exceeded): must send aggregate
+                            output.send(agg);
+                            agg = seed.apply(pending);
+                            remainingWeight = maxWeight - costFn.apply(pending);
+                            pending = null;
+                            hasPending = false;
+                        } else if (agg != null) {
+                            // upstream done, have aggregate: send it
+                            output.send(agg);
+                            agg = null;
+                            remainingWeight = maxWeight;
+                            output.done();
+                            shouldRun = false;
+                        } else {
+                            // upstream done, no aggregate: done
+                            output.done();
+                            shouldRun = false;
+                        }
+                    }
+                    return null;
+                });
+        FlowEmit.channelToEmit(output, emit);
+        return null;
     }
 
     /**
