@@ -141,4 +141,22 @@ class FlowRecoverWithTest {
                         () -> flow.recoverWith(recoveryFunction).runToList());
         assertEquals(recoveryException, caught.getCause().getCause());
     }
+
+    @Test
+    void shouldPropagateExceptionWhenRecoveryFunctionThrows() {
+        // given
+        IllegalArgumentException exception = new IllegalArgumentException("test error");
+        Flow<Integer> flow = Flows.fromValues(1, 2).concat(Flows.failed(exception));
+        ThrowingFunction<Throwable, Optional<Flow<Integer>>> recoveryFunction =
+                e -> {
+                    throw exception;
+                };
+
+        // when & then
+        JoxScopeExecutionException caught =
+                assertThrows(
+                        JoxScopeExecutionException.class,
+                        () -> flow.recoverWith(recoveryFunction).runToList());
+        assertEquals(exception, caught.getCause().getCause());
+    }
 }

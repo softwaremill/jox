@@ -1296,7 +1296,8 @@ public class Flow<T> {
     /**
      * Recovers from upstream errors by switching to an alternative flow produced by the provided
      * function. Elements already emitted before the error are preserved. If the function returns
-     * {@link Optional#empty()}, the original error is propagated.
+     * {@link Optional#empty()}, the original error is propagated. If the recovery flow itself
+     * fails, that error is propagated downstream.
      *
      * <p>Creates an asynchronous boundary (see {@link #buffer}) to isolate failures when running
      * the upstream flow.
@@ -1322,8 +1323,7 @@ public class Flow<T> {
                                                 } catch (Throwable e) {
                                                     Optional<Flow<U>> recovery = pf.apply(e);
                                                     if (recovery.isPresent()) {
-                                                        recovery.get()
-                                                                .runToEmit(t -> channel.send(t));
+                                                        recovery.get().runToEmit(channel::send);
                                                     } else {
                                                         channel.error(e);
                                                         return null;
