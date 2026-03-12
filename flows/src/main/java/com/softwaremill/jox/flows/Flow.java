@@ -1380,6 +1380,153 @@ public class Flow<T> {
     }
 
     /**
+     * Expands elements by applying the {@code expander} function to each upstream element,
+     * producing an iterator. When downstream is faster than upstream, elements from the iterator
+     * are emitted. When a new upstream element arrives, it replaces the current iterator.
+     *
+     * <p>Note that upstream elements are not emitted directly — only the elements produced by the
+     * {@code expander} iterator are. To also emit the original element, include it in the iterator,
+     * or use {@link #extrapolate} which does this automatically.
+     *
+     * <p>When a new upstream element arrives while a send from the current iterator is pending, the
+     * pending value is discarded in favor of the new element's iterator. This favors freshness over
+     * completeness.
+     *
+     * <p>Creates an asynchronous boundary.
+     *
+     * @param expander A function that creates an iterator from an upstream element.
+     * @return A flow emitting elements produced by the expander for each upstream element.
+     */
+    public <U> Flow<U> expand(ThrowingFunction<T, Iterator<U>> expander) {
+        return usingEmit(emit -> supervised(scope -> expandImpl(scope, expander, emit)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <U> Void expandImpl(
+            Scope scope, ThrowingFunction<T, Iterator<U>> expander, FlowEmit<U> emit)
+            throws Exception {
+        Channel<U> output = Channel.newRendezvousChannel();
+        Source<T> c = runToChannel(scope);
+        forkPropagate(
+                scope,
+                output,
+                () -> {
+                    Iterator<U> iterator = Collections.emptyIterator();
+                    boolean upstreamDone = false;
+
+                    boolean shouldRun = true;
+                    while (shouldRun) {
+                        if (!iterator.hasNext() && !upstreamDone) {
+                            // no elements, upstream active: wait for upstream
+                            switch (c.receiveOrClosed()) {
+                                case ChannelDone _ -> {
+                                    output.done();
+                                    shouldRun = false;
+                                }
+                                case ChannelError(Throwable cause, Channel<?> _) -> {
+                                    output.error(cause);
+                                    shouldRun = false;
+                                }
+                                case Object t -> iterator = expander.apply((T) t);
+                            }
+                        } else if (iterator.hasNext() && !upstreamDone) {
+                            // have elements, upstream active: select between receive and send;
+                            // receive first to prefer freshness
+                            U next = iterator.next();
+                            switch (selectOrClosed(
+                                    c.receiveClause(),
+                                    output.sendClause(next, () -> SENT_MARKER))) {
+                                case ChannelDone _ -> {
+                                    // upstream done; next already consumed, must send it
+                                    upstreamDone = true;
+                                    output.send(next);
+                                }
+                                case ChannelError(Throwable cause, Channel<?> _) -> {
+                                    output.error(cause);
+                                    shouldRun = false;
+                                }
+                                case Object r -> {
+                                    if (r == SENT_MARKER) {
+                                        // send succeeded, continue
+                                    } else {
+                                        // new upstream element, replace iterator
+                                        iterator = expander.apply((T) r);
+                                    }
+                                }
+                            }
+                        } else if (iterator.hasNext()) {
+                            // have elements, upstream done: drain iterator
+                            output.send(iterator.next());
+                        } else {
+                            // no elements, upstream done: done
+                            output.done();
+                            shouldRun = false;
+                        }
+                    }
+                    return null;
+                });
+        FlowEmit.channelToEmit(output, emit);
+        return null;
+    }
+
+    /**
+     * Extrapolates elements when downstream is faster than upstream. Each upstream element is first
+     * emitted as-is, then the {@code extrapolator} function is used to generate additional
+     * elements.
+     *
+     * <p>Optionally, an {@code initial} element can be provided which will be emitted before the
+     * first upstream element arrives.
+     *
+     * <p>Creates an asynchronous boundary.
+     *
+     * @param extrapolator A function generating extra elements from the last upstream element.
+     * @param initial An optional element to emit before any upstream element.
+     * @return A flow emitting upstream elements followed by extrapolated values.
+     */
+    @SuppressWarnings("unchecked")
+    public <U extends T> Flow<U> extrapolate(
+            ThrowingFunction<U, Iterator<U>> extrapolator, Optional<U> initial) {
+        Flow<U> self = (Flow<U>) this;
+        Flow<U> base =
+                self.expand(
+                        u -> {
+                            Iterator<U> extra = extrapolator.apply(u);
+                            return new Iterator<>() {
+                                boolean first = true;
+
+                                public boolean hasNext() {
+                                    return first || extra.hasNext();
+                                }
+
+                                public U next() {
+                                    if (first) {
+                                        first = false;
+                                        return u;
+                                    }
+                                    return extra.next();
+                                }
+                            };
+                        });
+        return initial.map(e -> Flows.<U>fromValues(e).concat(base)).orElse(base);
+    }
+
+    /**
+     * Extrapolates elements when downstream is faster than upstream. Each upstream element is first
+     * emitted as-is, then the {@code extrapolator} function is used to generate additional
+     * elements.
+     *
+     * <p>Equivalent to {@code extrapolate(extrapolator, Optional.empty())}.
+     *
+     * <p>Creates an asynchronous boundary.
+     *
+     * @param extrapolator A function generating extra elements from the last upstream element.
+     * @return A flow emitting upstream elements followed by extrapolated values.
+     */
+    public <U extends T> Flow<U> extrapolate(ThrowingFunction<U, Iterator<U>> extrapolator) {
+        return extrapolate(extrapolator, Optional.empty());
+    }
+
+    /**
      * Discard all elements emitted by this flow. The returned flow completes only when this flow
      * completes (successfully or with an error).
      */
