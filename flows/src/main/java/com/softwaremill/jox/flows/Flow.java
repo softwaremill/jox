@@ -1491,34 +1491,92 @@ public class Flow<T> {
      *     if the upstream fails with a handled exception.
      */
     public <U extends T> Flow<U> recoverWith(ThrowingFunction<Throwable, Optional<Flow<U>>> pf) {
-        return usingEmit(
-                emit ->
-                        supervised(
-                                scope -> {
-                                    Channel<U> channel = newChannelWithBufferSizeFromScope();
-                                    forkPropagate(
-                                            scope,
-                                            channel,
-                                            () -> {
-                                                try {
-                                                    //noinspection unchecked
-                                                    last.run(t -> channel.send((U) t));
-                                                } catch (Throwable e) {
-                                                    Optional<Flow<U>> recovery = pf.apply(e);
-                                                    if (recovery.isPresent()) {
-                                                        recovery.get().runToEmit(channel::send);
-                                                    } else {
-                                                        channel.error(e);
-                                                        return null;
-                                                    }
-                                                }
-                                                channel.done();
-                                                return null;
-                                            });
+        return recoverWithRetry(Schedule.immediate().maxRetries(0), pf);
+    }
 
-                                    FlowEmit.channelToEmit(channel, emit);
-                                    return null;
-                                }));
+    /**
+     * Recovers from upstream errors by switching to a recovery flow with retry support. On failure
+     * matching {@code pf}, the recovery flow is materialized and run. If the recovery flow also
+     * fails and retries remain (as specified by the schedule), recovery is attempted again. After
+     * exhausting all retries, the error is propagated.
+     *
+     * <p>The function {@code pf} is re-evaluated on each retry attempt, allowing it to return
+     * different recovery flows.
+     *
+     * <p>Elements already emitted before the upstream error are preserved. Creates an asynchronous
+     * boundary (see {@link #buffer}) to isolate failures.
+     *
+     * @param schedule The retry schedule specifying intervals and maximum retries.
+     * @param pf A function mapping exceptions to recovery flows, or empty if not handled.
+     * @return A flow that emits elements from the upstream flow, and switches to a recovery flow on
+     *     failure, retrying according to the schedule.
+     */
+    public <U extends T> Flow<U> recoverWithRetry(
+            Schedule schedule, ThrowingFunction<Throwable, Optional<Flow<U>>> pf) {
+        return usingEmit(
+                emit -> supervised(scope -> recoverWithRetryImpl(scope, schedule, pf, emit)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private <U> Void recoverWithRetryImpl(
+            Scope scope,
+            Schedule schedule,
+            ThrowingFunction<Throwable, Optional<Flow<U>>> pf,
+            FlowEmit<U> emit)
+            throws Exception {
+        Channel<U> channel = newChannelWithBufferSizeFromScope();
+        forkPropagate(
+                scope,
+                channel,
+                () -> {
+                    try {
+                        last.run(t -> channel.send((U) t));
+                    } catch (Throwable e) {
+                        Optional<Flow<U>> recovery = pf.apply(e);
+                        if (recovery.isEmpty()) {
+                            channel.error(e);
+                            return null;
+                        }
+                        // use first pf result for initial attempt, re-evaluate pf on retries
+                        boolean[] first = {true};
+                        retryOnException(
+                                schedule,
+                                () -> {
+                                    Flow<U> flow;
+                                    if (first[0]) {
+                                        first[0] = false;
+                                        flow = recovery.get();
+                                    } else {
+                                        flow = pf.apply(e).orElseThrow();
+                                    }
+                                    flow.runToEmit(channel::send);
+                                });
+                    }
+                    channel.done();
+                    return null;
+                });
+        FlowEmit.channelToEmit(channel, emit);
+        return null;
+    }
+
+    private static void retryOnException(Schedule schedule, ThrowingRunnable operation)
+            throws Exception {
+        Iterator<Duration> intervals = schedule.newIterator();
+        while (true) {
+            try {
+                operation.run();
+                return;
+            } catch (Exception e) {
+                if (intervals.hasNext()) {
+                    Duration delay = intervals.next();
+                    if (!delay.isZero()) {
+                        Thread.sleep(delay);
+                    }
+                } else {
+                    throw e;
+                }
+            }
+        }
     }
 
     /**
