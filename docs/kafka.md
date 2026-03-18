@@ -8,20 +8,20 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>kafka</artifactId>
-    <version>0.5.2</version>
+    <version>0.5.3</version>
 </dependency>
 ```
 
 Gradle:
 
 ```gradle
-implementation 'com.softwaremill.jox:kafka:0.5.2'
+implementation 'com.softwaremill.jox:kafka:0.5.3'
 ```
 
 Gradle (Kotlin DSL):
 
 ```kotlin
-implementation("com.softwaremill.jox:kafka:0.5.2")
+implementation("com.softwaremill.jox:kafka:0.5.3")
 ```
 
 `Flow`s which read from a Kafka topic, mapping stages and drains which publish to Kafka topics are available through

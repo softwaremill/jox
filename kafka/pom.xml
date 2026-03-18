@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>kafka</artifactId>
-  <version>0.5.2</version>
+  <version>0.5.3</version>
   <packaging>jar</packaging>
   <name>${project.groupId}:${project.artifactId}</name>
 
@@ -28,12 +28,12 @@
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>structured</artifactId>
-      <version>0.5.2</version>
+      <version>0.5.3</version>
     </dependency>
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>flows</artifactId>
-      <version>0.5.2</version>
+      <version>0.5.3</version>
     </dependency>
     <dependency>
       <groupId>org.apache.kafka</groupId>
