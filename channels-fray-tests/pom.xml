@@ -30,7 +30,7 @@
     <dependency>
       <groupId>org.pastalab.fray</groupId>
       <artifactId>fray-junit</artifactId>
-      <version>0.8.3</version>
+      <version>0.8.5</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
