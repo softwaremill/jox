@@ -23,7 +23,7 @@ jobs:
         run: mvn --batch-mode --update-snapshots verify
       - name: Prepare release notes
         if: github.event_name == 'push'
-        uses: release-drafter/release-drafter@c2e2804cc59f45f57076a99af580d0fedb697927 # v7, specifically v6.1.0
+        uses: release-drafter/release-drafter@693d20e7c1ce1a81d3a41962f85914253b518449 # v7, specifically v6.1.0
         with:
           config-name: release-drafter.yml
         env:
@@ -70,7 +70,7 @@ jobs:
           version=${GITHUB_REF/refs\/tags\/v/}
           echo "VERSION=$version" >> $GITHUB_ENV
       - name: Publish release notes
-        uses: release-drafter/release-drafter@c2e2804cc59f45f57076a99af580d0fedb697927 # v7, specifically v6.1.0
+        uses: release-drafter/release-drafter@693d20e7c1ce1a81d3a41962f85914253b518449 # v7, specifically v6.1.0
         with:
           config-name: release-drafter.yml
           publish: true
