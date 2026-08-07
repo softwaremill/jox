@@ -29,20 +29,8 @@ final class JsonRendering {
     }
 
     static <T> ByteFlow renderArray(Flow<T> values, ObjectWriter writer) {
-        return Flows.<ByteChunk>usingEmit(
-                        emit -> {
-                            emit.apply(ARRAY_START);
-                            boolean[] first = {true};
-                            values.runForeach(
-                                    value -> {
-                                        ByteChunk json =
-                                                ByteChunk.fromArray(
-                                                        writer.writeValueAsBytes(value));
-                                        emit.apply(first[0] ? json : COMMA.concat(json));
-                                        first[0] = false;
-                                    });
-                            emit.apply(ARRAY_END);
-                        })
+        return values.map(value -> ByteChunk.fromArray(writer.writeValueAsBytes(value)))
+                .intersperse(ARRAY_START, COMMA, ARRAY_END)
                 .toByteFlow();
     }
 

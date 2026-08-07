@@ -405,8 +405,8 @@ class JsonFlowTest {
 
         // then
         assertEquals(0, renderedValues.get());
-        assertEquals("[0,1", chunksToString(rendered.take(3).runToList()));
-        assertEquals(2, renderedValues.get());
+        assertEquals("[0", chunksToString(rendered.take(2).runToList()));
+        assertEquals(1, renderedValues.get());
     }
 
     @Test
