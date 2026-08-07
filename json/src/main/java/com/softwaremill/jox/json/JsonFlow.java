@@ -33,8 +33,7 @@ public final class JsonFlow {
      * @return a flow emitting one value for each non-blank input line
      */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, Class<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(valueType));
+        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -48,8 +47,7 @@ public final class JsonFlow {
      * @return a flow emitting one value for each non-blank input line
      */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, TypeReference<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(valueType));
+        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -78,8 +76,7 @@ public final class JsonFlow {
      * @return a flow emitting the array elements
      */
     public static <T> Flow<T> parseArray(ByteFlow bytes, Class<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return parseArray(bytes, DEFAULT_MAPPER.readerFor(valueType));
+        return parseArray(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -93,8 +90,7 @@ public final class JsonFlow {
      * @return a flow emitting the array elements
      */
     public static <T> Flow<T> parseArray(ByteFlow bytes, TypeReference<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return parseArray(bytes, DEFAULT_MAPPER.readerFor(valueType));
+        return parseArray(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -122,8 +118,7 @@ public final class JsonFlow {
      * @return a flow emitting UTF-8 encoded NDJSON
      */
     public static <T> ByteFlow renderNdjson(Flow<T> values, Class<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return renderNdjson(values, DEFAULT_MAPPER.writerFor(valueType));
+        return renderNdjson(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -136,8 +131,7 @@ public final class JsonFlow {
      * @return a flow emitting UTF-8 encoded NDJSON
      */
     public static <T> ByteFlow renderNdjson(Flow<T> values, TypeReference<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return renderNdjson(values, DEFAULT_MAPPER.writerFor(valueType));
+        return renderNdjson(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -165,8 +159,7 @@ public final class JsonFlow {
      * @return a flow emitting one UTF-8 encoded JSON array
      */
     public static <T> ByteFlow renderArray(Flow<T> values, Class<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return renderArray(values, DEFAULT_MAPPER.writerFor(valueType));
+        return renderArray(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -179,8 +172,7 @@ public final class JsonFlow {
      * @return a flow emitting one UTF-8 encoded JSON array
      */
     public static <T> ByteFlow renderArray(Flow<T> values, TypeReference<T> valueType) {
-        Objects.requireNonNull(valueType, "valueType");
-        return renderArray(values, DEFAULT_MAPPER.writerFor(valueType));
+        return renderArray(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
