@@ -26,32 +26,12 @@ public final class JsonFlow {
 
     private JsonFlow() {}
 
-    /**
-     * Parses newline-delimited JSON using a default {@link ObjectMapper}. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. The input must be valid UTF-8; one initial UTF-8 byte-order mark is accepted.
-     * Records are limited to 32 MiB by default.
-     *
-     * @param bytes the UTF-8 encoded NDJSON
-     * @param valueType the type of each parsed value
-     * @param <T> the type of parsed values
-     * @return a flow emitting one value for each non-blank input line
-     */
+    /** Parses NDJSON using the default mapper and settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, Class<T> valueType) {
         return parseNdjson(bytes, valueType, JsonReadSettings.defaults());
     }
 
-    /**
-     * Parses newline-delimited JSON using a default {@link ObjectMapper}. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. The input must be valid UTF-8; one initial UTF-8 byte-order mark is accepted.
-     *
-     * @param bytes the UTF-8 encoded NDJSON
-     * @param valueType the type of each parsed value
-     * @param settings the NDJSON framing settings
-     * @param <T> the type of parsed values
-     * @return a flow emitting one value for each non-blank input line
-     */
+    /** Parses NDJSON using the default mapper and the supplied settings. */
     public static <T> Flow<T> parseNdjson(
             ByteFlow bytes, Class<T> valueType, JsonReadSettings settings) {
         return parseNdjson(
@@ -60,32 +40,12 @@ public final class JsonFlow {
                 settings);
     }
 
-    /**
-     * Parses newline-delimited JSON using a default {@link ObjectMapper}. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. The input must be valid UTF-8; one initial UTF-8 byte-order mark is accepted.
-     * Records are limited to 32 MiB by default.
-     *
-     * @param bytes the UTF-8 encoded NDJSON
-     * @param valueType the generic type of each parsed value
-     * @param <T> the type of parsed values
-     * @return a flow emitting one value for each non-blank input line
-     */
+    /** Parses generic NDJSON values using the default mapper and settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, TypeReference<T> valueType) {
         return parseNdjson(bytes, valueType, JsonReadSettings.defaults());
     }
 
-    /**
-     * Parses newline-delimited JSON using a default {@link ObjectMapper}. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. The input must be valid UTF-8; one initial UTF-8 byte-order mark is accepted.
-     *
-     * @param bytes the UTF-8 encoded NDJSON
-     * @param valueType the generic type of each parsed value
-     * @param settings the NDJSON framing settings
-     * @param <T> the type of parsed values
-     * @return a flow emitting one value for each non-blank input line
-     */
+    /** Parses generic NDJSON values using the default mapper and the supplied settings. */
     public static <T> Flow<T> parseNdjson(
             ByteFlow bytes, TypeReference<T> valueType, JsonReadSettings settings) {
         return parseNdjson(
@@ -94,29 +54,14 @@ public final class JsonFlow {
                 settings);
     }
 
-    /**
-     * Parses newline-delimited JSON using the supplied Jackson reader. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. Each non-blank line must contain exactly one JSON value. The input must be valid
-     * UTF-8; one initial UTF-8 byte-order mark is accepted. {@link
-     * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is enabled regardless
-     * of the reader's configuration. The caller must ensure that {@code T} matches the type
-     * configured on the reader. Records are limited to 32 MiB by default.
-     *
-     * @param bytes the UTF-8 encoded NDJSON
-     * @param reader the reader used to deserialize each value
-     * @param <T> the type of parsed values
-     * @return a flow emitting one value for each non-blank input line
-     */
+    /** Parses NDJSON using the supplied reader and default settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, ObjectReader reader) {
         return parseNdjson(bytes, reader, JsonReadSettings.defaults());
     }
 
     /**
-     * Parses newline-delimited JSON using the supplied Jackson reader. Empty and whitespace-only
-     * lines are ignored. Both LF and CRLF line endings are accepted, as is a final record without a
-     * line ending. Each non-blank line must contain exactly one JSON value. The input must be valid
-     * UTF-8; one initial UTF-8 byte-order mark is accepted. {@link
+     * Parses UTF-8 NDJSON using the supplied reader and framing settings. Blank lines are ignored;
+     * LF, CRLF, a final unterminated record and one initial byte-order mark are accepted. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is enabled regardless
      * of the reader's configuration. The caller must ensure that {@code T} matches the type
      * configured on the reader.
@@ -135,46 +80,21 @@ public final class JsonFlow {
                 Objects.requireNonNull(settings, "settings"));
     }
 
-    /**
-     * Parses a top-level JSON array using a default {@link ObjectMapper}. The returned flow
-     * incrementally emits array elements as they are parsed. Input that is not one complete
-     * top-level array, including input containing trailing JSON, fails the flow. Elements can be
-     * emitted before the input ends, but successful completion waits for end-of-input so that
-     * trailing content can be rejected. Failures are wrapped in {@link JoxScopeExecutionException}.
-     *
-     * @param bytes the UTF-8 encoded JSON array
-     * @param valueType the type of each array element
-     * @param <T> the type of parsed values
-     * @return a flow emitting the array elements
-     */
+    /** Parses a top-level JSON array using the default mapper. */
     public static <T> Flow<T> parseArray(ByteFlow bytes, Class<T> valueType) {
         return parseArray(
                 bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /**
-     * Parses a top-level JSON array using a default {@link ObjectMapper}. The returned flow
-     * incrementally emits array elements as they are parsed. Input that is not one complete
-     * top-level array, including input containing trailing JSON, fails the flow. Elements can be
-     * emitted before the input ends, but successful completion waits for end-of-input so that
-     * trailing content can be rejected. Failures are wrapped in {@link JoxScopeExecutionException}.
-     *
-     * @param bytes the UTF-8 encoded JSON array
-     * @param valueType the generic type of each array element
-     * @param <T> the type of parsed values
-     * @return a flow emitting the array elements
-     */
+    /** Parses generic elements from a top-level JSON array using the default mapper. */
     public static <T> Flow<T> parseArray(ByteFlow bytes, TypeReference<T> valueType) {
         return parseArray(
                 bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
-     * Parses a top-level JSON array using the supplied Jackson reader. The returned flow
-     * incrementally emits array elements as they are parsed. Input that is not one complete
-     * top-level array, including input containing trailing JSON, fails the flow. Elements can be
-     * emitted before the input ends, but successful completion waits for end-of-input so that
-     * trailing content can be rejected. {@link
+     * Incrementally parses exactly one top-level JSON array using the supplied reader. Successful
+     * completion waits for end-of-input to reject trailing content. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is disabled while
      * reading individual elements, regardless of the reader's configuration. The caller must ensure
      * that {@code T} matches the type configured on the reader. Failures are wrapped in {@link
@@ -190,38 +110,21 @@ public final class JsonFlow {
                 Objects.requireNonNull(bytes, "bytes"), Objects.requireNonNull(reader, "reader"));
     }
 
-    /**
-     * Renders values as newline-delimited JSON using a default {@link ObjectMapper}. Every value is
-     * followed by an LF byte, including the final value.
-     *
-     * @param values the values to render
-     * @param valueType the type of each value
-     * @param <T> the type of rendered values
-     * @return a flow emitting UTF-8 encoded NDJSON
-     */
+    /** Renders values as NDJSON using the default mapper. */
     public static <T> ByteFlow renderNdjson(Flow<T> values, Class<T> valueType) {
         return renderNdjson(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /**
-     * Renders values as newline-delimited JSON using a default {@link ObjectMapper}. Every value is
-     * followed by an LF byte, including the final value.
-     *
-     * @param values the values to render
-     * @param valueType the generic type of each value
-     * @param <T> the type of rendered values
-     * @return a flow emitting UTF-8 encoded NDJSON
-     */
+    /** Renders generic values as NDJSON using the default mapper. */
     public static <T> ByteFlow renderNdjson(Flow<T> values, TypeReference<T> valueType) {
         return renderNdjson(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
-     * Renders values as newline-delimited JSON using the supplied Jackson writer. Every value is
-     * followed by an LF byte, including the final value. Writer output containing a raw CR or LF
-     * byte is rejected, as it would produce invalid NDJSON records.
+     * Renders values as UTF-8 NDJSON using the supplied writer. Every value, including the final
+     * one, is followed by LF. Writer output containing raw CR or LF is rejected.
      *
      * @param values the values to render
      * @param writer the writer used to serialize each value
@@ -233,40 +136,21 @@ public final class JsonFlow {
                 Objects.requireNonNull(values, "values"), Objects.requireNonNull(writer, "writer"));
     }
 
-    /**
-     * Renders values as one JSON array using a default {@link ObjectMapper}. Elements are
-     * serialized one at a time. An empty input flow produces {@code []}. If the flow fails after
-     * output starts, already-emitted bytes can contain an incomplete array.
-     *
-     * @param values the values to render
-     * @param valueType the type of each array element
-     * @param <T> the type of rendered values
-     * @return a flow emitting one UTF-8 encoded JSON array
-     */
+    /** Renders values as one JSON array using the default mapper. */
     public static <T> ByteFlow renderArray(Flow<T> values, Class<T> valueType) {
         return renderArray(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /**
-     * Renders values as one JSON array using a default {@link ObjectMapper}. Elements are
-     * serialized one at a time. An empty input flow produces {@code []}. If the flow fails after
-     * output starts, already-emitted bytes can contain an incomplete array.
-     *
-     * @param values the values to render
-     * @param valueType the generic type of each array element
-     * @param <T> the type of rendered values
-     * @return a flow emitting one UTF-8 encoded JSON array
-     */
+    /** Renders generic values as one JSON array using the default mapper. */
     public static <T> ByteFlow renderArray(Flow<T> values, TypeReference<T> valueType) {
         return renderArray(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
-     * Renders values as one JSON array using the supplied Jackson writer. Elements are serialized
-     * one at a time. An empty input flow produces {@code []}. If the flow fails after output
-     * starts, already-emitted bytes can contain an incomplete array.
+     * Renders values as one UTF-8 JSON array using the supplied writer. An empty flow produces
+     * {@code []}; a failed flow can leave an incomplete array.
      *
      * @param values the values to render
      * @param writer the writer used to serialize each array element
