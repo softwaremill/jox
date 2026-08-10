@@ -56,8 +56,17 @@ class JsonFlowTest {
 
     @Test
     void shouldParseEmptyNdjsonAndEmptyArray() throws Exception {
-        assertEquals(List.of(), JsonFlow.parseNdjson(byteFlow(""), Person.class).runToList());
-        assertEquals(List.of(), JsonFlow.parseArray(byteFlow("[]"), Person.class).runToList());
+        // given
+        var ndjsonInput = byteFlow("");
+        var arrayInput = byteFlow("[]");
+
+        // when
+        var ndjson = JsonFlow.parseNdjson(ndjsonInput, Person.class).runToList();
+        var array = JsonFlow.parseArray(arrayInput, Person.class).runToList();
+
+        // then
+        assertEquals(List.of(), ndjson);
+        assertEquals(List.of(), array);
     }
 
     @Test
@@ -140,6 +149,9 @@ class JsonFlowTest {
 
     @Test
     void shouldRejectDeserializedNullValuesButAllowJsonNullNodes() throws Exception {
+        // given
+        var nullNode = MAPPER.readTree("null");
+
         // when
         var ndjsonException =
                 assertThrows(
@@ -152,70 +164,74 @@ class JsonFlowTest {
                                 JsonFlow.parseArray(byteFlow("[null]"), String.class)
                                         .buffer()
                                         .runToList());
-        var nullNode = MAPPER.readTree("null");
+        var ndjsonNodes = JsonFlow.parseNdjson(byteFlow("null\n"), JsonNode.class).runToList();
+        var arrayNodes = JsonFlow.parseArray(byteFlow("[null]"), JsonNode.class).runToList();
 
         // then
         assertCauseMessage(ndjsonException, "Jox flows do not support null values");
         assertCauseMessage(arrayException, "Jox flows do not support null values");
-        assertEquals(
-                List.of(nullNode),
-                JsonFlow.parseNdjson(byteFlow("null\n"), JsonNode.class).runToList());
-        assertEquals(
-                List.of(nullNode),
-                JsonFlow.parseArray(byteFlow("[null]"), JsonNode.class).runToList());
+        assertEquals(List.of(nullNode), ndjsonNodes);
+        assertEquals(List.of(nullNode), arrayNodes);
     }
 
     @Test
     void shouldRejectMalformedNdjsonAndMultipleValuesOnOneLine() {
-        assertFails(
-                () -> JsonFlow.parseNdjson(byteFlow("{\"name\":}\n"), Person.class).runToList());
-        assertFails(
-                () ->
-                        JsonFlow.parseNdjson(
-                                        byteFlow("{\"name\":\"Ada\",\"age\":36} true\n"),
-                                        Person.class)
-                                .runToList());
+        // given
+        var malformed = byteFlow("{\"name\":}\n");
+        var multipleValues = byteFlow("{\"name\":\"Ada\",\"age\":36} true\n");
+
+        // when & then
+        assertFails(() -> JsonFlow.parseNdjson(malformed, Person.class).runToList());
+        assertFails(() -> JsonFlow.parseNdjson(multipleValues, Person.class).runToList());
     }
 
     @Test
     void shouldHandleArrayWhitespaceAndRejectMissingInputAndTrailingCommas() throws Exception {
-        assertEquals(
-                List.of(1),
-                JsonFlow.parseArray(byteFlow(" \n\t[ 1 ]\r\n "), Integer.class).runToList());
+        // given
+        var inputWithWhitespace = byteFlow(" \n\t[ 1 ]\r\n ");
+        var emptyInput = byteFlow("");
+        var whitespaceOnlyInput = byteFlow(" \r\n\t");
+        var trailingCommaInput = byteFlow("[1,]");
 
+        // when
+        var result = JsonFlow.parseArray(inputWithWhitespace, Integer.class).runToList();
         var empty =
                 assertThrows(
                         Exception.class,
-                        () -> JsonFlow.parseArray(byteFlow(""), Integer.class).runToList());
+                        () -> JsonFlow.parseArray(emptyInput, Integer.class).runToList());
         var whitespaceOnly =
                 assertThrows(
                         Exception.class,
-                        () -> JsonFlow.parseArray(byteFlow(" \r\n\t"), Integer.class).runToList());
+                        () -> JsonFlow.parseArray(whitespaceOnlyInput, Integer.class).runToList());
 
+        // then
+        assertEquals(List.of(1), result);
         assertCauseMessage(empty, "Expected one top-level JSON array");
         assertCauseMessage(whitespaceOnly, "Expected one top-level JSON array");
-        assertFails(() -> JsonFlow.parseArray(byteFlow("[1,]"), Integer.class).runToList());
+        assertFails(() -> JsonFlow.parseArray(trailingCommaInput, Integer.class).runToList());
     }
 
     @Test
     void shouldRejectMalformedArrayWrongTopLevelShapeAndTrailingContent() {
-        assertFails(
-                () ->
-                        JsonFlow.parseArray(byteFlow("[{\"name\":\"Ada\"}"), Person.class)
-                                .runToList());
+        // given
+        var incomplete = byteFlow("[{\"name\":\"Ada\"}");
+        var wrongShapeInput = byteFlow("{\"name\":\"Ada\"}");
+        var trailingInput = byteFlow("[] true");
+
+        // when
+        assertFails(() -> JsonFlow.parseArray(incomplete, Person.class).runToList());
 
         var wrongShape =
                 assertThrows(
                         Exception.class,
-                        () ->
-                                JsonFlow.parseArray(byteFlow("{\"name\":\"Ada\"}"), Person.class)
-                                        .runToList());
-        assertCauseMessage(wrongShape, "Expected one top-level JSON array");
-
+                        () -> JsonFlow.parseArray(wrongShapeInput, Person.class).runToList());
         var trailing =
                 assertThrows(
                         Exception.class,
-                        () -> JsonFlow.parseArray(byteFlow("[] true"), Person.class).runToList());
+                        () -> JsonFlow.parseArray(trailingInput, Person.class).runToList());
+
+        // then
+        assertCauseMessage(wrongShape, "Expected one top-level JSON array");
         assertCauseMessage(trailing, "Unexpected content after the top-level JSON array");
     }
 
@@ -425,8 +441,16 @@ class JsonFlowTest {
 
     @Test
     void shouldRenderEmptyFlows() throws Exception {
-        assertEquals("", render(JsonFlow.renderNdjson(Flows.empty(), Person.class)));
-        assertEquals("[]", render(JsonFlow.renderArray(Flows.empty(), Person.class)));
+        // given
+        Flow<Person> empty = Flows.empty();
+
+        // when
+        var ndjson = render(JsonFlow.renderNdjson(empty, Person.class));
+        var array = render(JsonFlow.renderArray(empty, Person.class));
+
+        // then
+        assertEquals("", ndjson);
+        assertEquals("[]", array);
     }
 
     @Test
@@ -525,29 +549,30 @@ class JsonFlowTest {
 
     @Test
     void shouldPropagateJacksonReaderAndWriterFailures() {
+        // given
+        var ndjsonInput = byteFlow("{\"value\":\"x\"}\n");
+        var arrayInput = byteFlow("[{\"value\":\"x\"}]");
+        var failingValue = new FailingSerialization();
+
         // when
         var ndjsonReaderException =
                 assertThrows(
                         Exception.class,
                         () ->
-                                JsonFlow.parseNdjson(
-                                                byteFlow("{\"value\":\"x\"}\n"),
-                                                FailingDeserialization.class)
+                                JsonFlow.parseNdjson(ndjsonInput, FailingDeserialization.class)
                                         .runToList());
         var arrayReaderException =
                 assertThrows(
                         Exception.class,
                         () ->
-                                JsonFlow.parseArray(
-                                                byteFlow("[{\"value\":\"x\"}]"),
-                                                FailingDeserialization.class)
+                                JsonFlow.parseArray(arrayInput, FailingDeserialization.class)
                                         .runToList());
         var ndjsonWriterException =
                 assertThrows(
                         Exception.class,
                         () ->
                                 JsonFlow.renderNdjson(
-                                                Flows.fromValues(new FailingSerialization()),
+                                                Flows.fromValues(failingValue),
                                                 FailingSerialization.class)
                                         .runToList());
         var arrayWriterException =
@@ -555,7 +580,7 @@ class JsonFlowTest {
                         Exception.class,
                         () ->
                                 JsonFlow.renderArray(
-                                                Flows.fromValues(new FailingSerialization()),
+                                                Flows.fromValues(failingValue),
                                                 FailingSerialization.class)
                                         .runToList());
 
