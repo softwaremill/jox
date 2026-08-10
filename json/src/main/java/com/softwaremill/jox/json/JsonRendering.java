@@ -3,7 +3,6 @@ package com.softwaremill.jox.json;
 import com.softwaremill.jox.flows.ByteChunk;
 import com.softwaremill.jox.flows.Flow;
 import com.softwaremill.jox.flows.Flow.ByteFlow;
-import com.softwaremill.jox.flows.Flows;
 
 import tools.jackson.databind.ObjectWriter;
 
@@ -17,14 +16,9 @@ final class JsonRendering {
     private JsonRendering() {}
 
     static <T> ByteFlow renderNdjson(Flow<T> values, ObjectWriter writer) {
-        return Flows.<ByteChunk>usingEmit(
-                        emit ->
-                                values.runForeach(
-                                        value -> {
-                                            byte[] json = writer.writeValueAsBytes(value);
-                                            rejectLineBreaks(json);
-                                            emit.apply(ByteChunk.fromArray(json).concat(NEW_LINE));
-                                        }))
+        return values.map(writer::writeValueAsBytes)
+                .tap(JsonRendering::requireNoLineBreaks)
+                .map(json -> ByteChunk.fromArray(json).concat(NEW_LINE))
                 .toByteFlow();
     }
 
@@ -34,7 +28,7 @@ final class JsonRendering {
                 .toByteFlow();
     }
 
-    private static void rejectLineBreaks(byte[] json) {
+    private static void requireNoLineBreaks(byte[] json) {
         for (byte value : json) {
             if (value == '\r' || value == '\n') {
                 throw new IllegalArgumentException(
