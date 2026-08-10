@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,10 @@ import tools.jackson.databind.ObjectMapper;
 class JsonFlowTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final IllegalStateException DESERIALIZATION_FAILURE =
+            new IllegalStateException("deserialization failed");
+    private static final IllegalStateException SERIALIZATION_FAILURE =
+            new IllegalStateException("serialization failed");
 
     @TempDir Path tempDir;
 
@@ -134,6 +139,33 @@ class JsonFlowTest {
     }
 
     @Test
+    void shouldRejectDeserializedNullValuesButAllowJsonNullNodes() throws Exception {
+        // when
+        var ndjsonException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(byteFlow("null\n"), String.class).runToList());
+        var arrayException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseArray(byteFlow("[null]"), String.class)
+                                        .buffer()
+                                        .runToList());
+        var nullNode = MAPPER.readTree("null");
+
+        // then
+        assertCauseMessage(ndjsonException, "Jox flows do not support null values");
+        assertCauseMessage(arrayException, "Jox flows do not support null values");
+        assertEquals(
+                List.of(nullNode),
+                JsonFlow.parseNdjson(byteFlow("null\n"), JsonNode.class).runToList());
+        assertEquals(
+                List.of(nullNode),
+                JsonFlow.parseArray(byteFlow("[null]"), JsonNode.class).runToList());
+    }
+
+    @Test
     void shouldRejectMalformedNdjsonAndMultipleValuesOnOneLine() {
         assertFails(
                 () -> JsonFlow.parseNdjson(byteFlow("{\"name\":}\n"), Person.class).runToList());
@@ -143,6 +175,26 @@ class JsonFlowTest {
                                         byteFlow("{\"name\":\"Ada\",\"age\":36} true\n"),
                                         Person.class)
                                 .runToList());
+    }
+
+    @Test
+    void shouldHandleArrayWhitespaceAndRejectMissingInputAndTrailingCommas() throws Exception {
+        assertEquals(
+                List.of(1),
+                JsonFlow.parseArray(byteFlow(" \n\t[ 1 ]\r\n "), Integer.class).runToList());
+
+        var empty =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseArray(byteFlow(""), Integer.class).runToList());
+        var whitespaceOnly =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseArray(byteFlow(" \r\n\t"), Integer.class).runToList());
+
+        assertCauseMessage(empty, "Expected one top-level JSON array");
+        assertCauseMessage(whitespaceOnly, "Expected one top-level JSON array");
+        assertFails(() -> JsonFlow.parseArray(byteFlow("[1,]"), Integer.class).runToList());
     }
 
     @Test
@@ -235,6 +287,61 @@ class JsonFlowTest {
     }
 
     @Test
+    void shouldCancelAndCloseArrayInputAfterDownstreamFailure() {
+        // given
+        var input = new StringBuilder("[");
+        for (int i = 0; i < 20_000; i++) {
+            if (i > 0) {
+                input.append(',');
+            }
+            input.append(i);
+        }
+        input.append(']');
+        var bytes = input.toString().getBytes(StandardCharsets.UTF_8);
+        var readBytes = new AtomicInteger();
+        var closed = new AtomicBoolean();
+        var inputStream =
+                new ByteArrayInputStream(bytes) {
+                    @Override
+                    public synchronized int read(byte[] target, int offset, int length) {
+                        int read = super.read(target, offset, length);
+                        if (read > 0) {
+                            readBytes.addAndGet(read);
+                        }
+                        return read;
+                    }
+
+                    @Override
+                    public void close() {
+                        closed.set(true);
+                    }
+                };
+        var downstreamFailure = new IllegalStateException("downstream failed");
+
+        // when
+        var exception =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseArray(
+                                                Flows.fromInputStream(inputStream, 1),
+                                                Integer.class)
+                                        .map(
+                                                value -> {
+                                                    if (value == 1) {
+                                                        throw downstreamFailure;
+                                                    }
+                                                    return value;
+                                                })
+                                        .runToList());
+
+        // then
+        assertHasCause(exception, downstreamFailure);
+        assertTrue(closed.get());
+        assertTrue(readBytes.get() < bytes.length);
+    }
+
+    @Test
     void shouldStopNdjsonUpstreamAndPropagateDownstreamFailure() throws Exception {
         // given
         var emittedRecords = new AtomicInteger();
@@ -303,6 +410,20 @@ class JsonFlowTest {
     }
 
     @Test
+    void shouldAllowEscapedLineBreaksInNdjsonValues() throws Exception {
+        // given
+        var value = "first line\nsecond line\rthird line";
+
+        // when
+        var rendered = render(JsonFlow.renderNdjson(Flows.fromValues(value), String.class));
+
+        // then
+        assertEquals("\"first line\\nsecond line\\rthird line\"\n", rendered);
+        assertEquals(
+                List.of(value), JsonFlow.parseNdjson(byteFlow(rendered), String.class).runToList());
+    }
+
+    @Test
     void shouldRenderEmptyFlows() throws Exception {
         assertEquals("", render(JsonFlow.renderNdjson(Flows.empty(), Person.class)));
         assertEquals("[]", render(JsonFlow.renderArray(Flows.empty(), Person.class)));
@@ -359,6 +480,21 @@ class JsonFlowTest {
     }
 
     @Test
+    void shouldAllowPrettyPrintedArrayElements() throws Exception {
+        // given
+        var person = new Person("Ada", 36);
+        var prettyWriter = MAPPER.writerFor(Person.class).withDefaultPrettyPrinter();
+
+        // when
+        var rendered = render(JsonFlow.renderArray(Flows.fromValues(person), prettyWriter));
+
+        // then
+        assertTrue(rendered.contains("\n"));
+        assertEquals(
+                List.of(person), JsonFlow.parseArray(byteFlow(rendered), Person.class).runToList());
+    }
+
+    @Test
     void shouldPropagateRenderingUpstreamErrors() {
         // given
         var ndjsonFailure = new IllegalStateException("ndjson values failed");
@@ -385,6 +521,49 @@ class JsonFlowTest {
         // then
         assertHasCause(ndjsonException, ndjsonFailure);
         assertHasCause(arrayException, arrayFailure);
+    }
+
+    @Test
+    void shouldPropagateJacksonReaderAndWriterFailures() {
+        // when
+        var ndjsonReaderException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseNdjson(
+                                                byteFlow("{\"value\":\"x\"}\n"),
+                                                FailingDeserialization.class)
+                                        .runToList());
+        var arrayReaderException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseArray(
+                                                byteFlow("[{\"value\":\"x\"}]"),
+                                                FailingDeserialization.class)
+                                        .runToList());
+        var ndjsonWriterException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.renderNdjson(
+                                                Flows.fromValues(new FailingSerialization()),
+                                                FailingSerialization.class)
+                                        .runToList());
+        var arrayWriterException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.renderArray(
+                                                Flows.fromValues(new FailingSerialization()),
+                                                FailingSerialization.class)
+                                        .runToList());
+
+        // then
+        assertHasCause(ndjsonReaderException, DESERIALIZATION_FAILURE);
+        assertHasCause(arrayReaderException, DESERIALIZATION_FAILURE);
+        assertHasCause(ndjsonWriterException, SERIALIZATION_FAILURE);
+        assertHasCause(arrayWriterException, SERIALIZATION_FAILURE);
     }
 
     @Test
@@ -530,6 +709,18 @@ class JsonFlowTest {
     @FunctionalInterface
     private interface ThrowingRunnable {
         void run() throws Exception;
+    }
+
+    private record FailingDeserialization(String value) {
+        private FailingDeserialization {
+            throw DESERIALIZATION_FAILURE;
+        }
+    }
+
+    private static final class FailingSerialization {
+        public String getValue() {
+            throw SERIALIZATION_FAILURE;
+        }
     }
 
     private record Person(String name, int age) {}

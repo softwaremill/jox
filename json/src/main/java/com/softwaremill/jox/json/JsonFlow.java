@@ -14,7 +14,9 @@ import tools.jackson.databind.ObjectWriter;
  * Creates flows which parse or render newline-delimited JSON (NDJSON) and top-level JSON arrays.
  *
  * <p>All transformations are lazy and preserve the backpressure and cancellation behavior of the
- * supplied flow. Values are parsed or rendered one at a time.
+ * supplied flow. Values are parsed or rendered one at a time. Parsing fails when Jackson
+ * deserializes a top-level value as {@code null}, which Jox flows do not support. Use Jackson's
+ * tree model to represent a JSON {@code null} as a non-null node.
  */
 public final class JsonFlow {
 
@@ -33,7 +35,8 @@ public final class JsonFlow {
      * @return a flow emitting one value for each non-blank input line
      */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, Class<T> valueType) {
-        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
+        return parseNdjson(
+                bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -47,7 +50,8 @@ public final class JsonFlow {
      * @return a flow emitting one value for each non-blank input line
      */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, TypeReference<T> valueType) {
-        return parseNdjson(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
+        return parseNdjson(
+                bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -76,7 +80,8 @@ public final class JsonFlow {
      * @return a flow emitting the array elements
      */
     public static <T> Flow<T> parseArray(ByteFlow bytes, Class<T> valueType) {
-        return parseArray(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
+        return parseArray(
+                bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -90,7 +95,8 @@ public final class JsonFlow {
      * @return a flow emitting the array elements
      */
     public static <T> Flow<T> parseArray(ByteFlow bytes, TypeReference<T> valueType) {
-        return parseArray(bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
+        return parseArray(
+                bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -118,7 +124,8 @@ public final class JsonFlow {
      * @return a flow emitting UTF-8 encoded NDJSON
      */
     public static <T> ByteFlow renderNdjson(Flow<T> values, Class<T> valueType) {
-        return renderNdjson(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
+        return renderNdjson(
+                values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -131,7 +138,8 @@ public final class JsonFlow {
      * @return a flow emitting UTF-8 encoded NDJSON
      */
     public static <T> ByteFlow renderNdjson(Flow<T> values, TypeReference<T> valueType) {
-        return renderNdjson(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
+        return renderNdjson(
+                values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -159,7 +167,8 @@ public final class JsonFlow {
      * @return a flow emitting one UTF-8 encoded JSON array
      */
     public static <T> ByteFlow renderArray(Flow<T> values, Class<T> valueType) {
-        return renderArray(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
+        return renderArray(
+                values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**
@@ -172,7 +181,8 @@ public final class JsonFlow {
      * @return a flow emitting one UTF-8 encoded JSON array
      */
     public static <T> ByteFlow renderArray(Flow<T> values, TypeReference<T> valueType) {
-        return renderArray(values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
+        return renderArray(
+                values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
     /**

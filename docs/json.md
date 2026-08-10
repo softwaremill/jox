@@ -41,6 +41,9 @@ implementation("com.softwaremill.jox:json:0.1.0")
 Each method is lazy: parsing, rendering and I/O start only when the returned flow is run. Values are processed one at
 a time, preserving the backpressure, failure propagation and cancellation behavior of the underlying Jox flow.
 
+Parsing rejects top-level values that Jackson deserializes as Java `null`, as Jox flows do not support `null` elements.
+To retain JSON `null` values, deserialize into Jackson's tree model, where they are represented by non-null null nodes.
+
 Each operation has overloads accepting a `Class<T>`, a Jackson `TypeReference<T>`, or a configured Jackson
 `ObjectReader`/`ObjectWriter`. The `Class<T>` and `TypeReference<T>` overloads use the module's default `ObjectMapper`.
 

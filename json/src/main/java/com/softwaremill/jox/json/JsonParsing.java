@@ -19,7 +19,7 @@ final class JsonParsing {
         var singleValueReader = reader.with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         return bytes.linesUtf8()
                 .filter(line -> !line.isBlank())
-                .map(line -> singleValueReader.<T>readValue(line));
+                .map(line -> requireNonNullValue(singleValueReader.<T>readValue(line)));
     }
 
     static <T> Flow<T> parseArray(ByteFlow bytes, ObjectReader reader) {
@@ -44,7 +44,9 @@ final class JsonParsing {
                                                         "Unexpected end of input while parsing the"
                                                                 + " top-level JSON array");
                                             }
-                                            emit.apply(elementReader.<T>readValue(parser));
+                                            emit.apply(
+                                                    requireNonNullValue(
+                                                            elementReader.<T>readValue(parser)));
                                         }
 
                                         if (parser.nextToken() != null) {
@@ -55,6 +57,14 @@ final class JsonParsing {
                                     }
                                     return null;
                                 }));
+    }
+
+    private static <T> T requireNonNullValue(T value) {
+        if (value == null) {
+            throw new IllegalArgumentException(
+                    "JSON null cannot be emitted because Jox flows do not support null values");
+        }
+        return value;
     }
 
     private static void requireToken(JsonToken actual, JsonToken expected, String message) {
