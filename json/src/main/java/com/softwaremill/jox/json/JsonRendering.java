@@ -16,16 +16,27 @@ final class JsonRendering {
     private JsonRendering() {}
 
     static <T> ByteFlow renderNdjson(Flow<T> values, ObjectWriter writer) {
-        return values.map(writer::writeValueAsBytes)
+        return values.map(value -> writer.writeValueAsBytes(requireNonNullValue(value)))
                 .tap(JsonRendering::requireNoLineBreaks)
                 .map(json -> ByteChunk.fromArray(json).concat(NEW_LINE))
                 .toByteFlow();
     }
 
     static <T> ByteFlow renderArray(Flow<T> values, ObjectWriter writer) {
-        return values.map(value -> ByteChunk.fromArray(writer.writeValueAsBytes(value)))
+        return values.map(
+                        value ->
+                                ByteChunk.fromArray(
+                                        writer.writeValueAsBytes(requireNonNullValue(value))))
                 .intersperse(ARRAY_START, COMMA, ARRAY_END)
                 .toByteFlow();
+    }
+
+    private static <T> T requireNonNullValue(T value) {
+        if (value == null) {
+            throw new IllegalArgumentException(
+                    "Java null cannot be rendered because Jox flows do not support null values");
+        }
+        return value;
     }
 
     private static void requireNoLineBreaks(byte[] json) {

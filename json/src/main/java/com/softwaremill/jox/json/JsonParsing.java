@@ -15,9 +15,9 @@ final class JsonParsing {
 
     private JsonParsing() {}
 
-    static <T> Flow<T> parseNdjson(ByteFlow bytes, ObjectReader reader) {
+    static <T> Flow<T> parseNdjson(ByteFlow bytes, ObjectReader reader, JsonReadSettings settings) {
         var singleValueReader = reader.with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
-        return bytes.linesUtf8()
+        return NdjsonFraming.lines(bytes, settings.maxNdjsonRecordBytes())
                 .filter(line -> !line.isBlank())
                 .map(line -> requireNonNullValue(singleValueReader.<T>readValue(line)));
     }

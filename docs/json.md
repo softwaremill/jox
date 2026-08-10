@@ -41,8 +41,9 @@ implementation("com.softwaremill.jox:json:0.1.0")
 Each method is lazy: parsing, rendering and I/O start only when the returned flow is run. Values are processed one at
 a time, preserving the backpressure, failure propagation and cancellation behavior of the underlying Jox flow.
 
-Parsing rejects top-level values that Jackson deserializes as Java `null`, as Jox flows do not support `null` elements.
-To retain JSON `null` values, deserialize into Jackson's tree model, where they are represented by non-null null nodes.
+Parsing rejects an NDJSON record or array element that Jackson deserializes as Java `null`, and rendering rejects raw
+Java `null` elements, as Jox flows do not support them. To retain JSON `null` values, use Jackson's tree model, where
+they are represented by non-null null nodes.
 
 Each operation has overloads accepting a `Class<T>`, a Jackson `TypeReference<T>`, or a configured Jackson
 `ObjectReader`/`ObjectWriter`. The `Class<T>` and `TypeReference<T>` overloads use the module's default `ObjectMapper`.
@@ -51,7 +52,14 @@ Each operation has overloads accepting a `Class<T>`, a Jackson `TypeReference<T>
 
 NDJSON parsing accepts LF and CRLF line endings, ignores empty and whitespace-only lines, and accepts a final record
 without a line ending. Every non-blank line must contain exactly one JSON value; malformed JSON or trailing content on
-a record fails the flow when it is run.
+a record fails the flow when it is run. Input must be valid UTF-8. One UTF-8 byte-order mark is accepted at the very
+beginning of the stream.
+
+An incomplete record is buffered across source chunks until its LF delimiter, or until end-of-input for the final
+unterminated record. The default maximum encoded record size is 32 MiB, excluding the LF delimiter. An initial BOM and
+the CR in a CRLF line ending count toward the limit. Use
+`JsonReadSettings.defaults().maxNdjsonRecordBytes(...)` to choose another positive byte limit and pass the resulting
+settings as the final argument to `parseNdjson`.
 
 ```java
 import java.nio.charset.StandardCharsets;
@@ -104,9 +112,11 @@ void main() throws Exception {
 
 ## JSON arrays
 
-Array parsing requires exactly one complete top-level array and emits every element as soon as it is decoded. A
+Array parsing requires exactly one complete top-level array and incrementally emits its elements while parsing. A
 different top-level JSON value, an incomplete array, malformed input, or JSON content after the array fails the flow.
-An empty array produces an empty flow.
+An empty array produces an empty flow. Elements can be emitted before the source ends, but successful completion waits
+for end-of-input so that trailing content can be rejected. As array parsing uses an internal supervised scope, failures
+are wrapped in `JoxScopeExecutionException`.
 
 ```java
 import java.nio.charset.StandardCharsets;
@@ -134,7 +144,8 @@ void main() throws Exception {
 ```
 
 Array rendering writes `[` and `]` around comma-separated values. Elements are serialized one at a time, and an empty
-input flow produces `[]`.
+input flow produces `[]`. If serialization or the input flow fails after output starts, already-written bytes can
+contain an incomplete array; callers should discard failed output or write transactionally when this matters.
 
 ```java
 import java.nio.file.Path;
@@ -177,6 +188,11 @@ Flow<List<Event>> parseBatches(ByteFlow input) {
 For custom Jackson modules, naming strategies, date handling, polymorphism, tree-model values, or other mapper
 features, configure an `ObjectMapper` and derive an `ObjectReader` or `ObjectWriter`. The reader or writer determines
 the type and Jackson behavior for each NDJSON record or array element.
+
+The parsing mode controls trailing-token validation: NDJSON enables `FAIL_ON_TRAILING_TOKENS` so that every record
+contains exactly one value, while array parsing disables it when reading individual elements. These settings override
+the supplied reader's value for that feature. The generic result type of an `ObjectReader` overload is inferred by Java
+and cannot be checked against the reader's configured type, so callers must keep them consistent.
 
 ```java
 import com.softwaremill.jox.flows.Flow;

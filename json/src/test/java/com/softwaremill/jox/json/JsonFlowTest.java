@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -21,6 +22,7 @@ import com.softwaremill.jox.flows.ByteChunk;
 import com.softwaremill.jox.flows.Flow;
 import com.softwaremill.jox.flows.Flows;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -78,6 +80,147 @@ class JsonFlowTest {
         assertEquals(
                 List.of(new Person("Zażółć 🦊", 7)),
                 JsonFlow.parseNdjson(input, Person.class).runToList());
+    }
+
+    @Test
+    void shouldParseNdjsonWithSplitUtf8Bom() throws Exception {
+        // given
+        var input =
+                Flows.fromByteChunks(
+                        ByteChunk.fromArray(new byte[] {(byte) 0xef}),
+                        ByteChunk.fromArray(new byte[] {(byte) 0xbb}),
+                        ByteChunk.fromArray(new byte[] {(byte) 0xbf, '"', 'o', 'k', '"', '\n'}));
+
+        // when & then
+        assertEquals(List.of("ok"), JsonFlow.parseNdjson(input, String.class).runToList());
+    }
+
+    @Test
+    void shouldRejectMalformedNdjsonUtf8() {
+        // given
+        var input = Flows.fromByteArrays(new byte[] {'"', (byte) 0xc3, '(', '"', '\n'});
+
+        // when
+        var exception =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(input, String.class).runToList());
+
+        // then
+        assertCauseTypeAndMessage(
+                exception, IllegalArgumentException.class, "NDJSON input contains malformed UTF-8");
+    }
+
+    @Test
+    void shouldApplyConfiguredNdjsonRecordLimitToEveryReaderOverload() throws Exception {
+        // given
+        var settings = JsonReadSettings.defaults().maxNdjsonRecordBytes(3);
+        TypeReference<Integer> type = new TypeReference<>() {};
+        var reader = MAPPER.readerFor(Integer.class);
+
+        // when
+        var usingClass =
+                JsonFlow.parseNdjson(byteFlow("123\n456\n"), Integer.class, settings).runToList();
+        var usingTypeReference =
+                JsonFlow.parseNdjson(byteFlow("123\n456\n"), type, settings).runToList();
+        var usingReader =
+                JsonFlow.<Integer>parseNdjson(byteFlow("123\n456\n"), reader, settings).runToList();
+        var classException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseNdjson(byteFlow("1234\n"), Integer.class, settings)
+                                        .runToList());
+        var typeReferenceException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(byteFlow("1234\n"), type, settings).runToList());
+        var readerException =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.<Integer>parseNdjson(byteFlow("1234\n"), reader, settings)
+                                        .runToList());
+
+        // then
+        assertEquals(List.of(123, 456), usingClass);
+        assertEquals(List.of(123, 456), usingTypeReference);
+        assertEquals(List.of(123, 456), usingReader);
+        assertRecordLimitExceeded(classException, 3);
+        assertRecordLimitExceeded(typeReferenceException, 3);
+        assertRecordLimitExceeded(readerException, 3);
+    }
+
+    @Test
+    void shouldValidateNdjsonRecordLimitSettings() {
+        // when & then
+        assertEquals(32 * 1024 * 1024, JsonReadSettings.defaults().maxNdjsonRecordBytes());
+        assertThrows(IllegalArgumentException.class, () -> new JsonReadSettings(0));
+    }
+
+    @Test
+    void shouldCountBomAndCarriageReturnTowardNdjsonRecordLimit() throws Exception {
+        // given
+        var fourBytes = JsonReadSettings.defaults().maxNdjsonRecordBytes(4);
+        var threeBytes = JsonReadSettings.defaults().maxNdjsonRecordBytes(3);
+        var twoBytes = JsonReadSettings.defaults().maxNdjsonRecordBytes(2);
+
+        // when
+        var bomAtLimit =
+                JsonFlow.parseNdjson(byteFlow("\uFEFF1\n"), Integer.class, fourBytes).runToList();
+        var bomOverLimit =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseNdjson(
+                                                byteFlow("\uFEFF1\n"), Integer.class, threeBytes)
+                                        .runToList());
+        var crAtLimit =
+                JsonFlow.parseNdjson(byteFlow("12\r\n"), Integer.class, threeBytes).runToList();
+        var crOverLimit =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseNdjson(byteFlow("12\r\n"), Integer.class, twoBytes)
+                                        .runToList());
+
+        // then
+        assertEquals(List.of(1), bomAtLimit);
+        assertRecordLimitExceeded(bomOverLimit, 3);
+        assertEquals(List.of(12), crAtLimit);
+        assertRecordLimitExceeded(crOverLimit, 2);
+    }
+
+    @Test
+    void shouldEmitValidNdjsonRecordsBeforeLaterRecordInSameChunkFails() {
+        // given
+        var emitted = new ArrayList<Integer>();
+        var settings = JsonReadSettings.defaults().maxNdjsonRecordBytes(3);
+
+        // when
+        var exception =
+                assertThrows(
+                        Exception.class,
+                        () ->
+                                JsonFlow.parseNdjson(byteFlow("1\n1234\n"), Integer.class, settings)
+                                        .runForeach(emitted::add));
+
+        // then
+        assertEquals(List.of(1), emitted);
+        assertRecordLimitExceeded(exception, 3);
+    }
+
+    @Test
+    void shouldPreserveNdjsonRecordsAcrossEmptyChunks() throws Exception {
+        // given
+        var input =
+                Flows.fromByteChunks(
+                        ByteChunk.fromArray("12".getBytes(StandardCharsets.UTF_8)),
+                        ByteChunk.empty(),
+                        ByteChunk.fromArray("3\n".getBytes(StandardCharsets.UTF_8)));
+
+        // when & then
+        assertEquals(List.of(123), JsonFlow.parseNdjson(input, Integer.class).runToList());
     }
 
     @Test
@@ -160,10 +303,7 @@ class JsonFlowTest {
         var arrayException =
                 assertThrows(
                         Exception.class,
-                        () ->
-                                JsonFlow.parseArray(byteFlow("[null]"), String.class)
-                                        .buffer()
-                                        .runToList());
+                        () -> JsonFlow.parseArray(byteFlow("[null]"), String.class).runToList());
         var ndjsonNodes = JsonFlow.parseNdjson(byteFlow("null\n"), JsonNode.class).runToList();
         var arrayNodes = JsonFlow.parseArray(byteFlow("[null]"), JsonNode.class).runToList();
 
@@ -180,9 +320,19 @@ class JsonFlowTest {
         var malformed = byteFlow("{\"name\":}\n");
         var multipleValues = byteFlow("{\"name\":\"Ada\",\"age\":36} true\n");
 
-        // when & then
-        assertFails(() -> JsonFlow.parseNdjson(malformed, Person.class).runToList());
-        assertFails(() -> JsonFlow.parseNdjson(multipleValues, Person.class).runToList());
+        // when
+        var malformedException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(malformed, Person.class).runToList());
+        var multipleValuesException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(multipleValues, Person.class).runToList());
+
+        // then
+        assertCauseType(malformedException, JacksonException.class);
+        assertCauseType(multipleValuesException, JacksonException.class);
     }
 
     @Test
@@ -208,19 +358,25 @@ class JsonFlowTest {
         assertEquals(List.of(1), result);
         assertCauseMessage(empty, "Expected one top-level JSON array");
         assertCauseMessage(whitespaceOnly, "Expected one top-level JSON array");
-        assertFails(() -> JsonFlow.parseArray(trailingCommaInput, Integer.class).runToList());
+        var trailingComma =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseArray(trailingCommaInput, Integer.class).runToList());
+        assertCauseType(trailingComma, JacksonException.class);
     }
 
     @Test
     void shouldRejectMalformedArrayWrongTopLevelShapeAndTrailingContent() {
         // given
-        var incomplete = byteFlow("[{\"name\":\"Ada\"}");
+        var incomplete = byteFlow("[1");
         var wrongShapeInput = byteFlow("{\"name\":\"Ada\"}");
         var trailingInput = byteFlow("[] true");
 
         // when
-        assertFails(() -> JsonFlow.parseArray(incomplete, Person.class).runToList());
-
+        var incompleteException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseArray(incomplete, Integer.class).runToList());
         var wrongShape =
                 assertThrows(
                         Exception.class,
@@ -231,6 +387,7 @@ class JsonFlowTest {
                         () -> JsonFlow.parseArray(trailingInput, Person.class).runToList());
 
         // then
+        assertCauseType(incompleteException, JacksonException.class);
         assertCauseMessage(wrongShape, "Expected one top-level JSON array");
         assertCauseMessage(trailing, "Unexpected content after the top-level JSON array");
     }
@@ -398,10 +555,11 @@ class JsonFlowTest {
     @Test
     void shouldRunParsingFlowsRepeatedly() throws Exception {
         // given
-        var ndjson = JsonFlow.parseNdjson(byteFlow("1\n2\n"), Integer.class);
+        var ndjson = JsonFlow.parseNdjson(oneByteChunks("\uFEFF1\n2"), Integer.class);
         var array = JsonFlow.parseArray(byteFlow("[1,2]"), Integer.class);
 
         // when & then
+        assertEquals(List.of(1), ndjson.take(1).runToList());
         assertEquals(List.of(1, 2), ndjson.runToList());
         assertEquals(List.of(1, 2), ndjson.runToList());
         assertEquals(List.of(1, 2), array.runToList());
@@ -470,18 +628,46 @@ class JsonFlowTest {
     void shouldRenderJsonNodesUsingConfiguredWriterOverloads() throws Exception {
         // given
         var writer = MAPPER.writerFor(JsonNode.class);
-        var values = Flows.fromValues(MAPPER.readTree("{\"n\":1}"), MAPPER.readTree("[true,null]"));
+        var values =
+                Flows.fromValues(
+                        MAPPER.readTree("{\"n\":1}"),
+                        MAPPER.readTree("[true,null]"),
+                        MAPPER.readTree("null"));
 
         // when & then
-        assertEquals("{\"n\":1}\n[true,null]\n", render(JsonFlow.renderNdjson(values, writer)));
         assertEquals(
-                "[{\"n\":1},[true,null]]",
+                "{\"n\":1}\n[true,null]\nnull\n", render(JsonFlow.renderNdjson(values, writer)));
+        assertEquals(
+                "[{\"n\":1},[true,null],null]",
                 render(
                         JsonFlow.renderArray(
                                 Flows.fromValues(
                                         MAPPER.readTree("{\"n\":1}"),
-                                        MAPPER.readTree("[true,null]")),
+                                        MAPPER.readTree("[true,null]"),
+                                        MAPPER.readTree("null")),
                                 writer)));
+    }
+
+    @Test
+    void shouldRejectRawNullValuesWhenRendering() {
+        // given
+        var values = Flows.<String>usingEmit(emit -> emit.apply(null));
+
+        // when
+        var ndjsonException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.renderNdjson(values, String.class).runToList());
+        var arrayException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.renderArray(values, String.class).runToList());
+
+        // then
+        var expectedMessage =
+                "Java null cannot be rendered because Jox flows do not support null values";
+        assertCauseTypeAndMessage(ndjsonException, IllegalArgumentException.class, expectedMessage);
+        assertCauseTypeAndMessage(arrayException, IllegalArgumentException.class, expectedMessage);
     }
 
     @Test
@@ -706,10 +892,6 @@ class JsonFlowTest {
         return output.toString(StandardCharsets.UTF_8);
     }
 
-    private static void assertFails(ThrowingRunnable action) {
-        assertThrows(Exception.class, action::run);
-    }
-
     private static void assertCauseMessage(Throwable exception, String expectedFragment) {
         for (Throwable current = exception; current != null; current = current.getCause()) {
             if (current.getMessage() != null && current.getMessage().contains(expectedFragment)) {
@@ -718,6 +900,39 @@ class JsonFlowTest {
         }
         throw new AssertionError(
                 "No exception in the cause chain contained: " + expectedFragment, exception);
+    }
+
+    private static void assertCauseType(
+            Throwable exception, Class<? extends Throwable> expectedType) {
+        for (Throwable current = exception; current != null; current = current.getCause()) {
+            if (expectedType.isInstance(current)) {
+                return;
+            }
+        }
+        throw new AssertionError(
+                "No exception in the cause chain had type: " + expectedType.getName(), exception);
+    }
+
+    private static void assertCauseTypeAndMessage(
+            Throwable exception, Class<? extends Throwable> expectedType, String expectedMessage) {
+        for (Throwable current = exception; current != null; current = current.getCause()) {
+            if (expectedType.isInstance(current) && expectedMessage.equals(current.getMessage())) {
+                return;
+            }
+        }
+        throw new AssertionError(
+                "No exception in the cause chain had type "
+                        + expectedType.getName()
+                        + " and message: "
+                        + expectedMessage,
+                exception);
+    }
+
+    private static void assertRecordLimitExceeded(Throwable exception, int maximumBytes) {
+        assertCauseTypeAndMessage(
+                exception,
+                IllegalArgumentException.class,
+                "NDJSON record exceeds the configured maximum of " + maximumBytes + " bytes");
     }
 
     private static void assertHasCause(Throwable exception, Throwable expected) {
@@ -729,11 +944,6 @@ class JsonFlowTest {
         }
         throw new AssertionError(
                 "Expected exception was not present in the cause chain", exception);
-    }
-
-    @FunctionalInterface
-    private interface ThrowingRunnable {
-        void run() throws Exception;
     }
 
     private record FailingDeserialization(String value) {
