@@ -14,6 +14,7 @@ Includes:
 * Programmer-friendly structured concurrency (Java 25 only)
 * Finite & infinite streaming using flows, with reactive streams compatibility, (blocking) I/O integration and a
   high-level, “functional” API (Java 25 only)
+* Streaming NDJSON and top-level JSON array integration using flows (Java 25 only)
 
 Find out more in the documentation available at [jox.softwaremill.com](https://jox.softwaremill.com/).
 

@@ -22,6 +22,7 @@
     <module>flows</module>
     <module>channels-fray-tests</module>
     <module>kafka</module>
+    <module>json</module>
   </modules>
 
   <!-- Deployment metadata -->
