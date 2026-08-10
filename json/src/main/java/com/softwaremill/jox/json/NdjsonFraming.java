@@ -5,14 +5,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 
 import com.softwaremill.jox.flows.ByteChunk;
 import com.softwaremill.jox.flows.Flow;
 import com.softwaremill.jox.flows.Flow.ByteFlow;
+import com.softwaremill.jox.flows.FlowEmit;
+import com.softwaremill.jox.flows.Flows;
 
 final class NdjsonFraming {
 
@@ -21,14 +20,18 @@ final class NdjsonFraming {
     private NdjsonFraming() {}
 
     static Flow<String> lines(ByteFlow bytes, int maxRecordBytes) {
-        return bytes.mapWithResource(
-                        () -> new State(maxRecordBytes), NdjsonFraming::finish, State::records)
-                .mapConcat(records -> records)
-                .map(NdjsonFraming::decode);
-    }
+        return Flows.usingEmit(
+                output -> {
+                    var framer = new Framer(maxRecordBytes);
+                    FlowEmit<Record> emitRecord = record -> output.apply(decode(record));
 
-    private static Optional<Iterable<Record>> finish(State state) {
-        return state.finish().map(record -> List.of(record));
+                    bytes.runToEmit(chunk -> framer.emitRecords(chunk, emitRecord));
+
+                    var finalRecord = framer.finish();
+                    if (finalRecord.isPresent()) {
+                        emitRecord.apply(finalRecord.get());
+                    }
+                });
     }
 
     private static String decode(Record record) {
@@ -60,61 +63,27 @@ final class NdjsonFraming {
 
     private record Record(byte[] bytes, boolean first) {}
 
-    private static final class State {
+    private static final class Framer {
         private final int maxRecordBytes;
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         private boolean firstRecord = true;
 
-        private State(int maxRecordBytes) {
+        private Framer(int maxRecordBytes) {
             this.maxRecordBytes = maxRecordBytes;
         }
 
-        private Iterable<Record> records(ByteChunk chunk) {
-            return () ->
-                    new Iterator<>() {
-                        private final List<byte[]> arrays = chunk.getArrays();
-                        private int arrayIndex;
-                        private int offset;
-                        private Record next;
-
-                        @Override
-                        public boolean hasNext() {
-                            if (next != null) {
-                                return true;
-                            }
-
-                            while (arrayIndex < arrays.size()) {
-                                var array = arrays.get(arrayIndex);
-                                for (int i = offset; i < array.length; i++) {
-                                    if (array[i] == '\n') {
-                                        append(array, offset, i - offset);
-                                        next = completeRecord();
-                                        offset = i + 1;
-                                        if (offset == array.length) {
-                                            arrayIndex++;
-                                            offset = 0;
-                                        }
-                                        return true;
-                                    }
-                                }
-
-                                append(array, offset, array.length - offset);
-                                arrayIndex++;
-                                offset = 0;
-                            }
-                            return false;
-                        }
-
-                        @Override
-                        public Record next() {
-                            if (!hasNext()) {
-                                throw new NoSuchElementException();
-                            }
-                            var result = next;
-                            next = null;
-                            return result;
-                        }
-                    };
+        private void emitRecords(ByteChunk chunk, FlowEmit<Record> output) throws Exception {
+            for (var array : chunk.getArrays()) {
+                int recordStart = 0;
+                for (int i = 0; i < array.length; i++) {
+                    if (array[i] == '\n') {
+                        append(array, recordStart, i - recordStart);
+                        output.apply(completeRecord());
+                        recordStart = i + 1;
+                    }
+                }
+                append(array, recordStart, array.length - recordStart);
+            }
         }
 
         private Optional<Record> finish() {
