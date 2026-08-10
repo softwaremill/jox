@@ -3,7 +3,7 @@
 Lazy, backpressured parsing and rendering of newline-delimited JSON (NDJSON) and top-level JSON arrays using Jox
 `Flow` and `ByteFlow`.
 
-Requires Java 25 (current LTS).
+Requires Java 25.
 
 ## Dependency
 

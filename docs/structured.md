@@ -3,7 +3,7 @@
 Programmer-friendly structured concurrency scopes, building upon the lower-level API available as a preview in Java 25,
 [JEP 505](https://openjdk.org/jeps/505).
 
-Requires Java 25 (current LTS).
+Requires Java 25.
 
 Javadocs: [https://javadoc.io](https://javadoc.io/doc/com.softwaremill.jox/structured).
 
@@ -183,8 +183,8 @@ void main(String[] args) throws InterruptedException, TimeoutException {
 
 ## Comparing with Java's structured concurrency (JEP 505)
 
-Java 21 and further releases include previews of a structured concurrency API. The latest version of the proposal is in
-[JEP 505](https://openjdk.org/jeps/505). How does it compare with Jox's structured concurrency?
+[JEP 505](https://openjdk.org/jeps/505) describes a preview of Java's structured concurrency API. How does it compare
+with Jox's structured concurrency?
 
 Let's examine a simple example of parallelizing two computations, first using JEP 505:
 
