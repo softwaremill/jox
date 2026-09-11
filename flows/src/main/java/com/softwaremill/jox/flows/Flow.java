@@ -2539,6 +2539,9 @@ public class Flow<T> {
          * <p>Must be run within a concurrency scope, as under the hood the flow is run in the
          * background.
          *
+         * <p>Bulk reads block only until at least one byte is available and may return fewer bytes
+         * than requested, as allowed by the {@link InputStream} contract.
+         *
          * <p>Buffer capacity can be set via scoped value {@link Flow#CHANNEL_BUFFER_SIZE}. If not
          * specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
          */
@@ -2552,7 +2555,8 @@ public class Flow<T> {
                 private int availableBytes = 0;
                 private boolean isEndOfStream = false;
 
-                private boolean ensureDataAvailable() {
+                // skips exhausted arrays of the current chunk; never blocks for the next chunk
+                private boolean hasBufferedData() {
                     while (currentArrayIndex < currentArrays.size()) {
                         byte[] currentArray = currentArrays.get(currentArrayIndex);
                         if (currentByteIndex < currentArray.length) {
@@ -2560,6 +2564,13 @@ public class Flow<T> {
                         }
                         currentArrayIndex++;
                         currentByteIndex = 0;
+                    }
+                    return false;
+                }
+
+                private boolean ensureDataAvailable() {
+                    if (hasBufferedData()) {
+                        return true;
                     }
 
                     if (!isEndOfStream) {
@@ -2616,7 +2627,9 @@ public class Flow<T> {
                     int totalBytesRead = 0;
                     int remainingToRead = len;
 
-                    while (remainingToRead > 0 && ensureDataAvailable()) {
+                    // block only for the first byte; a short read is returned once the
+                    // buffered chunk is exhausted, as required by the InputStream contract
+                    while (remainingToRead > 0 && hasBufferedData()) {
                         byte[] currentArray = currentArrays.get(currentArrayIndex);
                         int availableInCurrentArray = currentArray.length - currentByteIndex;
                         int bytesToRead = Math.min(remainingToRead, availableInCurrentArray);

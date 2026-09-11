@@ -12,7 +12,9 @@ import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -193,10 +195,51 @@ public class FlowIOTest {
                                     new byte[0], // another empty chunk
                                     "World!".getBytes());
                     try (InputStream stream = source.runToInputStream(scope)) {
-                        byte[] buffer = new byte[20];
+                        assertEquals("Hello, World!", inputStreamToString(stream));
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void bulkReadReturnsBufferedBytesWithoutWaitingForNextChunk() throws InterruptedException {
+        supervised(
+                scope -> {
+                    var release = new CountDownLatch(1);
+                    var source =
+                            Flows.<ByteChunk>usingEmit(
+                                            emit -> {
+                                                emit.apply(ByteChunk.fromArray("hello".getBytes()));
+                                                release.await();
+                                            })
+                                    .toByteFlow();
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead =
+                                assertTimeoutPreemptively(
+                                        Duration.ofSeconds(10), () -> stream.read(buffer, 0, 8192));
+                        assertEquals(5, bytesRead);
+                        assertEquals("hello", new String(buffer, 0, bytesRead));
+                    } finally {
+                        release.countDown();
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void bulkReadCopiesAllArraysOfChunk() throws InterruptedException {
+        supervised(
+                scope -> {
+                    var chunk =
+                            ByteChunk.fromArray("ab".getBytes())
+                                    .concat(ByteChunk.fromArray("cd".getBytes()));
+                    var source = Flows.fromByteChunks(chunk);
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[10];
                         int bytesRead = stream.read(buffer);
-                        assertEquals(13, bytesRead);
-                        assertEquals("Hello, World!", new String(buffer, 0, bytesRead));
+                        assertEquals(4, bytesRead);
+                        assertEquals("abcd", new String(buffer, 0, bytesRead));
                     }
                     return null;
                 });
