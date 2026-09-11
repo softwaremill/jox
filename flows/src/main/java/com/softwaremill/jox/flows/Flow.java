@@ -2643,11 +2643,6 @@ public class Flow<T> {
                         totalBytesRead += bytesToRead;
                         remainingToRead -= bytesToRead;
                         availableBytes -= bytesToRead;
-
-                        if (currentByteIndex >= currentArray.length) {
-                            currentArrayIndex++;
-                            currentByteIndex = 0;
-                        }
                     }
 
                     return totalBytesRead;
