@@ -18,7 +18,7 @@ final class JsonParsing {
     static <T> Flow<T> parseNdjson(ByteFlow bytes, ObjectReader reader, JsonReadSettings settings) {
         var singleValueReader = reader.with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         return NdjsonFraming.lines(bytes, settings.maxNdjsonRecordBytes())
-                .filter(line -> !line.isBlank())
+                .filter(line -> !isBlank(line))
                 .map(line -> requireNonNullValue(singleValueReader.<T>readValue(line)));
     }
 
@@ -36,14 +36,9 @@ final class JsonParsing {
                                                 JsonToken.START_ARRAY,
                                                 "Expected one top-level JSON array");
 
-                                        JsonToken token;
-                                        while ((token = parser.nextToken())
-                                                != JsonToken.END_ARRAY) {
-                                            if (token == null) {
-                                                throw new IllegalArgumentException(
-                                                        "Unexpected end of input while parsing the"
-                                                                + " top-level JSON array");
-                                            }
+                                        // inside the array, a premature end of input makes
+                                        // nextToken() throw rather than return null
+                                        while (parser.nextToken() != JsonToken.END_ARRAY) {
                                             emit.apply(
                                                     requireNonNullValue(
                                                             elementReader.<T>readValue(parser)));
@@ -57,6 +52,18 @@ final class JsonParsing {
                                     }
                                     return null;
                                 }));
+    }
+
+    // String.isBlank() would also match other Unicode whitespace, which is not valid between
+    // JSON values and must fail parsing instead of being skipped
+    private static boolean isBlank(String line) {
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            if (c != ' ' && c != '\t' && c != '\r') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static <T> T requireNonNullValue(T value) {

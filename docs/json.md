@@ -3,7 +3,9 @@
 Lazy, backpressured parsing and rendering of newline-delimited JSON (NDJSON) and top-level JSON arrays using Jox
 `Flow` and `ByteFlow`.
 
-Requires Java 25.
+Requires Java 25 (current LTS).
+
+Javadocs: [https://javadoc.io](https://javadoc.io/doc/com.softwaremill.jox/json).
 
 ## Dependency
 
@@ -13,20 +15,20 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>json</artifactId>
-    <version>0.1.0</version>
+    <version>0.5.3</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:json:0.1.0'
+implementation 'com.softwaremill.jox:json:0.5.3'
 ```
 
 Gradle (Kotlin DSL):
 
 ```kotlin
-implementation("com.softwaremill.jox:json:0.1.0")
+implementation("com.softwaremill.jox:json:0.5.3")
 ```
 
 ## API
@@ -39,7 +41,9 @@ implementation("com.softwaremill.jox:json:0.1.0")
 * `renderArray(Flow<T>, ...)` renders values as one UTF-8 JSON array `ByteFlow`.
 
 Each method is lazy: parsing, rendering and I/O start only when the returned flow is run. Values are processed one at
-a time, preserving the backpressure, failure propagation and cancellation behavior of the underlying Jox flow.
+a time, preserving the failure propagation and cancellation behavior of the underlying Jox flow. NDJSON parsing and
+both renderers consume input only as fast as the output is consumed. Array parsing feeds Jackson through an
+`InputStream`, which reads a bounded number of chunks ahead of downstream demand.
 
 Parsing rejects an NDJSON record or array element that Jackson deserializes as Java `null`, and rendering rejects raw
 Java `null` elements, as Jox flows do not support them. To retain JSON `null` values, use Jackson's tree model, where
@@ -57,7 +61,8 @@ beginning of the stream.
 
 An incomplete record is buffered across source chunks until its LF delimiter, or until end-of-input for the final
 unterminated record. The default maximum encoded record size is 32 MiB, excluding the LF delimiter. An initial BOM and
-the CR in a CRLF line ending count toward the limit. Use
+the CR in a CRLF line ending count toward the limit. The limit also applies to blank lines, even though they are
+otherwise ignored. Use
 `JsonReadSettings.defaults().maxNdjsonRecordBytes(...)` to choose another positive byte limit and pass the resulting
 settings as the final argument to `parseNdjson`.
 

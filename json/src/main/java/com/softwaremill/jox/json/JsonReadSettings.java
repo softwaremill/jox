@@ -4,7 +4,7 @@ package com.softwaremill.jox.json;
  * Settings used when parsing NDJSON flows.
  *
  * @param maxNdjsonRecordBytes maximum UTF-8 encoded size of one NDJSON record, excluding the LF
- *     delimiter; must be positive
+ *     delimiter; applies to blank lines as well; must be positive
  */
 public record JsonReadSettings(int maxNdjsonRecordBytes) {
 

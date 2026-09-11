@@ -3,7 +3,7 @@
 Finite & infinite streaming using flows, with reactive streams compatibility, (blocking) I/O integration, and a
 high-level, "functional" API.
 
-Requires Java 25.
+Requires Java 25 (current LTS).
 
 Javadocs: [https://javadoc.io](https://javadoc.io/doc/com.softwaremill.jox/flows).
 

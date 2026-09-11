@@ -3,7 +3,7 @@
 Programmer-friendly structured concurrency scopes, building upon the lower-level API available as a preview in Java 25,
 [JEP 505](https://openjdk.org/jeps/505).
 
-Requires Java 25.
+Requires Java 25 (current LTS).
 
 Javadocs: [https://javadoc.io](https://javadoc.io/doc/com.softwaremill.jox/structured).
 

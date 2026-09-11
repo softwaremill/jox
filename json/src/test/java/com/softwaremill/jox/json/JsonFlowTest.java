@@ -319,6 +319,7 @@ class JsonFlowTest {
         // given
         var malformed = byteFlow("{\"name\":}\n");
         var multipleValues = byteFlow("{\"name\":\"Ada\",\"age\":36} true\n");
+        var nonJsonWhitespace = byteFlow("\u000b\n");
 
         // when
         var malformedException =
@@ -329,10 +330,15 @@ class JsonFlowTest {
                 assertThrows(
                         Exception.class,
                         () -> JsonFlow.parseNdjson(multipleValues, Person.class).runToList());
+        var nonJsonWhitespaceException =
+                assertThrows(
+                        Exception.class,
+                        () -> JsonFlow.parseNdjson(nonJsonWhitespace, Person.class).runToList());
 
         // then
         assertCauseType(malformedException, JacksonException.class);
         assertCauseType(multipleValuesException, JacksonException.class);
+        assertCauseType(nonJsonWhitespaceException, JacksonException.class);
     }
 
     @Test

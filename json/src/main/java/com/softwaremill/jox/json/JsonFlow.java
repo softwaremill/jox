@@ -14,11 +14,13 @@ import tools.jackson.databind.ObjectWriter;
 /**
  * Creates flows which parse or render newline-delimited JSON (NDJSON) and top-level JSON arrays.
  *
- * <p>All transformations are lazy and preserve the backpressure and cancellation behavior of the
- * supplied flow. Values are parsed or rendered one at a time. Parsing fails when Jackson
- * deserializes an NDJSON record or array element as {@code null}, and rendering fails on a raw Java
- * {@code null}, as Jox flows do not support null elements. Use Jackson's tree model to represent a
- * JSON {@code null} as a non-null node.
+ * <p>All transformations are lazy and preserve the cancellation behavior of the supplied flow.
+ * Values are parsed or rendered one at a time. NDJSON parsing and rendering consume input only as
+ * fast as the output is consumed; array parsing reads a bounded number of chunks ahead of demand,
+ * see {@link #parseArray(ByteFlow, ObjectReader)}. Parsing fails when Jackson deserializes an
+ * NDJSON record or array element as {@code null}, and rendering fails on a raw Java {@code null},
+ * as Jox flows do not support null elements. Use Jackson's tree model to represent a JSON {@code
+ * null} as a non-null node.
  */
 public final class JsonFlow {
 
@@ -60,8 +62,9 @@ public final class JsonFlow {
     }
 
     /**
-     * Parses UTF-8 NDJSON using the supplied reader and framing settings. Blank lines are ignored;
-     * LF, CRLF, a final unterminated record and one initial byte-order mark are accepted. {@link
+     * Parses UTF-8 NDJSON using the supplied reader and framing settings. Blank lines are ignored,
+     * but still count against the record size limit; LF, CRLF, a final unterminated record and one
+     * initial byte-order mark are accepted. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is enabled regardless
      * of the reader's configuration. The caller must ensure that {@code T} matches the type
      * configured on the reader.
@@ -94,7 +97,9 @@ public final class JsonFlow {
 
     /**
      * Incrementally parses exactly one top-level JSON array using the supplied reader. Successful
-     * completion waits for end-of-input to reject trailing content. {@link
+     * completion waits for end-of-input to reject trailing content. The input is read through
+     * {@link ByteFlow#runToInputStream}, so up to a channel buffer of chunks, plus Jackson's input
+     * buffer, is consumed ahead of downstream demand. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is disabled while
      * reading individual elements, regardless of the reader's configuration. The caller must ensure
      * that {@code T} matches the type configured on the reader. Failures are wrapped in {@link
