@@ -195,14 +195,27 @@ public class FlowIOTest {
                                     new byte[0], // another empty chunk
                                     "World!".getBytes());
                     try (InputStream stream = source.runToInputStream(scope)) {
-                        assertEquals("Hello, World!", inputStreamToString(stream));
+                        byte[] buffer = new byte[20];
+                        int bytesRead = stream.read(buffer);
+                        assertEquals(5, bytesRead);
+                        assertEquals("Hello", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(2, bytesRead);
+                        assertEquals(", ", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(6, bytesRead);
+                        assertEquals("World!", new String(buffer, 0, bytesRead));
+
+                        assertEquals(-1, stream.read(buffer));
                     }
                     return null;
                 });
     }
 
     @Test
-    void bulkReadReturnsBufferedBytesWithoutWaitingForNextChunk() throws InterruptedException {
+    void handleBulkReadWithoutWaitingForNextChunk() throws InterruptedException {
         supervised(
                 scope -> {
                     var release = new CountDownLatch(1);
@@ -214,13 +227,14 @@ public class FlowIOTest {
                                             })
                                     .toByteFlow();
                     try (InputStream stream = source.runToInputStream(scope)) {
-                        byte[] buffer = new byte[8192];
+                        byte[] buffer = new byte[10];
                         int bytesRead =
                                 assertTimeoutPreemptively(
-                                        Duration.ofSeconds(10), () -> stream.read(buffer, 0, 8192));
+                                        Duration.ofSeconds(2), () -> stream.read(buffer));
                         assertEquals(5, bytesRead);
                         assertEquals("hello", new String(buffer, 0, bytesRead));
                     } finally {
+                        // unblocks the producer so the scope can close
                         release.countDown();
                     }
                     return null;
@@ -228,7 +242,7 @@ public class FlowIOTest {
     }
 
     @Test
-    void bulkReadCopiesAllArraysOfChunk() throws InterruptedException {
+    void handleBulkReadAcrossArraysOfSingleChunk() throws InterruptedException {
         supervised(
                 scope -> {
                     var chunk =
