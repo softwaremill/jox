@@ -12,7 +12,9 @@ import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -195,8 +197,63 @@ public class FlowIOTest {
                     try (InputStream stream = source.runToInputStream(scope)) {
                         byte[] buffer = new byte[20];
                         int bytesRead = stream.read(buffer);
-                        assertEquals(13, bytesRead);
-                        assertEquals("Hello, World!", new String(buffer, 0, bytesRead));
+                        assertEquals(5, bytesRead);
+                        assertEquals("Hello", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(2, bytesRead);
+                        assertEquals(", ", new String(buffer, 0, bytesRead));
+
+                        bytesRead = stream.read(buffer);
+                        assertEquals(6, bytesRead);
+                        assertEquals("World!", new String(buffer, 0, bytesRead));
+
+                        assertEquals(-1, stream.read(buffer));
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleBulkReadWithoutWaitingForNextChunk() throws InterruptedException {
+        supervised(
+                scope -> {
+                    var release = new CountDownLatch(1);
+                    var source =
+                            Flows.<ByteChunk>usingEmit(
+                                            emit -> {
+                                                emit.apply(ByteChunk.fromArray("hello".getBytes()));
+                                                release.await();
+                                            })
+                                    .toByteFlow();
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[10];
+                        int bytesRead =
+                                assertTimeoutPreemptively(
+                                        Duration.ofSeconds(2), () -> stream.read(buffer));
+                        assertEquals(5, bytesRead);
+                        assertEquals("hello", new String(buffer, 0, bytesRead));
+                    } finally {
+                        // unblocks the producer so the scope can close
+                        release.countDown();
+                    }
+                    return null;
+                });
+    }
+
+    @Test
+    void handleBulkReadAcrossArraysOfSingleChunk() throws InterruptedException {
+        supervised(
+                scope -> {
+                    var chunk =
+                            ByteChunk.fromArray("ab".getBytes())
+                                    .concat(ByteChunk.fromArray("cd".getBytes()));
+                    var source = Flows.fromByteChunks(chunk);
+                    try (InputStream stream = source.runToInputStream(scope)) {
+                        byte[] buffer = new byte[10];
+                        int bytesRead = stream.read(buffer);
+                        assertEquals(4, bytesRead);
+                        assertEquals("abcd", new String(buffer, 0, bytesRead));
                     }
                     return null;
                 });
