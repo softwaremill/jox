@@ -15,20 +15,20 @@ Maven:
 <dependency>
     <groupId>com.softwaremill.jox</groupId>
     <artifactId>json</artifactId>
-    <version>0.5.3</version>
+    <version>0.6.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.softwaremill.jox:json:0.5.3'
+implementation 'com.softwaremill.jox:json:0.6.0'
 ```
 
 Gradle (Kotlin DSL):
 
 ```kotlin
-implementation("com.softwaremill.jox:json:0.5.3")
+implementation("com.softwaremill.jox:json:0.6.0")
 ```
 
 ## API

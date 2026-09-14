@@ -10,7 +10,7 @@
   </parent>
 
   <artifactId>json</artifactId>
-  <version>0.5.3</version>
+  <version>0.6.0</version>
   <packaging>jar</packaging>
   <name>${project.groupId}:${project.artifactId}</name>
 
@@ -23,12 +23,12 @@
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>structured</artifactId>
-      <version>0.5.3</version>
+      <version>0.6.0</version>
     </dependency>
     <dependency>
       <groupId>com.softwaremill.jox</groupId>
       <artifactId>flows</artifactId>
-      <version>0.5.3</version>
+      <version>0.6.0</version>
     </dependency>
     <dependency>
       <groupId>tools.jackson.core</groupId>
