@@ -129,7 +129,8 @@ public final class JsonFlow {
 
     /**
      * Renders values as UTF-8 NDJSON using the supplied writer. Every value, including the final
-     * one, is followed by LF. Writer output containing raw CR or LF is rejected.
+     * one, is followed by LF. Writer output containing a raw CR or LF, which only a pretty-printing
+     * writer produces, is rejected as NDJSON consumers split records by line.
      *
      * @param values the values to render
      * @param writer the writer used to serialize each value

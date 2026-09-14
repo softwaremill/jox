@@ -90,9 +90,9 @@ void main() throws Exception {
 }
 ```
 
-NDJSON rendering writes one JSON value followed by an LF byte. The final value also has a terminating LF. A writer
-whose output contains raw CR or LF bytes is rejected, as such output would break NDJSON record boundaries. In
-particular, do not use a pretty-printing writer for NDJSON.
+NDJSON rendering writes one JSON value followed by an LF byte. The final value also has a terminating LF. NDJSON
+consumers split records by line, so a value must not span lines. Newlines inside strings are always escaped, so a raw
+CR or LF can only come from a pretty-printing writer. Such writer output is rejected.
 
 ```java
 import java.io.ByteArrayOutputStream;
