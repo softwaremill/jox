@@ -23,11 +23,11 @@ final class JsonParsing {
         var recordReader = reader.with(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         return NdjsonFraming.records(bytes, settings.maxRecordBytes())
                 .filter(record -> !record.isBlank())
-                .map(
-                        record ->
-                                requireNonNullValue(
-                                        recordReader.<T>readValue(
-                                                record.bytes(), record.offset(), record.length())));
+                .map(record -> requireNonNullValue(readRecord(recordReader, record)));
+    }
+
+    private static <T> T readRecord(ObjectReader reader, NdjsonFraming.RecordBytes record) {
+        return reader.readValue(record.bytes(), record.offset(), record.length());
     }
 
     static <T> Flow<T> parseArray(ByteFlow bytes, ObjectReader reader) {

@@ -17,12 +17,12 @@ final class JsonRendering {
 
     private JsonRendering() {}
 
-    // Each value becomes one array holding the JSON and its LF: sinks write one array at a time,
-    // so this halves the writes of unbuffered sinks. The buffer is created per run, as the same
-    // flow may run concurrently.
+    // one array per value, as sinks write one array at a time: halves the writes of unbuffered
+    // sinks
     static <T> ByteFlow renderNdjson(Flow<T> values, ObjectWriter writer) {
         return Flows.<ByteChunk>usingEmit(
                         emit -> {
+                            // per run, as the same flow may run concurrently
                             var line = new LineBuffer();
                             values.runToEmit(
                                     value -> {

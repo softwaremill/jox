@@ -15,10 +15,11 @@ import tools.jackson.databind.ObjectWriter;
  * Creates flows which parse or render newline-delimited JSON (NDJSON) and top-level JSON arrays.
  *
  * <p>All transformations are lazy and preserve the cancellation behavior of the supplied flow.
- * Values are parsed or rendered one at a time; see {@link #parseArray(ByteFlow, ObjectReader)} for
- * its read-ahead. Parsing fails when Jackson deserializes an NDJSON record or array element as
- * {@code null}, and rendering fails on a raw Java {@code null}, as Jox flows do not support null
- * elements. Use Jackson's tree model to represent a JSON {@code null} as a non-null node.
+ * Values are parsed or rendered one at a time, except that {@link #parseArray(ByteFlow,
+ * ObjectReader)} reads ahead as described there. Parsing fails when Jackson deserializes an NDJSON
+ * record or array element as {@code null}, and rendering fails on a raw Java {@code null}, as Jox
+ * flows do not support null elements. Use Jackson's tree model to represent a JSON {@code null} as
+ * a non-null node.
  */
 public final class JsonFlow {
 

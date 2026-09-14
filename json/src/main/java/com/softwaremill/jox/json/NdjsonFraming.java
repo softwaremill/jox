@@ -94,7 +94,7 @@ final class NdjsonFraming {
         private RecordBytes completeRecord(byte[] lastSegment, int offset, int length) {
             requireRecordWithinLimit(length);
             if (buffer.size() == 0) {
-                return newRecord(lastSegment, offset, length);
+                return nextRecord(lastSegment, offset, length);
             }
             buffer.write(lastSegment, offset, length);
             return bufferedRecord();
@@ -103,10 +103,10 @@ final class NdjsonFraming {
         private RecordBytes bufferedRecord() {
             var bytes = buffer.toByteArray();
             buffer.reset();
-            return newRecord(bytes, 0, bytes.length);
+            return nextRecord(bytes, 0, bytes.length);
         }
 
-        private RecordBytes newRecord(byte[] bytes, int offset, int length) {
+        private RecordBytes nextRecord(byte[] bytes, int offset, int length) {
             var record = new RecordBytes(bytes, offset, length);
             if (firstRecord) {
                 firstRecord = false;

@@ -238,8 +238,7 @@ void main() throws Exception {
     Flow<Event> accepted = JsonFlow.parseNdjson(
                     Flows.fromFile(Path.of("events.ndjson")),
                     Event.class)
-            .filter(Event::accepted)
-            .map(event -> new Event(event.id(), true));
+            .filter(Event::accepted);
 
     JsonFlow.renderArray(accepted, Event.class)
             .runToFile(Path.of("accepted.json"));

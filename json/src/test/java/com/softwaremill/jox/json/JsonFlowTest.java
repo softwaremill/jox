@@ -13,7 +13,9 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.softwaremill.jox.flows.ByteChunk;
 import com.softwaremill.jox.flows.Flow;
 import com.softwaremill.jox.flows.Flows;
+import com.softwaremill.jox.structured.Par;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
@@ -40,12 +43,12 @@ class JsonFlowTest {
     @TempDir Path tempDir;
 
     @Test
-    void shouldParseNdjsonLineEndingsBlankLinesAndFinalUnterminatedRecord() throws Exception {
+    void shouldParseNdjsonBomLineEndingsBlankLinesAndFinalUnterminatedRecord() throws Exception {
         // given
         var input =
                 byteFlow(
                         """
-
+                        \uFEFF
                         {"name":"Ada","age":36}\r
                            \t
                         {"name":"Łukasz","age":41}\
@@ -582,12 +585,12 @@ class JsonFlowTest {
     }
 
     @Test
-    void shouldRenderNdjsonWithMandatoryNewlinesUsingClassOverload() throws Exception {
+    void shouldTerminateEveryNdjsonValueWithNewlineUsingClassOverload() throws Exception {
         // given
         var values = Flows.fromValues(new Person("Ada", 36), new Person("Łukasz", 41));
 
         // when
-        var result = render(JsonFlow.renderNdjson(values, Person.class));
+        var chunks = JsonFlow.renderNdjson(values, Person.class).runToList();
 
         // then
         assertEquals(
@@ -595,7 +598,9 @@ class JsonFlowTest {
                 {"name":"Ada","age":36}
                 {"name":"Łukasz","age":41}
                 """,
-                result);
+                render(Flows.fromByteChunks(chunks.toArray(ByteChunk[]::new))));
+        assertEquals(
+                List.of(1, 1), chunks.stream().map(chunk -> chunk.getArrays().size()).toList());
     }
 
     @Test
@@ -608,8 +613,6 @@ class JsonFlowTest {
 
         // then
         assertEquals("\"first line\\nsecond line\\rthird line\"\n", rendered);
-        assertEquals(
-                List.of(value), JsonFlow.parseNdjson(byteFlow(rendered), String.class).runToList());
     }
 
     @Test
@@ -811,12 +814,26 @@ class JsonFlowTest {
                         });
 
         // when
-        var rendered = JsonFlow.renderArray(values, Integer.class);
+        var rendered = JsonFlow.renderNdjson(values, Integer.class);
 
         // then
         assertEquals(0, renderedValues.get());
         rendered.take(2).runToList();
         assertTrue(renderedValues.get() < 100);
+    }
+
+    @Test
+    void shouldRenderTheSameNdjsonFlowConcurrently() throws Exception {
+        // given
+        var value = new PausedSerialization(new CyclicBarrier(2));
+        var rendered = JsonFlow.renderNdjson(Flows.fromValues(value), PausedSerialization.class);
+
+        // when
+        var outputs =
+                Par.par(List.<Callable<String>>of(() -> render(rendered), () -> render(rendered)));
+
+        // then
+        assertEquals(List.of("{\"value\":\"x\"}\n", "{\"value\":\"x\"}\n"), outputs);
     }
 
     @Test
@@ -830,19 +847,6 @@ class JsonFlowTest {
         assertEquals("1\n2\n", render(ndjson));
         assertEquals("[1,2]", render(array));
         assertEquals("[1,2]", render(array));
-    }
-
-    @Test
-    void shouldParseArrayFromInputStream() throws Exception {
-        // given
-        var stream =
-                new ByteArrayInputStream(
-                        "[{\"name\":\"Ada\",\"age\":36}]".getBytes(StandardCharsets.UTF_8));
-
-        // when & then
-        assertEquals(
-                List.of(new Person("Ada", 36)),
-                JsonFlow.parseArray(Flows.fromInputStream(stream, 1), Person.class).runToList());
     }
 
     @Test
@@ -926,6 +930,24 @@ class JsonFlowTest {
     private static final class FailingSerialization {
         public String getValue() {
             throw SERIALIZATION_FAILURE;
+        }
+    }
+
+    /** Serialization waits until both concurrent runs are writing at the same time. */
+    private static final class PausedSerialization {
+        private final CyclicBarrier barrier;
+
+        private PausedSerialization(CyclicBarrier barrier) {
+            this.barrier = barrier;
+        }
+
+        public String getValue() {
+            try {
+                barrier.await();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+            return "x";
         }
     }
 
