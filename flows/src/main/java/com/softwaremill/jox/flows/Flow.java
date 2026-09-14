@@ -366,7 +366,7 @@ public class Flow<T> {
      * this flow. The results are emitted by the returned flow. Optionally the returned flow emits
      * an additional element, possibly based on the final state, once this flow is done.
      *
-     * <p>The `initializeState` function is called once when `statefulMap` is called.
+     * <p>The `initializeState` function is called once per run of the returned flow.
      *
      * <p>The `onComplete` function is called once when this flow is done. If it returns a non-empty
      * {@link Optional}, the value will be emitted by the flow, while an empty value will be
@@ -393,7 +393,7 @@ public class Flow<T> {
      * Applies the given mapping function `f`, using additional state, to each element emitted by
      * this flow. The results are emitted by the returned flow.
      *
-     * <p>The `initializeState` function is called once when `statefulMap` is called.
+     * <p>The `initializeState` function is called once per run of the returned flow.
      *
      * <p>If you want to send additional element after the flow is done, use {@link
      * Flow#mapStateful(Supplier, StatefulMapper, OnComplete)}
@@ -411,7 +411,7 @@ public class Flow<T> {
      * this flow. The returned flow emits the results one by one. Optionally the returned flow emits
      * an additional element, possibly based on the final state, once this flow is done.
      *
-     * <p>The `initializeState` function is called once when `statefulMap` is called.
+     * <p>The `initializeState` function is called once per run of the returned flow.
      *
      * <p>The `onComplete` function is called once when this flow is done. If it returns a non-empty
      * value, the value will be emitted by the returned flow, while an empty value will be ignored.
@@ -427,9 +427,9 @@ public class Flow<T> {
             Supplier<S> initializeState,
             StatefulMapper<T, S, Iterable<U>> f,
             OnComplete<S, U> onComplete) {
-        AtomicReference<S> state = new AtomicReference<>(initializeState.get());
         return usingEmit(
                 emit -> {
+                    AtomicReference<S> state = new AtomicReference<>(initializeState.get());
                     last.run(
                             t -> {
                                 Map.Entry<S, Iterable<U>> result = f.apply(state.get(), t);
@@ -450,7 +450,7 @@ public class Flow<T> {
      * Applies the given mapping function `f`, using additional state, to each element emitted by
      * this flow. The returned flow emits the results one by one.
      *
-     * <p>The `initializeState` function is called once when `statefulMap` is called.
+     * <p>The `initializeState` function is called once per run of the returned flow.
      *
      * <p>If you want to send additional element after the flow is done, use {@link
      * Flow#mapStatefulConcat(Supplier, StatefulMapper, OnComplete)}.

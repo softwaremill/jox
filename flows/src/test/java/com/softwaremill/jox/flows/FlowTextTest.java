@@ -157,6 +157,15 @@ public class FlowTextTest {
     }
 
     @Test
+    void splitIntoLinesOnEachRun() throws Exception {
+        var chunk1 = fromArray("line1-part1,".getBytes());
+        var chunk2 = fromArray("line1-part2\nline2".getBytes());
+        Flow<String> flow = Flows.fromByteChunks(chunk1, chunk2).linesUtf8();
+        assertEquals(List.of("line1-part1,line1-part2", "line2"), flow.runToList());
+        assertEquals(List.of("line1-part1,line1-part2", "line2"), flow.runToList());
+    }
+
+    @Test
     void encodeUtf8_shouldHandleEmptyString() throws Exception {
         assertEquals(0, Flows.fromValues("").encodeUtf8().runLast().length());
     }
