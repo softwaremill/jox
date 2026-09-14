@@ -17,8 +17,8 @@ final class JsonRendering {
 
     private JsonRendering() {}
 
-    // one array per value, as sinks write one array at a time: halves the writes of unbuffered
-    // sinks
+    // the JSON and its LF go into one byte array, as sinks write one array at a time: halves the
+    // writes of unbuffered sinks
     static <T> ByteFlow renderNdjson(Flow<T> values, ObjectWriter writer) {
         return Flows.<ByteChunk>usingEmit(
                         emit -> {

@@ -222,8 +222,7 @@ The results are ordinary Jox `Flow` and `ByteFlow` values. Parsed values can use
 `filter`, `mapPar`, `buffer` and error recovery. Rendered bytes can be written using existing `ByteFlow` operations.
 Likewise, JSON input can come from any `ByteFlow`, including files, `InputStream`s and in-memory byte chunks.
 
-For example, this pipeline reads NDJSON from a file, applies regular flow transformations, and streams one JSON array
-to another file:
+For example, this pipeline reads NDJSON from a file, applies a filter, and streams one JSON array to another file:
 
 ```java
 import java.nio.file.Path;
@@ -232,13 +231,13 @@ import com.softwaremill.jox.flows.Flow;
 import com.softwaremill.jox.flows.Flows;
 import com.softwaremill.jox.json.JsonFlow;
 
-record Event(long id, boolean accepted) {}
+record Event(long id, String message) {}
 
 void main() throws Exception {
     Flow<Event> accepted = JsonFlow.parseNdjson(
                     Flows.fromFile(Path.of("events.ndjson")),
                     Event.class)
-            .filter(Event::accepted);
+            .filter(event -> !event.message().isBlank());
 
     JsonFlow.renderArray(accepted, Event.class)
             .runToFile(Path.of("accepted.json"));
