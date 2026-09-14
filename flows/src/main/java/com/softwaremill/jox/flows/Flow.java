@@ -2539,6 +2539,9 @@ public class Flow<T> {
          * <p>Must be run within a concurrency scope, as under the hood the flow is run in the
          * background.
          *
+         * <p>Bulk reads block only until at least one byte is available; they may return fewer
+         * bytes than requested.
+         *
          * <p>Buffer capacity can be set via scoped value {@link Flow#CHANNEL_BUFFER_SIZE}. If not
          * specified in scope, {@link Channel#DEFAULT_BUFFER_SIZE} is used.
          */
@@ -2552,7 +2555,8 @@ public class Flow<T> {
                 private int availableBytes = 0;
                 private boolean isEndOfStream = false;
 
-                private boolean ensureDataAvailable() {
+                // does not block for the next chunk
+                private boolean advanceToBufferedByte() {
                     while (currentArrayIndex < currentArrays.size()) {
                         byte[] currentArray = currentArrays.get(currentArrayIndex);
                         if (currentByteIndex < currentArray.length) {
@@ -2560,6 +2564,13 @@ public class Flow<T> {
                         }
                         currentArrayIndex++;
                         currentByteIndex = 0;
+                    }
+                    return false;
+                }
+
+                private boolean ensureDataAvailable() {
+                    if (advanceToBufferedByte()) {
+                        return true;
                     }
 
                     if (!isEndOfStream) {
@@ -2616,7 +2627,7 @@ public class Flow<T> {
                     int totalBytesRead = 0;
                     int remainingToRead = len;
 
-                    while (remainingToRead > 0 && ensureDataAvailable()) {
+                    while (remainingToRead > 0 && advanceToBufferedByte()) {
                         byte[] currentArray = currentArrays.get(currentArrayIndex);
                         int availableInCurrentArray = currentArray.length - currentByteIndex;
                         int bytesToRead = Math.min(remainingToRead, availableInCurrentArray);
@@ -2632,11 +2643,6 @@ public class Flow<T> {
                         totalBytesRead += bytesToRead;
                         remainingToRead -= bytesToRead;
                         availableBytes -= bytesToRead;
-
-                        if (currentByteIndex >= currentArray.length) {
-                            currentArrayIndex++;
-                            currentByteIndex = 0;
-                        }
                     }
 
                     return totalBytesRead;

@@ -58,7 +58,7 @@
       <dependency>
         <groupId>org.apache.pekko</groupId>
         <artifactId>pekko-bom_3</artifactId>
-        <version>1.6.0</version>
+        <version>1.7.0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -79,7 +79,7 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>6.1.2</version>
+      <version>6.1.3</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -90,7 +90,7 @@
     <dependency>
       <groupId>io.projectreactor</groupId>
       <artifactId>reactor-core</artifactId>
-      <version>3.8.6</version>
+      <version>3.8.7</version>
       <scope>test</scope>
     </dependency>
     <dependency>
