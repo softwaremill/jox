@@ -666,6 +666,34 @@ public class FlowMapTest {
     }
 
     @Test
+    void mapStatefulConcat_shouldInitializeStateOnEachRun() throws Exception {
+        // given
+        Flow<Integer> flow =
+                Flows.fromValues(1, 2, 2, 3)
+                        .mapStatefulConcat(
+                                () -> new HashSet<Integer>(),
+                                (s, e) -> Map.entry(s, s.add(e) ? List.of(e) : List.of()));
+
+        // when & then
+        assertEquals(List.of(1, 2, 3), flow.runToList());
+        assertEquals(List.of(1, 2, 3), flow.runToList());
+    }
+
+    @Test
+    void mapStateful_shouldNotLeakStateFromPartialRun() throws Exception {
+        // given
+        var flow =
+                Flows.fromValues("a", "b", "c")
+                        .mapStateful(() -> 0, (index, _) -> Map.entry(index + 1, index));
+
+        // when
+        flow.take(2).runToList();
+
+        // then
+        assertEquals(List.of(0, 1, 2), flow.runToList());
+    }
+
+    @Test
     void mapStateful_shouldZipWithIndex() throws Exception {
         // given
         var flow =
