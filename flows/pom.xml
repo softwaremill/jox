@@ -105,17 +105,13 @@
       <version>1.0.4</version>
       <scope>test</scope>
     </dependency>
+    <!-- slf4j-api must stay on the test classpath: surefire's TestNG platform engine initializes
+         TestNG during test discovery, which needs org.slf4j.LoggerFactory -->
     <dependency>
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
       <version>7.12.0</version>
       <scope>test</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.apache.pekko</groupId>
