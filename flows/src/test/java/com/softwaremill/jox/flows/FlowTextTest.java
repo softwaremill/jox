@@ -138,7 +138,22 @@ public class FlowTextTest {
                 Flows.fromByteChunks(emptyChunk, emptyChunk, chunk1, emptyChunk)
                         .linesUtf8()
                         .runToList();
-        assertEquals(List.of("", ""), result);
+        assertEquals(List.of("", "", ""), result);
+    }
+
+    @Test
+    void splitMultipleChunksIntoLinesEmptyChunkInsideLine() throws Exception {
+        var chunk1 = fromArray("12".getBytes());
+        var chunk2 = fromArray("3\nline2".getBytes());
+        List<String> result = Flows.fromByteChunks(chunk1, empty(), chunk2).linesUtf8().runToList();
+        assertEquals(List.of("123", "line2"), result);
+    }
+
+    @Test
+    void splitMultipleChunksIntoLinesTrailingEmptyChunk() throws Exception {
+        var chunk1 = fromArray("line1".getBytes());
+        List<String> result = Flows.fromByteChunks(chunk1, empty()).linesUtf8().runToList();
+        assertEquals(List.of("line1"), result);
     }
 
     @Test

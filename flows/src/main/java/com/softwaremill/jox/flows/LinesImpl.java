@@ -12,8 +12,7 @@ class LinesImpl {
                         (buffer, nextChunk) -> {
                             ByteChunk chunk = nextChunk;
                             if (chunk.length() == 0) {
-                                // get next incoming chunk
-                                return Map.entry(Optional.empty(), Collections.emptyList());
+                                return Map.entry(buffer, Collections.emptyList());
                             }
 
                             // check if chunk contains newline character, if not proceed to the next
