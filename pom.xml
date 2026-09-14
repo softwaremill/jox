@@ -8,9 +8,10 @@
   <groupId>com.softwaremill.jox</groupId>
   <artifactId>parent</artifactId>
   <packaging>pom</packaging>
-  <version>1.1.2</version>
+  <version>${revision}</version>
 
   <properties>
+    <revision>1.1.2</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
   </properties>
@@ -112,6 +113,31 @@
       </plugins>
     </pluginManagement>
     <plugins>
+      <!-- Writes the installed/published POMs with the revision placeholder resolved -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>flatten-maven-plugin</artifactId>
+        <version>1.8.0</version>
+        <configuration>
+          <flattenMode>resolveCiFriendliesOnly</flattenMode>
+          <updatePomFile>true</updatePomFile>
+        </configuration>
+        <executions>
+          <execution>
+            <id>flatten</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>flatten</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>flatten-clean</id>
+            <goals>
+              <goal>clean</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.sonatype.central</groupId>
         <artifactId>central-publishing-maven-plugin</artifactId>
