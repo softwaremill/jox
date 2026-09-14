@@ -16,9 +16,12 @@ final class JsonRendering {
     private JsonRendering() {}
 
     static <T> ByteFlow renderNdjson(Flow<T> values, ObjectWriter writer) {
-        return values.map(value -> writer.writeValueAsBytes(requireNonNullValue(value)))
-                .tap(JsonRendering::requireNoLineBreaks)
-                .map(json -> ByteChunk.fromArray(json).concat(NEW_LINE))
+        return values.map(
+                        value -> {
+                            var json = writer.writeValueAsBytes(requireNonNullValue(value));
+                            requireNoLineBreaks(json);
+                            return ByteChunk.fromArray(json).concat(NEW_LINE);
+                        })
                 .toByteFlow();
     }
 
@@ -40,8 +43,8 @@ final class JsonRendering {
     }
 
     private static void requireNoLineBreaks(byte[] json) {
-        for (byte value : json) {
-            if (value == '\r' || value == '\n') {
+        for (byte b : json) {
+            if (b == '\r' || b == '\n') {
                 throw new IllegalArgumentException(
                         "ObjectWriter output contains a raw line break and cannot be rendered as"
                                 + " NDJSON");

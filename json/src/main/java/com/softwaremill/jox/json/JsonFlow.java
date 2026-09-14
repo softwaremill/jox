@@ -15,12 +15,10 @@ import tools.jackson.databind.ObjectWriter;
  * Creates flows which parse or render newline-delimited JSON (NDJSON) and top-level JSON arrays.
  *
  * <p>All transformations are lazy and preserve the cancellation behavior of the supplied flow.
- * Values are parsed or rendered one at a time. NDJSON parsing and rendering consume input only as
- * fast as the output is consumed; array parsing reads a bounded number of chunks ahead of demand,
- * see {@link #parseArray(ByteFlow, ObjectReader)}. Parsing fails when Jackson deserializes an
- * NDJSON record or array element as {@code null}, and rendering fails on a raw Java {@code null},
- * as Jox flows do not support null elements. Use Jackson's tree model to represent a JSON {@code
- * null} as a non-null node.
+ * Values are parsed or rendered one at a time; see {@link #parseArray(ByteFlow, ObjectReader)} for
+ * its read-ahead. Parsing fails when Jackson deserializes an NDJSON record or array element as
+ * {@code null}, and rendering fails on a raw Java {@code null}, as Jox flows do not support null
+ * elements. Use Jackson's tree model to represent a JSON {@code null} as a non-null node.
  */
 public final class JsonFlow {
 
@@ -30,26 +28,26 @@ public final class JsonFlow {
 
     /** Parses NDJSON using the default mapper and settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, Class<T> valueType) {
-        return parseNdjson(bytes, valueType, JsonReadSettings.defaults());
+        return parseNdjson(bytes, valueType, NdjsonReadSettings.defaults());
     }
 
     /** Parses NDJSON using the default mapper and the supplied settings. */
     public static <T> Flow<T> parseNdjson(
-            ByteFlow bytes, Class<T> valueType, JsonReadSettings settings) {
+            ByteFlow bytes, Class<T> valueType, NdjsonReadSettings settings) {
         return parseNdjson(
                 bytes,
                 DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")),
                 settings);
     }
 
-    /** Parses generic NDJSON values using the default mapper and settings. */
+    /** Parses NDJSON into a generic type using the default mapper and settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, TypeReference<T> valueType) {
-        return parseNdjson(bytes, valueType, JsonReadSettings.defaults());
+        return parseNdjson(bytes, valueType, NdjsonReadSettings.defaults());
     }
 
-    /** Parses generic NDJSON values using the default mapper and the supplied settings. */
+    /** Parses NDJSON into a generic type using the default mapper and the supplied settings. */
     public static <T> Flow<T> parseNdjson(
-            ByteFlow bytes, TypeReference<T> valueType, JsonReadSettings settings) {
+            ByteFlow bytes, TypeReference<T> valueType, NdjsonReadSettings settings) {
         return parseNdjson(
                 bytes,
                 DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")),
@@ -58,13 +56,13 @@ public final class JsonFlow {
 
     /** Parses NDJSON using the supplied reader and default settings. */
     public static <T> Flow<T> parseNdjson(ByteFlow bytes, ObjectReader reader) {
-        return parseNdjson(bytes, reader, JsonReadSettings.defaults());
+        return parseNdjson(bytes, reader, NdjsonReadSettings.defaults());
     }
 
     /**
-     * Parses UTF-8 NDJSON using the supplied reader and framing settings. Blank lines are ignored,
-     * but still count against the record size limit; LF, CRLF, a final unterminated record and one
-     * initial byte-order mark are accepted. {@link
+     * Parses UTF-8 NDJSON using the supplied reader and framing settings. Lines containing only
+     * spaces, tabs and CR are ignored, but still count against the record size limit; LF, CRLF, a
+     * final unterminated record and one initial byte-order mark are accepted. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is enabled regardless
      * of the reader's configuration. The caller must ensure that {@code T} matches the type
      * configured on the reader.
@@ -76,7 +74,7 @@ public final class JsonFlow {
      * @return a flow emitting one value for each non-blank input line
      */
     public static <T> Flow<T> parseNdjson(
-            ByteFlow bytes, ObjectReader reader, JsonReadSettings settings) {
+            ByteFlow bytes, ObjectReader reader, NdjsonReadSettings settings) {
         return JsonParsing.parseNdjson(
                 Objects.requireNonNull(bytes, "bytes"),
                 Objects.requireNonNull(reader, "reader"),
@@ -89,7 +87,7 @@ public final class JsonFlow {
                 bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /** Parses generic elements from a top-level JSON array using the default mapper. */
+    /** Parses a top-level JSON array into a generic type using the default mapper. */
     public static <T> Flow<T> parseArray(ByteFlow bytes, TypeReference<T> valueType) {
         return parseArray(
                 bytes, DEFAULT_MAPPER.readerFor(Objects.requireNonNull(valueType, "valueType")));
@@ -121,7 +119,7 @@ public final class JsonFlow {
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /** Renders generic values as NDJSON using the default mapper. */
+    /** Renders values of a generic type as NDJSON using the default mapper. */
     public static <T> ByteFlow renderNdjson(Flow<T> values, TypeReference<T> valueType) {
         return renderNdjson(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
@@ -148,7 +146,7 @@ public final class JsonFlow {
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));
     }
 
-    /** Renders generic values as one JSON array using the default mapper. */
+    /** Renders values of a generic type as one JSON array using the default mapper. */
     public static <T> ByteFlow renderArray(Flow<T> values, TypeReference<T> valueType) {
         return renderArray(
                 values, DEFAULT_MAPPER.writerFor(Objects.requireNonNull(valueType, "valueType")));

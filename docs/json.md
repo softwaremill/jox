@@ -41,30 +41,25 @@ implementation("com.softwaremill.jox:json:0.5.3")
 * `renderArray(Flow<T>, ...)` renders values as one UTF-8 JSON array `ByteFlow`.
 
 Each method is lazy: parsing, rendering and I/O start only when the returned flow is run. Values are processed one at
-a time, preserving the failure propagation and cancellation behavior of the underlying Jox flow. NDJSON parsing and
-both renderers consume input only as fast as the output is consumed. Array parsing feeds Jackson through an
-`InputStream`, which reads a bounded number of chunks ahead of downstream demand.
-
-Parsing rejects an NDJSON record or array element that Jackson deserializes as Java `null`, and rendering rejects raw
-Java `null` elements, as Jox flows do not support them. To retain JSON `null` values, use Jackson's tree model, where
-they are represented by non-null null nodes.
+a time; array parsing reads a bounded number of chunks ahead of downstream demand. Jox flows do not support `null`
+elements, so a JSON `null` cannot be parsed and a Java `null` cannot be rendered; use Jackson's tree model to retain
+JSON `null`s.
 
 Each operation has overloads accepting a `Class<T>`, a Jackson `TypeReference<T>`, or a configured Jackson
 `ObjectReader`/`ObjectWriter`. The `Class<T>` and `TypeReference<T>` overloads use the module's default `ObjectMapper`.
 
 ## NDJSON
 
-NDJSON parsing accepts LF and CRLF line endings, ignores empty and whitespace-only lines, and accepts a final record
-without a line ending. Every non-blank line must contain exactly one JSON value; malformed JSON or trailing content on
-a record fails the flow when it is run. Input must be valid UTF-8. One UTF-8 byte-order mark is accepted at the very
-beginning of the stream.
+NDJSON parsing accepts LF and CRLF line endings, ignores lines containing only spaces, tabs and CR, and accepts a
+final record without a line ending. Every other line must contain exactly one JSON value; malformed JSON or trailing
+content on a record fails the flow when it is run. Input must be valid UTF-8. One UTF-8 byte-order mark is accepted at
+the very beginning of the stream.
 
 An incomplete record is buffered across source chunks until its LF delimiter, or until end-of-input for the final
 unterminated record. The default maximum encoded record size is 32 MiB, excluding the LF delimiter. An initial BOM and
 the CR in a CRLF line ending count toward the limit. The limit also applies to blank lines, even though they are
-otherwise ignored. Use
-`JsonReadSettings.defaults().maxNdjsonRecordBytes(...)` to choose another positive byte limit and pass the resulting
-settings as the final argument to `parseNdjson`.
+otherwise ignored. Pass `new NdjsonReadSettings(maxRecordBytes)` as the final argument to `parseNdjson` to choose
+another positive byte limit.
 
 ```java
 import java.nio.charset.StandardCharsets;
