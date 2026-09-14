@@ -98,8 +98,8 @@ public final class JsonFlow {
     /**
      * Incrementally parses exactly one top-level JSON array using the supplied reader. Successful
      * completion waits for end-of-input to reject trailing content. The input is read through
-     * {@link ByteFlow#runToInputStream}, so up to a channel buffer of chunks, plus Jackson's input
-     * buffer, is consumed ahead of downstream demand. {@link
+     * {@link ByteFlow#runToInputStream}, so up to a channel buffer of chunks is consumed ahead of
+     * downstream demand. {@link
      * tools.jackson.databind.DeserializationFeature#FAIL_ON_TRAILING_TOKENS} is disabled while
      * reading individual elements, regardless of the reader's configuration. The caller must ensure
      * that {@code T} matches the type configured on the reader. Failures are wrapped in {@link

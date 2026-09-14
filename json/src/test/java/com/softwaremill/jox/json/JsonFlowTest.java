@@ -3,6 +3,7 @@ package com.softwaremill.jox.json;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
@@ -10,8 +11,10 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -463,6 +466,35 @@ class JsonFlowTest {
         assertEquals(0, emittedBytes.get());
         assertEquals(List.of(0, 1), parsed.take(2).runToList());
         assertTrue(emittedBytes.get() < bytes.length);
+    }
+
+    @Test
+    void shouldEmitArrayElementsBeforeSourceEnds() throws Exception {
+        // given
+        var release = new CountDownLatch(1);
+        var source =
+                Flows.<ByteChunk>usingEmit(
+                                emit -> {
+                                    emit.apply(
+                                            ByteChunk.fromArray(
+                                                    "[1,2,".getBytes(StandardCharsets.UTF_8)));
+                                    release.await();
+                                })
+                        .toByteFlow();
+
+        // when
+        List<Integer> result;
+        try {
+            result =
+                    assertTimeoutPreemptively(
+                            Duration.ofSeconds(2),
+                            () -> JsonFlow.parseArray(source, Integer.class).take(2).runToList());
+        } finally {
+            release.countDown(); // unblocks the producer so the scope can close
+        }
+
+        // then
+        assertEquals(List.of(1, 2), result);
     }
 
     @Test
