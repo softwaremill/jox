@@ -16,7 +16,7 @@
 
   <properties>
     <maven.compiler.release>25</maven.compiler.release>
-    <jackson.version>3.2.2</jackson.version>
+    <jackson.version>3.2.3</jackson.version>
   </properties>
 
   <dependencies>
