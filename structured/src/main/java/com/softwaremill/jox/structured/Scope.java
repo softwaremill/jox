@@ -27,11 +27,9 @@ public final class Scope {
      * which calls {@link #fork} (and its variants), before the fork is started.
      *
      * <p>Forks are started by the thread which runs the enclosing {@link
-     * Scopes#supervised(Scoped)}, not by the thread which calls {@code fork}. Hence, values which
-     * are propagated when a thread is created - such as {@link ScopedValue}s or the OpenTelemetry
-     * context - are inherited from that thread, and not from the one which started the fork. A
-     * decorator can capture such values when {@code fork} is called, and restore them around the
-     * fork's body.
+     * Scopes#supervised(Scoped)}, not by the thread which calls {@code fork}. Values inherited when
+     * a thread is created - {@link ScopedValue}s, or a context held in a thread local - hence come
+     * from that thread; a decorator can instead capture them when {@code fork} is called.
      *
      * <p>To set the decorator, use the {@link ScopedValue#where(ScopedValue, Object)} method, e.g.
      * {@code ScopedValue.where(Scope.FORK_DECORATOR, myDecorator).run(() -> supervised(...))}. It
