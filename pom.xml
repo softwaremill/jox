@@ -14,6 +14,7 @@
     <revision>1.1.2</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
+    <opentelemetry.version>1.67.0</opentelemetry.version>
   </properties>
 
   <modules>
@@ -24,6 +25,8 @@
     <module>channels-fray-tests</module>
     <module>kafka</module>
     <module>json</module>
+    <module>otel-context</module>
+    <module>otel-tracing</module>
   </modules>
 
   <!-- Deployment metadata -->

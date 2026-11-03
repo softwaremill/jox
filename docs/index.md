@@ -3,7 +3,7 @@
 [Virtual-thread](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html) based safe concurrency & streaming
 for Java. Open-source, Apache2 licensed.
 
-Jox contains five main modules:
+Jox contains six main modules:
 
 * Fast & scalable, completable [channels](channels.md), with Go-like `select`s (Java 21+)
 * Programmer-friendly [structured concurrency](structured.md) (Java 25 only)
@@ -11,6 +11,7 @@ Jox contains five main modules:
   and a high-level, "functional" API (Java 25 only)
 * [Kafka](kafka.md) integration for reading from and writing to Kafka topics using flows (Java 25 only)
 * [JSON](json.md) integration for streaming NDJSON and top-level JSON arrays using flows (Java 25 only)
+* [OpenTelemetry tracing](otel-tracing.md) for creating spans around flows and code (Java 25 only)
 
 Source code is [available on GitHub](https://github.com/softwaremill/jox).
 
@@ -110,4 +111,5 @@ For a Scala version, see the [Ox project](https://github.com/softwaremill/ox).
    structured
    kafka
    json
+   otel-tracing
    contributing
