@@ -22,10 +22,28 @@ public final class Scope {
     private final Lock externalSchedulerLock = new ReentrantLock();
     private volatile ActorRef<ExternalScheduler> externalSchedulerActor;
 
+    /**
+     * Decorates the body of every fork started in a scope, with the decorator applied on the thread
+     * which calls {@link #fork} (and its variants), before the fork is started.
+     *
+     * <p>To set the decorator, use the {@link ScopedValue#where(ScopedValue, Object)} method, e.g.
+     * {@code ScopedValue.where(Scope.FORK_DECORATOR, myDecorator).run(() -> supervised(...))}. It
+     * is then used by all the scopes which are created within that binding.
+     */
+    public static final ScopedValue<Decorator> FORK_DECORATOR = ScopedValue.newInstance();
+
     Scope() {
         this.scopeDone = new AtomicBoolean(false);
         this.rawScope = StructuredTaskScope.open(new CancelWhenDoneJoiner(scopeDone));
         this.supervisor = new Supervisor();
+    }
+
+    /**
+     * Applies the {@link #FORK_DECORATOR}, if any, to the body of a fork. Called on the thread
+     * which starts the fork, so that the decorator can capture that thread's state.
+     */
+    private static <T> Callable<T> decorate(Callable<T> f) {
+        return FORK_DECORATOR.isBound() ? FORK_DECORATOR.get().decorate(f) : f;
     }
 
     Supervisor getSupervisor() {
@@ -96,13 +114,14 @@ public final class Scope {
      */
     public <T> Fork<T> fork(Callable<T> f) throws InterruptedException {
         var result = new ForkUsingResult<T>();
+        var decorated = decorate(f);
         supervisor
                 .getCommands()
                 .send(
                         (RunFork<T>)
                                 () -> {
                                     try {
-                                        result.complete(f.call());
+                                        result.complete(decorated.call());
                                     } catch (Throwable e) {
                                         // we notify the supervisor first, so that if this is the
                                         // first failing fork in the scope, the supervisor will
@@ -133,6 +152,7 @@ public final class Scope {
      */
     public <T> Fork<T> forkUser(Callable<T> f) throws InterruptedException {
         var result = new ForkUsingResult<T>();
+        var decorated = decorate(f);
         supervisor.forkUserStarts();
         supervisor
                 .getCommands()
@@ -140,7 +160,7 @@ public final class Scope {
                         (RunFork<T>)
                                 () -> {
                                     try {
-                                        result.complete(f.call());
+                                        result.complete(decorated.call());
                                         supervisor.forkUserSuccess();
                                     } catch (Throwable e) {
                                         if (!supervisor.forkException(e)) {
@@ -166,13 +186,14 @@ public final class Scope {
      */
     public <T> Fork<T> forkUnsupervised(Callable<T> f) throws InterruptedException {
         var result = new ForkUsingResult<T>();
+        var decorated = decorate(f);
         supervisor
                 .getCommands()
                 .send(
                         (RunFork<T>)
                                 () -> {
                                     try {
-                                        result.complete(f.call());
+                                        result.complete(decorated.call());
                                     } catch (Throwable e) {
                                         result.completeExceptionally(e);
                                     }
@@ -204,6 +225,7 @@ public final class Scope {
         // forks can be never run, if they are cancelled immediately - we need to detect this, not
         // to await on result.get()
         var result = new CancellableForkUsingResult<T>();
+        var decorated = decorate(f);
         supervisor
                 .getCommands()
                 .send(
@@ -213,7 +235,9 @@ public final class Scope {
                                             .run(
                                                     nestedScope ->
                                                             forkCancellableNestedScope(
-                                                                    nestedScope, result, f));
+                                                                    nestedScope,
+                                                                    result,
+                                                                    decorated));
                                     return null;
                                 });
         return result;
