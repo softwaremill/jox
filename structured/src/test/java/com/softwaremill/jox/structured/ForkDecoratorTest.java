@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 public class ForkDecoratorTest {
 
     /** Carries the value bound when a fork is started into the fork's body. */
-    private static class PropagatingDecorator implements ForkDecorator {
+    private static class PropagatingDecorator implements Decorator {
         @Override
         public <T> Callable<T> decorate(Callable<T> f) {
             var captured = VALUE.isBound() ? VALUE.get() : null;
@@ -117,8 +117,8 @@ public class ForkDecoratorTest {
     @Test
     void shouldDecorateAllForkVariants() throws Exception {
         var decorated = new CopyOnWriteArrayList<String>();
-        ForkDecorator counting =
-                new ForkDecorator() {
+        Decorator counting =
+                new Decorator() {
                     @Override
                     public <T> Callable<T> decorate(Callable<T> f) {
                         decorated.add("decorated");
