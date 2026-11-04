@@ -40,14 +40,12 @@ int measuredComputations(Tracer tracer) throws Exception {
 }
 ```
 
-For code which doesn't return a value, use `spanRun`.
+There is also an overload for code which doesn't return a value.
 
 ## Propagating the context
 
-The current span is kept in the OpenTelemetry `Context`, which by default isn't propagated to forks created in
-[`supervised`](structured.md) scopes. Forks are started by the thread which runs the enclosing `supervised`, not by the
-thread which calls `fork`, so values inherited when a thread is created - such as the OpenTelemetry context - come from
-that thread, and not from the one which started the fork.
+The current span is kept in the OpenTelemetry `Context`, which by default isn't properly propagated to forks created in
+[`supervised`](structured.md) scopes.
 
 Jox tracing therefore should be used with the `PropagatingForkDecorator` from the `otel-context` module, set as the fork
 decorator used by concurrency scopes through the `Scope.FORK_DECORATOR` scoped value. It captures the context when
@@ -78,8 +76,6 @@ public static void main(String[] args) throws Exception {
         .call(() -> runApp());
 }
 ```
-
-Code which runs outside the binding - e.g. on threads which aren't created within it - won't propagate the context.
 
 ## Spans around flows
 

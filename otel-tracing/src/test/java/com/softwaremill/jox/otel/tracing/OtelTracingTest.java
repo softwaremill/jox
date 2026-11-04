@@ -4,7 +4,6 @@ import static com.softwaremill.jox.otel.tracing.FlowTracing.spanEach;
 import static com.softwaremill.jox.otel.tracing.SpanOptions.spanOptions;
 import static com.softwaremill.jox.otel.tracing.Tracing.currentSpanUnsafe;
 import static com.softwaremill.jox.otel.tracing.Tracing.span;
-import static com.softwaremill.jox.otel.tracing.Tracing.spanRun;
 import static com.softwaremill.jox.otel.tracing.Tracing.spanUnsafe;
 import static com.softwaremill.jox.structured.Scopes.supervised;
 
@@ -481,7 +480,7 @@ public class OtelTracingTest {
         assertThrows(
                 Exception.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 () -> {
@@ -555,7 +554,7 @@ public class OtelTracingTest {
                 assertThrows(
                         InterruptedException.class,
                         () ->
-                                spanRun(
+                                span(
                                         tracer,
                                         f.name(LEVEL0),
                                         spanOptions()
@@ -582,7 +581,7 @@ public class OtelTracingTest {
         var f = new Fixture();
         var attr = Attributes.of(AttributeKey.stringKey("k"), "v");
 
-        spanRun(
+        span(
                 tracer,
                 f.name(LEVEL0),
                 spanOptions().withSpanKind(SpanKind.PRODUCER).withAttributes(attr),
@@ -601,7 +600,7 @@ public class OtelTracingTest {
         var second = spanUnsafe(tracer, f.name("LinkB"));
         second.close();
 
-        spanRun(
+        span(
                 tracer,
                 f.name(LEVEL0),
                 spanOptions()
@@ -625,7 +624,7 @@ public class OtelTracingTest {
     void shouldRestoreThePreviousSpanAsCurrentAfterSpanReturns() throws Exception {
         var f = new Fixture();
         var outer = spanUnsafe(tracer, f.name(LEVEL0));
-        spanRun(tracer, f.name(LEVEL1), () -> {});
+        span(tracer, f.name(LEVEL1), () -> {});
         assertSame(outer.span(), currentSpanUnsafe());
         outer.close();
     }
@@ -637,7 +636,7 @@ public class OtelTracingTest {
         assertThrows(
                 Exception.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL1),
                                 () -> {
@@ -659,7 +658,7 @@ public class OtelTracingTest {
         assertThrows(
                 InterruptedException.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 spanOptions().withBeforeClose(s -> seen.set(s.exceptionOpt())),
@@ -679,7 +678,7 @@ public class OtelTracingTest {
         assertThrows(
                 ClosedByInterruptException.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 spanOptions().withBeforeClose(s -> seen.set(s.exceptionOpt())),
@@ -698,7 +697,7 @@ public class OtelTracingTest {
         assertThrows(
                 AsynchronousCloseException.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 () -> {
@@ -716,7 +715,7 @@ public class OtelTracingTest {
         assertThrows(
                 ExecutionException.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 spanOptions().withBeforeClose(s -> seen.set(s.exceptionOpt())),
@@ -735,7 +734,7 @@ public class OtelTracingTest {
         assertThrows(
                 ExecutionException.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 () -> {
@@ -752,7 +751,7 @@ public class OtelTracingTest {
         assertThrows(
                 LinkageError.class,
                 () ->
-                        spanRun(
+                        span(
                                 tracer,
                                 f.name(LEVEL0),
                                 () -> {

@@ -35,10 +35,6 @@ public final class Tracing {
      * AutoCloseableSpan}, which ends the span and restores the previously current one.
      * Try-with-resources guarantees that.
      *
-     * <p>For the context to be propagated to forks, the {@code PropagatingForkDecorator} from the
-     * {@code otel-context} module is required: it has to be set as the fork decorator used by
-     * concurrency scopes, using the {@code Scope#FORK_DECORATOR} scoped value.
-     *
      * @return an {@link AutoCloseableSpan}, which closes the opened span
      */
     public static AutoCloseableSpan spanUnsafe(Tracer tracer, String spanName) {
@@ -117,15 +113,15 @@ public final class Tracing {
     }
 
     /** As {@link #span(Tracer, String, Callable)}, for code which doesn't return a value. */
-    public static void spanRun(Tracer tracer, String spanName, ThrowingRunnable t)
+    public static void span(Tracer tracer, String spanName, ThrowingRunnable t)
             throws Exception {
-        spanRun(tracer, spanName, spanOptions(), t);
+        span(tracer, spanName, spanOptions(), t);
     }
 
     /**
-     * @see #spanRun(Tracer, String, ThrowingRunnable)
+     * @see #span(Tracer, String, ThrowingRunnable)
      */
-    public static void spanRun(
+    public static void span(
             Tracer tracer, String spanName, SpanOptions options, ThrowingRunnable t)
             throws Exception {
         span(

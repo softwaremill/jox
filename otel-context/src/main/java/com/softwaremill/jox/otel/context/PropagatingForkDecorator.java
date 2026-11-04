@@ -5,21 +5,20 @@ import java.util.concurrent.Callable;
 import io.opentelemetry.context.Context;
 import io.opentelemetry.context.Scope;
 
-import com.softwaremill.jox.structured.ForkDecorator;
+import com.softwaremill.jox.structured.Decorator;
 
 /**
- * A {@link ForkDecorator} which propagates the OpenTelemetry {@link Context} to forks: the context
- * which is current when a fork is started becomes current in the fork's body.
+ * A {@link Decorator} which propagates the OpenTelemetry {@link Context} to wrapped callable.
  *
- * <p>Should be set as the decorator used by concurrency scopes, through the {@code
- * com.softwaremill.jox.structured.Scope#FORK_DECORATOR} scoped value:
+ * <p>Intended to be assigned to {@code
+ * com.softwaremill.jox.structured.Scope#FORK_DECORATOR}:
  *
  * <pre>{@code
  * ScopedValue.where(Scope.FORK_DECORATOR, PropagatingForkDecorator.INSTANCE)
  *     .call(() -> supervised(scope -> { ... }));
  * }</pre>
  */
-public enum PropagatingForkDecorator implements ForkDecorator {
+public enum PropagatingForkDecorator implements Decorator {
     INSTANCE;
 
     @Override

@@ -11,12 +11,6 @@ import io.opentelemetry.api.trace.SpanKind;
  * Optional parameters of a span, reflecting the OpenTelemetry span builder, plus a {@code
  * beforeClose} callback.
  *
- * <p>Created using {@link #spanOptions()} and the {@code with*} methods, e.g.:
- *
- * <pre>{@code
- * spanOptions().withSpanKind(SpanKind.SERVER).withAttributes(attributes)
- * }</pre>
- *
  * @param spanKind the kind of the span
  * @param attributes the attributes to set on the span
  * @param links the span contexts to link to
@@ -33,7 +27,6 @@ public record SpanOptions(
     private static final SpanOptions DEFAULT =
             new SpanOptions(SpanKind.INTERNAL, Attributes.empty(), List.of(), _ -> {});
 
-    /** Default options: an {@link SpanKind#INTERNAL} span, without attributes or links. */
     public static SpanOptions spanOptions() {
         return DEFAULT;
     }

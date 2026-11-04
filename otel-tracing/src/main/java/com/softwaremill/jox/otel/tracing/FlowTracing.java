@@ -37,7 +37,7 @@ public final class FlowTracing {
                 emit ->
                         flow.runToEmit(
                                 t ->
-                                        Tracing.spanRun(
+                                        Tracing.span(
                                                 tracer,
                                                 spanName,
                                                 options,
