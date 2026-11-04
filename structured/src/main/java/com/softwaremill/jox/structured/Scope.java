@@ -26,16 +26,11 @@ public final class Scope {
      * Decorates the body of every fork started in a scope, with the decorator applied on the thread
      * which calls {@link #fork} (and its variants), before the fork is started.
      *
-     * <p>Forks are started by the thread which runs the enclosing {@link
-     * Scopes#supervised(Scoped)}, not by the thread which calls {@code fork}. Values inherited when
-     * a thread is created - {@link ScopedValue}s, or a context held in a thread local - hence come
-     * from that thread; a decorator can instead capture them when {@code fork} is called.
-     *
      * <p>To set the decorator, use the {@link ScopedValue#where(ScopedValue, Object)} method, e.g.
      * {@code ScopedValue.where(Scope.FORK_DECORATOR, myDecorator).run(() -> supervised(...))}. It
      * is then used by all the scopes which are created within that binding.
      */
-    public static final ScopedValue<ForkDecorator> FORK_DECORATOR = ScopedValue.newInstance();
+    public static final ScopedValue<Decorator> FORK_DECORATOR = ScopedValue.newInstance();
 
     Scope() {
         this.scopeDone = new AtomicBoolean(false);
