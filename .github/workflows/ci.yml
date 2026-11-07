@@ -9,7 +9,7 @@ permissions:
   contents: write        # release-drafter requirement
 jobs:
   ci:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -30,7 +30,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   fray-tests:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         channel_size: [ 0, 1, 10 ]
@@ -55,7 +55,7 @@ jobs:
   publishReleaseNotes:
     name: Publish release notes
     needs: [ ci, fray-tests ]
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v'))
     steps:
       - name: Checkout
