@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.softwaremill.jox</groupId>
+    <artifactId>parent</artifactId>
+    <version>${revision}</version>
+  </parent>
+
+  <artifactId>simulated-time</artifactId>
+  <version>0.6.0</version>
+  <packaging>jar</packaging>
+  <name>${project.groupId}:${project.artifactId}</name>
+
+  <properties>
+    <maven.compiler.release>25</maven.compiler.release>
+    <!-- the package of com.softwaremill.jox.simtime.boot.Hooks -->
+    <boot.package>com/softwaremill/jox/simtime/boot</boot.package>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <compilerArgs>
+            <!-- the agent runs inside class loading: indy string concatenation there can cause ClassCircularityError -->
+            <arg>-XDstringConcat=inline</arg>
+          </compilerArgs>
+        </configuration>
+        <executions>
+          <!-- jox structured & flows, used in tests, are compiled with preview features -->
+          <execution>
+            <id>default-testCompile</id>
+            <configuration>
+              <enablePreview>true</enablePreview>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <!-- the boot hooks are loaded by the bootstrap class loader: the agent appends this nested jar to the bootstrap
+           search path; the classes are excluded from the main jar -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>boot-jar</id>
+            <phase>prepare-package</phase>
+            <goals>
+              <goal>run</goal>
+            </goals>
+            <configuration>
+              <target>
+                <jar destfile="${project.build.outputDirectory}/META-INF/jox-simulated-time/boot.jar"
+                     basedir="${project.build.outputDirectory}" includes="${boot.package}/**"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <configuration>
+          <excludes>
+            <exclude>${boot.package}/**</exclude>
+          </excludes>
+          <archive>
+            <manifestEntries>
+              <Premain-Class>com.softwaremill.jox.simtime.agent.SimulatedTimeAgent</Premain-Class>
+              <Can-Retransform-Classes>true</Can-Retransform-Classes>
+              <Automatic-Module-Name>com.softwaremill.jox.simtime</Automatic-Module-Name>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+      <!-- tests need the packaged agent jar, hence they run with failsafe -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <skipTests>true</skipTests>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <argLine>--enable-preview -javaagent:${project.build.directory}/${project.build.finalName}.jar</argLine>
+          <includes>
+            <include>**/*Test.java</include>
+          </includes>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <configuration>
+            <release>25</release>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>6.1.3</version>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>6.1.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-testkit</artifactId>
+      <version>6.1.3</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.softwaremill.jox</groupId>
+      <artifactId>flows</artifactId>
+      <version>0.6.0</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>

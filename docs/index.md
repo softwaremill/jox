@@ -12,6 +12,10 @@ Jox contains five main modules:
 * [Kafka](kafka.md) integration for reading from and writing to Kafka topics using flows (Java 25 only)
 * [JSON](json.md) integration for streaming NDJSON and top-level JSON arrays using flows (Java 25 only)
 
+There's also a testing module:
+
+* [Simulated time](simulated-time.md), running time-dependent code in tests without waiting in real time (Java 25 only)
+
 Source code is [available on GitHub](https://github.com/softwaremill/jox).
 
 ## A tour of Jox
@@ -110,4 +114,5 @@ For a Scala version, see the [Ox project](https://github.com/softwaremill/ox).
    structured
    kafka
    json
+   simulated-time
    contributing
