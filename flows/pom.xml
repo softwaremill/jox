@@ -58,7 +58,7 @@
       <dependency>
         <groupId>org.apache.pekko</groupId>
         <artifactId>pekko-bom_3</artifactId>
-        <version>1.7.1</version>
+        <version>2.0.0</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
