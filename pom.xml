@@ -14,7 +14,7 @@
     <revision>1.1.2</revision>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
-    <opentelemetry.version>1.67.0</opentelemetry.version>
+    <opentelemetry.version>1.68.0</opentelemetry.version>
   </properties>
 
   <modules>
